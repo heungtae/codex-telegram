@@ -1,0 +1,17 @@
+[bot]
+token = "TELEGRAM_BOT_TOKEN"
+
+[codex]
+command = "codex"
+args = ["app-server"]
+
+[users]
+allowed_ids = []
+
+[approval]
+require_for = ["file_write", "command_exec", "tool_use"]
+auto_approve_trusted = false
+
+[display]
+max_message_length = 4000
+send_progress = true
