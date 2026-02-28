@@ -22,6 +22,11 @@ auto_approve_trusted = false
 [logging]
 level = "INFO"
 
+[forwarding]
+app_server_event_level = "INFO"
+app_server_event_allowlist = []
+app_server_event_denylist = []
+
 [display]
 max_message_length = 4000
 send_progress = true

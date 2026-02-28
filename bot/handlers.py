@@ -22,16 +22,25 @@ async def wait_for_codex():
         await asyncio.sleep(0.1)
 
 
+async def send_reply(update: Update, text: str, user_id: int, **kwargs):
+    logger.info("Sending Telegram message to user_id=%s: %s", user_id, text)
+    await update.message.reply_text(text, **kwargs)
+
+
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     allowed = get("users.allowed_ids", [])
     
     if allowed and user_id not in allowed:
-        await update.message.reply_text("You are not authorized to use this bot.")
+        await send_reply(update, "You are not authorized to use this bot.", user_id)
         return
+
+    await wait_for_codex()
+    start_result = await state.command_router.route("/start", [], user_id)
     
     keyboard = main_menu_keyboard()
-    await update.message.reply_text(
+    await send_reply(
+        update,
         "Welcome to Codex Telegram Bot!\n\n"
         "Available commands:\n"
         "/start - Start a new thread\n"
@@ -41,7 +50,9 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/skills - List skills\n"
         "/apps - List apps\n"
         "/mcp - MCP server status\n\n"
+        f"{start_result}\n\n"
         "Or just send a message to start a turn!",
+        user_id,
         reply_markup=keyboard,
     )
 
@@ -59,15 +70,17 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     state_user = user_manager.get(user_id)
     if not state_user.active_thread_id:
-        await update.message.reply_text(
-            "No active thread. Use /start to create one first."
+        await send_reply(
+            update,
+            "No active thread. Use /start to create one first.",
+            user_id,
         )
         return
     
     if not text:
         return
     
-    await update.message.reply_text("Processing...")
+    await send_reply(update, "Processing...", user_id)
     
     try:
         result = await state.codex_client.call("turn/start", {
@@ -78,11 +91,11 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         turn = result.get("turn", {})
         turn_id = turn.get("id", "unknown")
         
-        await update.message.reply_text(f"Turn started: {turn_id}")
+        await send_reply(update, f"Turn started: {turn_id}", user_id)
         
     except Exception as e:
         logger.exception("Error processing message")
-        await update.message.reply_text(f"Error: {str(e)}")
+        await send_reply(update, f"Error: {str(e)}", user_id)
 
 
 async def command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -92,7 +105,7 @@ async def command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     allowed = get("users.allowed_ids", [])
     
     if allowed and user_id not in allowed:
-        await update.message.reply_text("You are not authorized to use this bot.")
+        await send_reply(update, "You are not authorized to use this bot.", user_id)
         return
     
     await wait_for_codex()
@@ -102,7 +115,7 @@ async def command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     result = await state.command_router.route(command, args, user_id)
     
-    await update.message.reply_text(result)
+    await send_reply(update, result, user_id)
 
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):

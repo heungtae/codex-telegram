@@ -27,5 +27,13 @@ class UserManager:
     def has_active_thread(self, user_id: int) -> bool:
         return self.get(user_id).active_thread_id is not None
 
+    def find_user_id_by_thread(self, thread_id: str | None) -> int | None:
+        if not thread_id:
+            return None
+        for uid, user in self._users.items():
+            if user.active_thread_id == thread_id:
+                return uid
+        return None
+
 
 user_manager = UserManager()

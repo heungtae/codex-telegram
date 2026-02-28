@@ -262,15 +262,35 @@ class CommandRouter:
         
         result = await self.codex.call("skills/list", params)
         
-        skills = result.get("data", [])
+        groups = result.get("data", [])
+        if not groups:
+            return "No skills found."
+
+        skills: list[dict[str, Any]] = []
+        for g in groups:
+            if isinstance(g, dict):
+                group_skills = g.get("skills", [])
+                if isinstance(group_skills, list):
+                    skills.extend(group_skills)
+
         if not skills:
             return "No skills found."
-        
+
         lines = ["Skills:"]
         for s in skills:
-            name = s.get("name", "unknown")
-            enabled = "✓" if s.get("enabled") else "✗"
-            lines.append(f"• {enabled} {name}")
+            name = (
+                s.get("displayName")
+                or s.get("name")
+                or s.get("id")
+                or s.get("slug")
+                or "unknown"
+            )
+            enabled_value = s.get("enabled")
+            if isinstance(enabled_value, bool):
+                prefix = "✓" if enabled_value else "✗"
+            else:
+                prefix = "•"
+            lines.append(f"• {prefix} {name}")
         
         return "\n".join(lines)
     
@@ -283,9 +303,13 @@ class CommandRouter:
         
         lines = ["Apps:"]
         for a in apps:
-            name = a.get("name", "unknown")
-            enabled = "✓" if a.get("enabled") else "✗"
-            lines.append(f"• {enabled} {name}")
+            name = a.get("displayName", a.get("name", a.get("id", "unknown")))
+            enabled_value = a.get("enabled")
+            if isinstance(enabled_value, bool):
+                prefix = "✓" if enabled_value else "✗"
+            else:
+                prefix = "•"
+            lines.append(f"• {prefix} {name}")
         
         return "\n".join(lines)
     

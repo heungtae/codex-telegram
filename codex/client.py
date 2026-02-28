@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 from typing import Any, Callable
 import logging
 
@@ -17,6 +18,7 @@ class CodexClient:
         self._stderr_task: asyncio.Task | None = None
         self._pending: dict[int, asyncio.Future[JSONRPCResponse]] = {}
         self._event_handlers: dict[str, list[Callable]] = {}
+        self._any_event_handlers: list[Callable] = []
         self._initialized = False
     
     async def start(self):
@@ -88,6 +90,9 @@ class CodexClient:
         if method not in self._event_handlers:
             self._event_handlers[method] = []
         self._event_handlers[method].append(handler)
+
+    def on_any(self, handler: Callable):
+        self._any_event_handlers.append(handler)
     
     def _write(self, msg: JSONRPCRequest | JSONRPCNotification):
         data = self.protocol.serialize(msg)
@@ -135,10 +140,20 @@ class CodexClient:
                 future.set_result(msg)
         
         elif isinstance(msg, JSONRPCNotification):
+            for handler in self._any_event_handlers:
+                try:
+                    result = handler(msg.method, msg.params)
+                    if inspect.isawaitable(result):
+                        await result
+                except Exception as e:
+                    logger.error(f"Error in wildcard event handler for {msg.method}: {e}")
+
             handlers = self._event_handlers.get(msg.method, [])
             for handler in handlers:
                 try:
-                    handler(msg.params)
+                    result = handler(msg.params)
+                    if inspect.isawaitable(result):
+                        await result
                 except Exception as e:
                     logger.error(f"Error in event handler for {msg.method}: {e}")
 
