@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -7,12 +8,18 @@ from codex.events import create_event_handler
 from models.user import user_manager
 from utils.config import get
 from bot.keyboard import main_menu_keyboard
+from models import state
 
 logger = logging.getLogger("codex-telegram.bot")
 
 
-codex_client: CodexClient | None = None
-command_router: CommandRouter | None = None
+async def wait_for_codex():
+    while not state.codex_ready.is_set():
+        await asyncio.sleep(0.1)
+    for _ in range(50):
+        if state.command_router is not None:
+            return
+        await asyncio.sleep(0.1)
 
 
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -20,20 +27,20 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     allowed = get("users.allowed_ids", [])
     
     if allowed and user_id not in allowed:
-        await update.message.reply_text("❌ You are not authorized to use this bot.")
+        await update.message.reply_text("You are not authorized to use this bot.")
         return
     
     keyboard = main_menu_keyboard()
     await update.message.reply_text(
         "Welcome to Codex Telegram Bot!\n\n"
         "Available commands:\n"
-        "• /start - Start a new thread\n"
-        "• /resume <id> - Resume a thread\n"
-        "• /threads - List your threads\n"
-        "• /models - List available models\n"
-        "• /skills - List skills\n"
-        "• /apps - List apps\n"
-        "• /mcp - MCP server status\n\n"
+        "/start - Start a new thread\n"
+        "/resume <id> - Resume a thread\n"
+        "/threads - List your threads\n"
+        "/models - List available models\n"
+        "/skills - List skills\n"
+        "/apps - List apps\n"
+        "/mcp - MCP server status\n\n"
         "Or just send a message to start a turn!",
         reply_markup=keyboard,
     )
@@ -41,31 +48,30 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
+    text = update.message.text if update.message else ""
+    logger.info("Received Telegram message from user_id=%s: %s", user_id, text)
     allowed = get("users.allowed_ids", [])
     
     if allowed and user_id not in allowed:
         return
     
-    if not codex_client or not command_router:
-        await update.message.reply_text("Bot is not ready. Please try again later.")
-        return
+    await wait_for_codex()
     
-    state = user_manager.get(user_id)
-    if not state.active_thread_id:
+    state_user = user_manager.get(user_id)
+    if not state_user.active_thread_id:
         await update.message.reply_text(
             "No active thread. Use /start to create one first."
         )
         return
     
-    text = update.message.text
     if not text:
         return
     
-    await update.message.reply_text("⏳ Processing...")
+    await update.message.reply_text("Processing...")
     
     try:
-        result = await codex_client.call("turn/start", {
-            "threadId": state.active_thread_id,
+        result = await state.codex_client.call("turn/start", {
+            "threadId": state_user.active_thread_id,
             "input": [{"type": "text", "text": text}],
         })
         
@@ -81,20 +87,20 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
+    text = update.message.text if update.message else ""
+    logger.info("Received Telegram command from user_id=%s: %s", user_id, text)
     allowed = get("users.allowed_ids", [])
     
     if allowed and user_id not in allowed:
-        await update.message.reply_text("❌ You are not authorized to use this bot.")
+        await update.message.reply_text("You are not authorized to use this bot.")
         return
     
-    if not codex_client or not command_router:
-        await update.message.reply_text("Bot is not ready. Please try again later.")
-        return
+    await wait_for_codex()
     
-    command = update.message.text.split()[0]
-    args = update.message.text.split()[1:]
+    command = text.split()[0]
+    args = text.split()[1:]
     
-    result = await command_router.route(command, args, user_id)
+    result = await state.command_router.route(command, args, user_id)
     
     await update.message.reply_text(result)
 

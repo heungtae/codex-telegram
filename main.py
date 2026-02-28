@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import signal
 
 from telegram.ext import (
     Application,
@@ -20,12 +19,10 @@ from bot import (
     error_handler,
     callback_handler,
 )
+from models import state
 
 
 logger = setup("codex-telegram")
-
-codex_client: CodexClient | None = None
-command_router: CommandRouter | None = None
 
 
 async def setup_codex() -> CodexClient:
@@ -40,10 +37,8 @@ async def setup_codex() -> CodexClient:
 
 
 async def post_init(app: Application):
-    global codex_client, command_router
-    
-    codex_client = await setup_codex()
-    command_router = CommandRouter(codex_client)
+    state.codex_client = await setup_codex()
+    state.command_router = CommandRouter(state.codex_client)
     
     event_handler = create_event_handler()
     
@@ -61,12 +56,13 @@ async def post_init(app: Application):
     ]:
         event_handler.on(method, handler)
     
+    state.codex_ready.set()
     logger.info("Codex initialized")
 
 
 async def post_shutdown(app: Application):
-    if codex_client:
-        await codex_client.stop()
+    if state.codex_client:
+        await state.codex_client.stop()
 
 
 def main():
@@ -85,8 +81,6 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
     app.add_handler(CallbackQueryHandler(callback_handler))
     app.add_error_handler(error_handler)
-    
-    logger.info("Bot is ready!")
     
     app.run_polling(stop_signals=None)
 

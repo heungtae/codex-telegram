@@ -39,6 +39,9 @@ allowed_ids = [123456789]
 [approval]
 require_for = ["file_write", "command_exec", "tool_use"]
 auto_approve_trusted = false
+
+[logging]
+level = "INFO" # app-server 메시지(DEBUG)를 보려면 "DEBUG"
 ```
 
 ### 2. Set Environment Variable

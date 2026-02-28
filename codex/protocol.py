@@ -11,7 +11,7 @@ class JSONRPCRequest:
 
     def to_dict(self) -> dict[str, Any]:
         result: dict[str, Any] = {"method": self.method}
-        if self.params:
+        if self.params is not None:
             result["params"] = self.params
         if self.id is not None:
             result["id"] = self.id
@@ -55,7 +55,7 @@ class JSONRPCNotification:
     
     def to_dict(self) -> dict[str, Any]:
         result: dict[str, Any] = {"method": self.method}
-        if self.params:
+        if self.params is not None:
             result["params"] = self.params
         return result
 

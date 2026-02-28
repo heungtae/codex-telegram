@@ -1,5 +1,4 @@
 import asyncio
-import subprocess
 from typing import Any, Callable
 import logging
 
@@ -15,6 +14,7 @@ class CodexClient:
         self.protocol = Protocol()
         self._proc: asyncio.subprocess.Process | None = None
         self._reader_task: asyncio.Task | None = None
+        self._stderr_task: asyncio.Task | None = None
         self._pending: dict[int, asyncio.Future[JSONRPCResponse]] = {}
         self._event_handlers: dict[str, list[Callable]] = {}
         self._initialized = False
@@ -30,7 +30,8 @@ class CodexClient:
             stderr=asyncio.subprocess.PIPE,
         )
         
-        self._reader_task = asyncio.create_task(self._read_stream())
+        self._reader_task = asyncio.create_task(self._read_stdout_stream())
+        self._stderr_task = asyncio.create_task(self._read_stderr_stream())
         logger.info("Codex app-server started")
     
     async def stop(self):
@@ -38,6 +39,13 @@ class CodexClient:
             self._reader_task.cancel()
             try:
                 await self._reader_task
+            except asyncio.CancelledError:
+                pass
+
+        if self._stderr_task:
+            self._stderr_task.cancel()
+            try:
+                await self._stderr_task
             except asyncio.CancelledError:
                 pass
         
@@ -62,7 +70,7 @@ class CodexClient:
         return result
     
     async def call(self, method: str, params: dict[str, Any] | None = None) -> Any:
-        request = self.protocol.create_request(method, params)
+        request = self.protocol.create_request(method, {} if params is None else params)
         req_id = request.id
         if req_id is None:
             raise ValueError("Request ID is None")
@@ -83,10 +91,11 @@ class CodexClient:
     
     def _write(self, msg: JSONRPCRequest | JSONRPCNotification):
         data = self.protocol.serialize(msg)
+        logger.debug("app-server stdin: %s", data)
         if self._proc and self._proc.stdin:
             self._proc.stdin.write(data.encode() + b"\n")
     
-    async def _read_stream(self):
+    async def _read_stdout_stream(self):
         while True:
             try:
                 if not self._proc or not self._proc.stdout:
@@ -94,12 +103,29 @@ class CodexClient:
                 line = await self._proc.stdout.readline()
                 if not line:
                     break
-                
-                msg = self.protocol.deserialize(line.decode())
+
+                raw = line.decode(errors="replace").rstrip("\n")
+                logger.debug("app-server stdout: %s", raw)
+                msg = self.protocol.deserialize(raw)
                 if msg:
                     await self._handle_message(msg)
+                else:
+                    logger.debug("app-server stdout (non-json): %s", raw)
             except Exception as e:
                 logger.error(f"Error reading stream: {e}")
+                break
+
+    async def _read_stderr_stream(self):
+        while True:
+            try:
+                if not self._proc or not self._proc.stderr:
+                    break
+                line = await self._proc.stderr.readline()
+                if not line:
+                    break
+                logger.debug("app-server stderr: %s", line.decode(errors="replace").rstrip("\n"))
+            except Exception as e:
+                logger.error(f"Error reading stderr stream: {e}")
                 break
     
     async def _handle_message(self, msg: JSONRPCRequest | JSONRPCResponse | JSONRPCNotification):

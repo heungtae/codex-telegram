@@ -12,6 +12,9 @@ allowed_ids = []
 require_for = ["file_write", "command_exec", "tool_use"]
 auto_approve_trusted = false
 
+[logging]
+level = "INFO"
+
 [display]
 max_message_length = 4000
 send_progress = true
