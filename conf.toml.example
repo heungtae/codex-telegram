@@ -1,3 +1,9 @@
+project = "default"
+
+[projects.default]
+name = "codex-skills project"
+path = "/home/heungtae/develop/codex-skills"
+
 [bot]
 token = "TELEGRAM_BOT_TOKEN"
 drop_pending_updates = true

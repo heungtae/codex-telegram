@@ -1,11 +1,14 @@
 from typing import Any
 import logging
+import os
+
+from utils.config import get, reload, save_project_profile
 
 logger = logging.getLogger("codex-telegram.codex")
 
 COMMAND_HELP: dict[str, str] = {
     "/commands": "List available commands. Usage: /commands",
-    "/start": "Create a new thread. Usage: /start [model]",
+    "/start": "Create a new thread and show workspace. Usage: /start [model]",
     "/resume": "Resume a thread. Usage: /resume <thread_id|number>",
     "/fork": "Fork a thread. Usage: /fork <thread_id>",
     "/threads": "List threads. Usage: /threads [--archived|-a] [--full] [--limit N] [--offset N]",
@@ -24,6 +27,8 @@ COMMAND_HELP: dict[str, str] = {
     "/apps": "List apps. Usage: /apps",
     "/mcp": "List MCP server statuses. Usage: /mcp",
     "/config": "Read server configuration. Usage: /config",
+    "/projects": "List/manage projects. Usage: /projects --list | /projects --add <key>",
+    "/project": "Select active project. Usage: /project <key|number|name>",
 }
 
 
@@ -69,6 +74,52 @@ class CommandRouter:
         lines.append("")
         lines.append("Tip: Use <command> --help for details.")
         return "\n".join(lines)
+
+    def _load_project_profiles(self) -> tuple[list[dict[str, str]], str | None]:
+        projects_raw = get("projects", {})
+        default_key = get("project")
+        profiles: list[dict[str, str]] = []
+        if isinstance(projects_raw, dict):
+            for key, value in projects_raw.items():
+                if not isinstance(key, str) or not isinstance(value, dict):
+                    continue
+                name = value.get("name")
+                path = value.get("path")
+                if not isinstance(name, str) or not name.strip():
+                    continue
+                if not isinstance(path, str) or not path.strip():
+                    continue
+                profiles.append({"key": key, "name": name.strip(), "path": path.strip()})
+        return profiles, default_key if isinstance(default_key, str) else None
+
+    def _resolve_effective_project(self, user_id: int) -> dict[str, str] | None:
+        from models.user import user_manager
+
+        state = user_manager.get(user_id)
+        if (
+            isinstance(state.selected_project_key, str)
+            and isinstance(state.selected_project_name, str)
+            and isinstance(state.selected_project_path, str)
+            and state.selected_project_key
+            and state.selected_project_name
+            and state.selected_project_path
+        ):
+            return {
+                "key": state.selected_project_key,
+                "name": state.selected_project_name,
+                "path": state.selected_project_path,
+            }
+
+        profiles, default_key = self._load_project_profiles()
+        if not profiles:
+            cwd = os.getcwd()
+            return {"key": "current", "name": "current workspace", "path": cwd}
+        if default_key:
+            for p in profiles:
+                if p["key"] == default_key:
+                    return p
+        cwd = os.getcwd()
+        return {"key": "current", "name": "current workspace", "path": cwd}
     
     async def route(self, command: str, args: list[str], user_id: int) -> str:
         try:
@@ -114,6 +165,10 @@ class CommandRouter:
                 return await self._mcp_server_status()
             elif command == "/config":
                 return await self._config_read()
+            elif command == "/projects":
+                return await self._projects_command(args, user_id)
+            elif command == "/project":
+                return await self._project_select(args, user_id)
             else:
                 return f"Unknown command: {command}"
         except Exception as e:
@@ -126,14 +181,191 @@ class CommandRouter:
         params: dict[str, Any] = {}
         if args:
             params["model"] = args[0]
+        project = self._resolve_effective_project(user_id)
+        if project:
+            params["cwd"] = project["path"]
         
         result = await self.codex.call("thread/start", params)
         thread_id = result.get("thread", {}).get("id")
         
         if thread_id:
             user_manager.get(user_id).set_thread(thread_id)
-        
-        return f"Thread started: {thread_id}"
+
+        if project:
+            return (
+                f"Thread started: {thread_id}\n"
+                f"Project: {project['key']} - {project['name']}\n"
+                f"Workspace: {project['path']}"
+            )
+        return f"Thread started: {thread_id}\nWorkspace: {os.getcwd()}"
+
+    async def _projects_command(self, args: list[str], user_id: int) -> str:
+        def _flag_word(token: str) -> str:
+            # Accept mixed dash variants such as --add, -add, —add, –add, −add
+            value = self._normalize_cli_token(token).strip().lower()
+            value = value.lstrip("-—–−﹣－")
+            return value
+
+        if not args:
+            return await self._projects_list(user_id)
+        normalized = [self._normalize_cli_token(a).lower() for a in args]
+        normalized_words = [_flag_word(a) for a in args]
+        if any(a in ("--list", "-l", "list") for a in normalized) or any(w == "list" for w in normalized_words):
+            return await self._projects_list(user_id)
+
+        first = _flag_word(args[0])
+        if len(args) >= 2 and first == "add":
+            key = args[1].strip()
+            if not key:
+                return "Usage: /projects --add <key>"
+            return await self._projects_add_start(user_id, key)
+
+        return "Usage: /projects --list | /projects --add <key>"
+
+    async def _projects_list(self, user_id: int) -> str:
+        from models.user import user_manager
+
+        profiles, default_key = self._load_project_profiles()
+        state = user_manager.get(user_id)
+        if not profiles:
+            state.set_last_listed_projects([])
+            return "No projects configured."
+
+        lines = ["Projects:", ""]
+        lines.append(f"{'no':>3}  {'key':<16}  {'name':<28}  {'path':<52}  status")
+        lines.append(f"{'-' * 3}  {'-' * 16}  {'-' * 28}  {'-' * 52}  {'-' * 14}")
+        listed_keys: list[str] = []
+        for idx, p in enumerate(profiles, 1):
+            listed_keys.append(p["key"])
+            statuses: list[str] = []
+            if default_key and p["key"] == default_key:
+                statuses.append("default")
+            if state.selected_project_key and p["key"] == state.selected_project_key:
+                statuses.append("selected")
+            status_text = f"[{', '.join(statuses)}]" if statuses else ""
+            lines.append(
+                f"{idx:>3}  {p['key'][:16]:<16}  {p['name'][:28]:<28}  {p['path'][:52]:<52}  {status_text}"
+            )
+        state.set_last_listed_projects(listed_keys)
+        lines.append("")
+        lines.append("Tip: /project <key|number|name>")
+        return "\n".join(lines)
+
+    async def _projects_add_start(self, user_id: int, key: str) -> str:
+        from models.user import user_manager
+
+        cleaned_key = key.strip()
+        if not cleaned_key:
+            return "Usage: /projects --add <key>"
+        if not all(ch.isalnum() or ch in ("_", "-") for ch in cleaned_key):
+            return "Invalid project key. Use letters, numbers, '_' or '-'."
+        profiles, _ = self._load_project_profiles()
+        for p in profiles:
+            if p["key"].lower() == cleaned_key.lower():
+                return f"Project key '{cleaned_key}' already exists."
+
+        state = user_manager.get(user_id)
+        state.start_project_add_flow(cleaned_key)
+        return f"Enter project name for key '{cleaned_key}':"
+
+    async def handle_project_add_input(self, user_id: int, text: str) -> str:
+        from models.user import user_manager
+
+        state = user_manager.get(user_id)
+        message = (text or "").strip()
+        if state.awaiting_project_add_name:
+            if not message:
+                return "Project name must not be empty. Enter project name:"
+            state.set_project_add_name(message)
+            return "Enter project path:"
+
+        if state.awaiting_project_add_path:
+            if not message:
+                return "Project path must not be empty. Enter project path:"
+            key = state.pending_project_add_key
+            name = state.pending_project_add_name
+            if not key or not name:
+                state.clear_project_add_flow()
+                return "Project add flow reset. Use /projects --add <key> again."
+            try:
+                save_project_profile(key, name, message)
+                reload()
+            except ValueError as e:
+                state.clear_project_add_flow()
+                return f"Failed to add project: {e}"
+            state.clear_project_add_flow()
+            return (
+                f"Project added: {key} - {name}\n"
+                f"Path: {message}\n"
+                f"Use /project {key} to select it."
+            )
+        return "No pending project add flow. Use /projects --add <key>."
+
+    async def _project_select(self, args: list[str], user_id: int) -> str:
+        from models.user import user_manager
+
+        if not args:
+            return "Usage: /project <key|number|name>"
+
+        profiles, _ = self._load_project_profiles()
+        if not profiles:
+            return "No projects configured."
+
+        target = " ".join(args).strip()
+        selected: dict[str, str] | None = None
+        if target.isdigit():
+            idx = int(target)
+            if idx < 1 or idx > len(profiles):
+                return "Project not found. Run /projects --list."
+            selected = profiles[idx - 1]
+        else:
+            for p in profiles:
+                if p["key"] == target:
+                    selected = p
+                    break
+            if selected is None:
+                matched = [p for p in profiles if p["name"].lower() == target.lower()]
+                if len(matched) > 1:
+                    return "Ambiguous project name. Use key or number."
+                if len(matched) == 1:
+                    selected = matched[0]
+
+        if selected is None:
+            return "Project not found. Run /projects --list."
+
+        state = user_manager.get(user_id)
+        state.set_project(selected["key"], selected["name"], selected["path"])
+
+        interrupt_message = ""
+        if state.active_thread_id and state.active_turn_id:
+            try:
+                await self.codex.call(
+                    "turn/interrupt",
+                    {"threadId": state.active_thread_id, "turnId": state.active_turn_id},
+                )
+                interrupt_message = "\nInterrupted running turn."
+            except Exception:
+                logger.exception(
+                    "Failed to interrupt running turn before project switch user_id=%s thread_id=%s turn_id=%s",
+                    user_id,
+                    state.active_thread_id,
+                    state.active_turn_id,
+                )
+                interrupt_message = "\nFailed to interrupt previous running turn."
+            finally:
+                state.clear_turn()
+
+        start_result = await self.codex.call("thread/start", {"cwd": selected["path"]})
+        new_thread_id = (start_result.get("thread") or {}).get("id")
+        if isinstance(new_thread_id, str) and new_thread_id:
+            state.set_thread(new_thread_id)
+            state.clear_turn()
+
+        return (
+            f"Project selected: {selected['key']} - {selected['name']}\n"
+            f"Workspace: {selected['path']}\n"
+            f"Thread started: {new_thread_id or 'unknown'}{interrupt_message}"
+        )
     
     def _resolve_thread_arg(self, arg: str, user_id: int) -> tuple[str | None, str | None]:
         from models.user import user_manager

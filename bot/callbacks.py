@@ -7,6 +7,7 @@ from telegram.ext import ContextTypes
 from bot.keyboard import main_menu_keyboard
 from bot.thread_ui import threads_keyboard
 from bot.skills_ui import extract_skill_names, skills_keyboard
+from bot.projects_ui import projects_keyboard
 from models.user import user_manager
 from models import state
 
@@ -93,6 +94,28 @@ async def send_skills_picker(
     await edit_with_log(query, context, picker_text, user_id, reply_markup=keyboard)
 
 
+async def send_projects_picker(
+    context: ContextTypes.DEFAULT_TYPE,
+    user_id: int,
+    chat_id: int,
+    query=None,
+):
+    result = await state.command_router.route("/projects", ["--list"], user_id)
+    listed = user_manager.get(user_id).last_listed_project_keys
+    if not listed or result.startswith("Usage:") or result == "No projects configured.":
+        if query is None:
+            await context.bot.send_message(chat_id=chat_id, text=result, reply_markup=main_menu_keyboard())
+            return
+        await edit_with_log(query, context, result, user_id, reply_markup=main_menu_keyboard())
+        return
+
+    keyboard = projects_keyboard(listed)
+    if query is None:
+        await context.bot.send_message(chat_id=chat_id, text=result, reply_markup=keyboard)
+        return
+    await edit_with_log(query, context, result, user_id, reply_markup=keyboard)
+
+
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if query is None:
@@ -120,6 +143,9 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             elif command == "skills":
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
                 await send_skills_picker(context, user_id, chat_id)
+            elif command == "projects":
+                logger.info("Executing callback action user_id=%s data=%s", user_id, data)
+                await send_projects_picker(context, user_id, chat_id)
             elif command == "apps":
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
                 result = await run_callback_command("/apps", user_id)
@@ -225,6 +251,12 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 user_id,
                 reply_markup=main_menu_keyboard(),
             )
+
+        elif data.startswith("projectsel:"):
+            key = data[len("projectsel:"):].strip()
+            logger.info("Executing callback action user_id=%s data=%s", user_id, data)
+            result = await state.command_router.route("/project", [key], user_id)
+            await edit_with_log(query, context, result, user_id, reply_markup=main_menu_keyboard())
         else:
             logger.info("Executing callback action user_id=%s data=%s (unsupported)", user_id, data)
             await edit_with_log(query, context, "Unsupported button action.", user_id, reply_markup=main_menu_keyboard())

@@ -1,11 +1,18 @@
 import os
+import re
 import tomllib
 from pathlib import Path
 from typing import Any
 
 _config: dict[str, Any] | None = None
 
-DEFAULT_CONFIG = """[bot]
+DEFAULT_CONFIG = """project = "default"
+
+[projects.default]
+name = "codex-telegram"
+path = "/path/to/your/project"
+
+[bot]
 token = "TELEGRAM_BOT_TOKEN"
 drop_pending_updates = true
 
@@ -36,6 +43,10 @@ send_progress = true
 def _get_config_path() -> Path:
     config_dir = Path.home() / ".config" / "codex-telegram"
     return config_dir / "conf.toml"
+
+
+def get_config_path() -> Path:
+    return _get_config_path()
 
 
 def _ensure_config_exists():
@@ -73,6 +84,12 @@ def load(path: str = None) -> dict[str, Any]:
     return _config
 
 
+def reload() -> dict[str, Any]:
+    global _config
+    _config = None
+    return load()
+
+
 def get(key: str, default: Any = None) -> Any:
     config = load()
     keys = key.split(".")
@@ -85,3 +102,39 @@ def get(key: str, default: Any = None) -> Any:
         if value is None:
             return default
     return value
+
+
+def _escape_toml_string(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("\"", "\\\"")
+
+
+def save_project_profile(key: str, name: str, path: str) -> None:
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", key):
+        raise ValueError("Invalid project key. Use letters, numbers, '_' or '-'.")
+    if not name.strip():
+        raise ValueError("Project name must not be empty.")
+    if not path.strip():
+        raise ValueError("Project path must not be empty.")
+
+    _ensure_config_exists()
+    config_path = _get_config_path()
+    raw = config_path.read_text(encoding="utf-8")
+    parsed = tomllib.loads(raw) if raw.strip() else {}
+
+    projects = parsed.get("projects")
+    if isinstance(projects, dict) and key in projects:
+        raise ValueError(f"Project key '{key}' already exists.")
+
+    updated = raw
+    if "project" not in parsed:
+        updated = f'project = "{_escape_toml_string(key)}"\n\n' + updated.lstrip()
+
+    if updated and not updated.endswith("\n"):
+        updated += "\n"
+    updated += (
+        f"\n[projects.{key}]\n"
+        f'name = "{_escape_toml_string(name)}"\n'
+        f'path = "{_escape_toml_string(path)}"\n'
+    )
+
+    config_path.write_text(updated, encoding="utf-8")

@@ -26,6 +26,12 @@ pip install python-telegram-bot
 ### 1. Edit conf.toml
 
 ```toml
+project = "default"
+
+[projects.default]
+name = "codex-skills project"
+path = "/home/heungtae/develop/codex-skills"
+
 [bot]
 token = "TELEGRAM_BOT_TOKEN"
 drop_pending_updates = true # true면 시작 전 쌓인 Telegram 업데이트를 버림(기본값)
@@ -75,6 +81,9 @@ python3 main.py
 | Telegram | Codex API | Description |
 |----------|-----------|-------------|
 | `/commands` | - | List available commands |
+| `/projects --list` | - | List configured projects |
+| `/projects --add <key>` | - | Start interactive project add flow |
+| `/project <key\|number\|name>` | - | Select active project |
 | `/start` | thread/start | Create a new thread |
 | `/resume <id\|number>` | thread/resume | Resume a thread (supports list number) |
 | `/fork <id>` | thread/fork | Fork a thread |

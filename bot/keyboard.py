@@ -36,6 +36,9 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton("🛠️ Skills", callback_data="cmd:skills"),
+            InlineKeyboardButton("📁 Projects", callback_data="cmd:projects"),
+        ],
+        [
             InlineKeyboardButton("📦 Apps", callback_data="cmd:apps"),
         ],
         [

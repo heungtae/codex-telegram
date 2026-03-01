@@ -6,9 +6,17 @@ class UserState:
     user_id: int
     active_thread_id: str | None = None
     active_turn_id: str | None = None
+    selected_project_key: str | None = None
+    selected_project_name: str | None = None
+    selected_project_path: str | None = None
+    pending_project_add_key: str | None = None
+    pending_project_add_name: str | None = None
+    awaiting_project_add_name: bool = False
+    awaiting_project_add_path: bool = False
     waiting_for_approval: dict[str, Any] = field(default_factory=dict)
     last_message_id: int | None = None
     last_listed_thread_ids: list[str] = field(default_factory=list)
+    last_listed_project_keys: list[str] = field(default_factory=list)
     
     def set_thread(self, thread_id: str | None):
         self.active_thread_id = thread_id
@@ -25,6 +33,36 @@ class UserState:
 
     def set_last_listed_threads(self, thread_ids: list[str]):
         self.last_listed_thread_ids = thread_ids
+
+    def set_last_listed_projects(self, project_keys: list[str]):
+        self.last_listed_project_keys = project_keys
+
+    def set_project(self, key: str, name: str, path: str):
+        self.selected_project_key = key
+        self.selected_project_name = name
+        self.selected_project_path = path
+
+    def clear_project(self):
+        self.selected_project_key = None
+        self.selected_project_name = None
+        self.selected_project_path = None
+
+    def start_project_add_flow(self, key: str):
+        self.pending_project_add_key = key
+        self.pending_project_add_name = None
+        self.awaiting_project_add_name = True
+        self.awaiting_project_add_path = False
+
+    def set_project_add_name(self, name: str):
+        self.pending_project_add_name = name
+        self.awaiting_project_add_name = False
+        self.awaiting_project_add_path = True
+
+    def clear_project_add_flow(self):
+        self.pending_project_add_key = None
+        self.pending_project_add_name = None
+        self.awaiting_project_add_name = False
+        self.awaiting_project_add_path = False
 
 
 class UserManager:

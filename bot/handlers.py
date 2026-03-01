@@ -10,6 +10,7 @@ from utils.config import get
 from bot.keyboard import main_menu_keyboard, interrupt_keyboard
 from bot.thread_ui import parse_threads_options, threads_keyboard
 from bot.skills_ui import extract_skill_names, skills_keyboard
+from bot.projects_ui import projects_keyboard
 from models import state
 
 logger = logging.getLogger("codex-telegram.bot")
@@ -47,6 +48,8 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Available commands:\n"
         "/commands - List all commands\n"
         "/start - Start a new thread\n"
+        "/projects - Manage projects\n"
+        "/project - Select project\n"
         "/resume <id> - Resume a thread\n"
         "/threads - List your threads\n"
         "/models - List available models\n"
@@ -72,6 +75,11 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await wait_for_codex()
     
     state_user = user_manager.get(user_id)
+    if state_user.awaiting_project_add_name or state_user.awaiting_project_add_path:
+        result = await state.command_router.handle_project_add_input(user_id, text)
+        await send_reply(update, result, user_id)
+        return
+
     if not state_user.active_thread_id:
         await send_reply(
             update,
@@ -95,8 +103,11 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         turn_id = turn.get("id", "unknown")
         if isinstance(turn_id, str) and turn_id and turn_id != "unknown":
             state_user.set_turn(turn_id)
-        
-        await send_reply(update, f"Turn started: {turn_id}", user_id)
+
+        if state_user.selected_project_path:
+            await send_reply(update, f"Turn started: {turn_id}\nWorkspace: {state_user.selected_project_path}", user_id)
+        else:
+            await send_reply(update, f"Turn started: {turn_id}", user_id)
         
     except Exception as e:
         logger.exception("Error processing message")
@@ -117,6 +128,9 @@ async def command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     command = text.split()[0]
     args = text.split()[1:]
+    state_user = user_manager.get(user_id)
+    if state_user.awaiting_project_add_name or state_user.awaiting_project_add_path:
+        state_user.clear_project_add_flow()
     
     result = await state.command_router.route(command, args, user_id)
     if command == "/threads":
@@ -142,6 +156,18 @@ async def command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Skills: choose one to insert template into chat.",
             user_id,
             reply_markup=skills_keyboard(skill_names),
+        )
+        return
+    if command == "/projects":
+        if result.startswith("Usage:") or result == "No projects configured.":
+            await send_reply(update, result, user_id)
+            return
+        listed = user_manager.get(user_id).last_listed_project_keys
+        await send_reply(
+            update,
+            result,
+            user_id,
+            reply_markup=projects_keyboard(listed),
         )
         return
 
