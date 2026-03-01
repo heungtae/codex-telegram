@@ -63,9 +63,9 @@ auto_response = "approve" # approve | session | deny
 level = "INFO"
 
 [forwarding]
-app_server_event_level = "DEBUG"
-app_server_event_allowlist = ["item/completed"]
-app_server_event_denylist = ["item/agentMessage/delta"]
+app_server_event_level = "INFO"
+app_server_event_allowlist = []
+app_server_event_denylist = []
 
 [[forwarding.rules]]
  method = "item/completed"
