@@ -86,6 +86,18 @@ async def post_init(app: Application):
                 return cid
         return None
 
+    def _extract_turn_id(method: str, params: dict | None) -> str | None:
+        p = params or {}
+        turn = p.get("turn")
+        if isinstance(turn, dict) and isinstance(turn.get("id"), str):
+            return turn.get("id")
+        if isinstance(p.get("turnId"), str):
+            return p.get("turnId")
+        if method.startswith("turn/"):
+            if isinstance(p.get("id"), str):
+                return p.get("id")
+        return None
+
     def _extract_text(params: dict | None) -> str | None:
         p = params or {}
         for key in ("delta", "text", "message"):
@@ -220,6 +232,13 @@ async def post_init(app: Application):
         user_id = user_manager.find_user_id_by_thread(thread_id)
         if user_id is None:
             return
+        user_state = user_manager.get(user_id)
+        turn_id = _extract_turn_id(method, params)
+        if method == "turn/started" and turn_id:
+            user_state.set_turn(turn_id)
+        elif method in ("turn/completed", "turn/failed", "turn/cancelled"):
+            # Completion or failure means there is no active running turn.
+            user_state.clear_turn()
 
         msg = _format_event(method, params)
         if msg is None:

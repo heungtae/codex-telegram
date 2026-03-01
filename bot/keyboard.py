@@ -43,3 +43,12 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
         ],
     ]
     return InlineKeyboardMarkup(keyboard)
+
+
+def interrupt_keyboard() -> InlineKeyboardMarkup:
+    keyboard = [
+        [
+            InlineKeyboardButton("⛔ Interrupt", callback_data="cmd:interrupt"),
+        ]
+    ]
+    return InlineKeyboardMarkup(keyboard)

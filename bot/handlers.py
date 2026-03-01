@@ -7,7 +7,7 @@ from codex import CodexClient, CommandRouter
 from codex.events import create_event_handler
 from models.user import user_manager
 from utils.config import get
-from bot.keyboard import main_menu_keyboard
+from bot.keyboard import main_menu_keyboard, interrupt_keyboard
 from bot.thread_ui import parse_threads_options, threads_keyboard
 from bot.skills_ui import extract_skill_names, skills_keyboard
 from models import state
@@ -83,7 +83,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not text:
         return
     
-    await send_reply(update, "Processing...", user_id)
+    await send_reply(update, "Processing...", user_id, reply_markup=interrupt_keyboard())
     
     try:
         result = await state.codex_client.call("turn/start", {
@@ -93,6 +93,8 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         turn = result.get("turn", {})
         turn_id = turn.get("id", "unknown")
+        if isinstance(turn_id, str) and turn_id and turn_id != "unknown":
+            state_user.set_turn(turn_id)
         
         await send_reply(update, f"Turn started: {turn_id}", user_id)
         

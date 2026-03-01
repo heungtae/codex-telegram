@@ -5,6 +5,7 @@ from typing import Any
 class UserState:
     user_id: int
     active_thread_id: str | None = None
+    active_turn_id: str | None = None
     waiting_for_approval: dict[str, Any] = field(default_factory=dict)
     last_message_id: int | None = None
     last_listed_thread_ids: list[str] = field(default_factory=list)
@@ -14,6 +15,13 @@ class UserState:
     
     def clear_thread(self):
         self.active_thread_id = None
+        self.active_turn_id = None
+
+    def set_turn(self, turn_id: str | None):
+        self.active_turn_id = turn_id
+
+    def clear_turn(self):
+        self.active_turn_id = None
 
     def set_last_listed_threads(self, thread_ids: list[str]):
         self.last_listed_thread_ids = thread_ids

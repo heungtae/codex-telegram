@@ -128,6 +128,10 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
                 result = await run_callback_command("/config", user_id)
                 await context.bot.send_message(chat_id=chat_id, text=result, reply_markup=main_menu_keyboard())
+            elif command == "interrupt":
+                logger.info("Executing callback action user_id=%s data=%s", user_id, data)
+                result = await run_callback_command("/interrupt", user_id)
+                await context.bot.send_message(chat_id=chat_id, text=result, reply_markup=main_menu_keyboard())
         
         elif data.startswith("threads_page:"):
             payload = data[len("threads_page:"):]

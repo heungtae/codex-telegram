@@ -429,9 +429,16 @@ class CommandRouter:
         state = user_manager.get(user_id)
         if not state.active_thread_id:
             return "No active thread."
-        
-        await self.codex.call("turn/interrupt", {"threadId": state.active_thread_id})
-        
+
+        if not state.active_turn_id:
+            return "No running turn to interrupt."
+
+        await self.codex.call(
+            "turn/interrupt",
+            {"threadId": state.active_thread_id, "turnId": state.active_turn_id},
+        )
+        state.clear_turn()
+
         return "Turn interrupted."
     
     async def _review_start(self, args: list[str], user_id: int) -> str:
