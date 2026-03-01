@@ -6,10 +6,10 @@ from telegram.ext import ContextTypes
 
 from bot.keyboard import main_menu_keyboard
 from bot.thread_ui import threads_keyboard
-from bot.skills_ui import extract_skill_names, skills_keyboard
+from bot.skills_ui import skills_keyboard
 from bot.projects_ui import projects_keyboard
-from models.user import user_manager
 from models import state
+from codex.commands import CommandResult
 
 logger = logging.getLogger("codex-telegram.bot")
 
@@ -37,10 +37,10 @@ async def edit_with_log(query, context: ContextTypes.DEFAULT_TYPE, text: str, us
         raise
 
 
-async def run_callback_command(command: str, user_id: int) -> str:
+async def run_callback_command(command: str, user_id: int) -> CommandResult:
     await _wait_for_codex()
     if state.command_router is None:
-        return "Codex is still initializing. Please try again in a moment."
+        return CommandResult(kind="error", text="Codex is still initializing. Please try again in a moment.")
     return await state.command_router.route(command, [], user_id)
 
 
@@ -57,18 +57,18 @@ async def send_threads_page(
     if archived:
         thread_args.append("--archived")
     result = await state.command_router.route("/threads", thread_args, user_id)
-    if result.startswith("Usage:") or result == "No threads found.":
+    listed = result.meta.get("thread_ids", [])
+    if result.kind != "threads" or not listed:
         if query is None:
-            await context.bot.send_message(chat_id=chat_id, text=result, reply_markup=main_menu_keyboard())
+            await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=main_menu_keyboard())
             return
-        await edit_with_log(query, context, result, user_id, reply_markup=main_menu_keyboard())
+        await edit_with_log(query, context, result.text, user_id, reply_markup=main_menu_keyboard())
         return
-    listed = user_manager.get(user_id).last_listed_thread_ids
     keyboard = threads_keyboard(listed, offset, limit, archived=archived)
     if query is None:
-        await context.bot.send_message(chat_id=chat_id, text=result, reply_markup=keyboard)
+        await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=keyboard)
         return
-    await edit_with_log(query, context, result, user_id, reply_markup=keyboard)
+    await edit_with_log(query, context, result.text, user_id, reply_markup=keyboard)
 
 
 async def send_skills_picker(
@@ -78,12 +78,12 @@ async def send_skills_picker(
     query=None,
 ):
     result = await state.command_router.route("/skills", [], user_id)
-    skill_names = extract_skill_names(result)
-    if not skill_names or result.startswith("Usage:") or result.startswith("No skills found"):
+    skill_names = result.meta.get("skill_names", [])
+    if result.kind != "skills" or not skill_names:
         if query is None:
-            await context.bot.send_message(chat_id=chat_id, text=result, reply_markup=main_menu_keyboard())
+            await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=main_menu_keyboard())
             return
-        await edit_with_log(query, context, result, user_id, reply_markup=main_menu_keyboard())
+        await edit_with_log(query, context, result.text, user_id, reply_markup=main_menu_keyboard())
         return
 
     picker_text = "Skills: choose one to insert template into chat."
@@ -101,19 +101,19 @@ async def send_projects_picker(
     query=None,
 ):
     result = await state.command_router.route("/projects", ["--list"], user_id)
-    listed = user_manager.get(user_id).last_listed_project_keys
-    if not listed or result.startswith("Usage:") or result == "No projects configured.":
+    listed = result.meta.get("project_keys", [])
+    if result.kind != "projects" or not listed:
         if query is None:
-            await context.bot.send_message(chat_id=chat_id, text=result, reply_markup=main_menu_keyboard())
+            await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=main_menu_keyboard())
             return
-        await edit_with_log(query, context, result, user_id, reply_markup=main_menu_keyboard())
+        await edit_with_log(query, context, result.text, user_id, reply_markup=main_menu_keyboard())
         return
 
     keyboard = projects_keyboard(listed)
     if query is None:
-        await context.bot.send_message(chat_id=chat_id, text=result, reply_markup=keyboard)
+        await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=keyboard)
         return
-    await edit_with_log(query, context, result, user_id, reply_markup=keyboard)
+    await edit_with_log(query, context, result.text, user_id, reply_markup=keyboard)
 
 
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -136,7 +136,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if command == "start":
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
                 result = await run_callback_command("/start", user_id)
-                await context.bot.send_message(chat_id=chat_id, text=result, reply_markup=main_menu_keyboard())
+                await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=main_menu_keyboard())
             elif command == "threads":
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
                 await send_threads_page(context, user_id, chat_id, offset=0, limit=5, archived=False)
@@ -149,15 +149,15 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             elif command == "apps":
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
                 result = await run_callback_command("/apps", user_id)
-                await context.bot.send_message(chat_id=chat_id, text=result, reply_markup=main_menu_keyboard())
+                await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=main_menu_keyboard())
             elif command == "config":
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
                 result = await run_callback_command("/config", user_id)
-                await context.bot.send_message(chat_id=chat_id, text=result, reply_markup=main_menu_keyboard())
+                await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=main_menu_keyboard())
             elif command == "interrupt":
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
                 result = await run_callback_command("/interrupt", user_id)
-                await context.bot.send_message(chat_id=chat_id, text=result)
+                await context.bot.send_message(chat_id=chat_id, text=result.text)
         
         elif data.startswith("threads_page:"):
             payload = data[len("threads_page:"):]
@@ -257,31 +257,31 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             thread_id = data[7:]
             logger.info("Executing callback action user_id=%s data=%s", user_id, data)
             result = await state.command_router.route("/resume", [thread_id], user_id)
-            await edit_with_log(query, context, result, user_id, reply_markup=main_menu_keyboard())
+            await edit_with_log(query, context, result.text, user_id, reply_markup=main_menu_keyboard())
         
         elif data.startswith("fork:"):
             thread_id = data[5:]
             logger.info("Executing callback action user_id=%s data=%s", user_id, data)
             result = await state.command_router.route("/fork", [thread_id], user_id)
-            await edit_with_log(query, context, result, user_id, reply_markup=main_menu_keyboard())
+            await edit_with_log(query, context, result.text, user_id, reply_markup=main_menu_keyboard())
         
         elif data.startswith("read:"):
             thread_id = data[5:]
             logger.info("Executing callback action user_id=%s data=%s", user_id, data)
             result = await state.command_router.route("/read", [thread_id], user_id)
-            await edit_with_log(query, context, result, user_id, reply_markup=main_menu_keyboard())
+            await edit_with_log(query, context, result.text, user_id, reply_markup=main_menu_keyboard())
         
         elif data.startswith("archive:"):
             thread_id = data[8:]
             logger.info("Executing callback action user_id=%s data=%s", user_id, data)
             result = await state.command_router.route("/archive", [thread_id], user_id)
-            await edit_with_log(query, context, result, user_id, reply_markup=main_menu_keyboard())
+            await edit_with_log(query, context, result.text, user_id, reply_markup=main_menu_keyboard())
 
         elif data.startswith("unarchive:"):
             thread_id = data[10:]
             logger.info("Executing callback action user_id=%s data=%s", user_id, data)
             result = await state.command_router.route("/unarchive", [thread_id], user_id)
-            await edit_with_log(query, context, result, user_id, reply_markup=main_menu_keyboard())
+            await edit_with_log(query, context, result.text, user_id, reply_markup=main_menu_keyboard())
 
         elif data.startswith("skillpick:"):
             skill_name = data[len("skillpick:"):].strip()
@@ -305,8 +305,11 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     timeout=12.0,
                 )
             except asyncio.TimeoutError:
-                result = "Project switch timed out. Please try again or run /start."
-            await edit_with_log(query, context, result, user_id, reply_markup=main_menu_keyboard())
+                result = CommandResult(
+                    kind="error",
+                    text="Project switch timed out. Please try again or run /start.",
+                )
+            await edit_with_log(query, context, result.text, user_id, reply_markup=main_menu_keyboard())
         else:
             logger.info("Executing callback action user_id=%s data=%s (unsupported)", user_id, data)
             await edit_with_log(query, context, "Unsupported button action.", user_id, reply_markup=main_menu_keyboard())

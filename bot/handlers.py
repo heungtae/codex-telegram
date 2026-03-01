@@ -3,13 +3,11 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from codex import CodexClient, CommandRouter
-from codex.events import create_event_handler
 from models.user import user_manager
 from utils.config import get
 from bot.keyboard import main_menu_keyboard, interrupt_keyboard
-from bot.thread_ui import parse_threads_options, threads_keyboard
-from bot.skills_ui import extract_skill_names, skills_keyboard
+from bot.thread_ui import threads_keyboard
+from bot.skills_ui import skills_keyboard
 from bot.projects_ui import projects_keyboard
 from models import state
 
@@ -62,7 +60,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/skills - List skills\n"
         "/apps - List apps\n"
         "/mcp - MCP server status\n\n"
-        f"{start_result}\n\n"
+        f"{start_result.text}\n\n"
         "Or just send a message to start a turn!",
         user_id,
         reply_markup=keyboard,
@@ -83,7 +81,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     state_user = user_manager.get(user_id)
     if state_user.awaiting_project_add_name or state_user.awaiting_project_add_path:
         result = await state.command_router.handle_project_add_input(user_id, text)
-        await send_reply(update, result, user_id)
+        await send_reply(update, result.text, user_id)
         return
 
     if not state_user.active_thread_id:
@@ -157,23 +155,25 @@ async def command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         state_user.clear_project_add_flow()
     
     result = await state.command_router.route(command, args, user_id)
-    if command == "/threads":
-        if result.startswith("Usage:") or result == "No threads found.":
-            await send_reply(update, result, user_id)
+    if result.kind == "threads":
+        listed = result.meta.get("thread_ids", [])
+        offset = int(result.meta.get("offset", 0))
+        limit = int(result.meta.get("limit", 5))
+        archived = bool(result.meta.get("archived", False))
+        if not listed:
+            await send_reply(update, result.text, user_id)
             return
-        offset, limit, archived = parse_threads_options(args)
-        listed = user_manager.get(user_id).last_listed_thread_ids
         await send_reply(
             update,
-            result,
+            result.text,
             user_id,
             reply_markup=threads_keyboard(listed, offset, limit, archived=archived),
         )
         return
-    if command == "/skills":
-        skill_names = extract_skill_names(result)
-        if not skill_names or result.startswith("Usage:") or result.startswith("No skills found"):
-            await send_reply(update, result, user_id)
+    if result.kind == "skills":
+        skill_names = result.meta.get("skill_names", [])
+        if not skill_names:
+            await send_reply(update, result.text, user_id)
             return
         await send_reply(
             update,
@@ -182,23 +182,20 @@ async def command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=skills_keyboard(skill_names),
         )
         return
-    if command == "/projects":
-        if result.startswith("Usage:") or result == "No projects configured.":
-            await send_reply(update, result, user_id)
-            return
-        if result.startswith("Projects:"):
-            listed = user_manager.get(user_id).last_listed_project_keys
+    if result.kind == "projects":
+        listed = result.meta.get("project_keys", [])
+        if listed:
             await send_reply(
                 update,
-                result,
+                result.text,
                 user_id,
                 reply_markup=projects_keyboard(listed),
             )
             return
-        await send_reply(update, result, user_id)
+        await send_reply(update, result.text, user_id)
         return
 
-    await send_reply(update, result, user_id)
+    await send_reply(update, result.text, user_id)
 
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
