@@ -43,6 +43,7 @@ class CodexClient:
                 await self._reader_task
             except asyncio.CancelledError:
                 pass
+            self._reader_task = None
 
         if self._stderr_task:
             self._stderr_task.cancel()
@@ -50,11 +51,22 @@ class CodexClient:
                 await self._stderr_task
             except asyncio.CancelledError:
                 pass
+            self._stderr_task = None
         
         if self._proc:
-            self._proc.terminate()
-            await self._proc.wait()
+            if self._proc.returncode is None:
+                try:
+                    self._proc.terminate()
+                except ProcessLookupError:
+                    # Process already exited between state check and terminate call.
+                    pass
+            try:
+                await self._proc.wait()
+            except ProcessLookupError:
+                # Transport may already be gone; treat as stopped.
+                pass
             logger.info("Codex app-server stopped")
+            self._proc = None
     
     async def initialize(self, client_info: dict[str, Any]):
         result = await self.call("initialize", {

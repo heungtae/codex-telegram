@@ -178,14 +178,24 @@ class CommandRouter:
     async def _thread_list(self, args: list[str], user_id: int) -> str:
         from models.user import user_manager
 
+        def _normalize_flag(arg: str) -> str:
+            value = (arg or "").strip()
+            if value.startswith("\u2014"):  # em dash
+                return "--" + value[1:]
+            if value.startswith("\u2013"):  # en dash
+                return "--" + value[1:]
+            return value
+
         params: dict[str, Any] = {"limit": 5}
         show_full_id = True
         offset: int | None = None
+        archived_mode = False
         i = 0
         while i < len(args):
-            arg = args[i]
-            if arg == "--archived":
+            arg = _normalize_flag(args[i])
+            if arg in ("--archived", "-a", "archived"):
                 params["archived"] = True
+                archived_mode = True
             elif arg in ("--full", "--full-id"):
                 show_full_id = True
             elif arg == "--limit":
@@ -209,6 +219,41 @@ class CommandRouter:
         result = await self.codex.call("thread/list", params)
         
         threads = result.get("data", [])
+
+        def _is_archived_thread(thread: dict[str, Any]) -> bool | None:
+            archived_value = thread.get("archived")
+            if isinstance(archived_value, bool):
+                return archived_value
+            status = thread.get("status")
+            if isinstance(status, dict):
+                status_text = str(status.get("type") or status.get("status") or "").strip().lower()
+                if status_text:
+                    if "archiv" in status_text:
+                        return True
+            for key in ("state", "threadState", "lifecycle"):
+                value = thread.get(key)
+                if isinstance(value, str):
+                    text = value.strip().lower()
+                    if "archiv" in text:
+                        return True
+            return None
+
+        recognized = [_is_archived_thread(t) for t in threads if isinstance(t, dict)]
+        # Only apply client-side filtering when archived state is explicitly detectable.
+        if any(v is True or v is False for v in recognized):
+            filtered: list[dict[str, Any]] = []
+            for t in threads:
+                if not isinstance(t, dict):
+                    continue
+                archived_state = _is_archived_thread(t)
+                if archived_mode:
+                    if archived_state is True:
+                        filtered.append(t)
+                else:
+                    if archived_state is not True:
+                        filtered.append(t)
+            threads = filtered
+
         if offset is not None:
             threads = threads[offset:]
             if original_limit < len(threads):
@@ -220,7 +265,10 @@ class CommandRouter:
         listed_ids: list[str] = []
         
         page_number = (offset // original_limit) + 1 if offset is not None else 1
-        lines = ["Threads:", f"Page {page_number} (size {original_limit})", ""]
+        row_start = (offset or 0) + 1
+        row_end = (offset or 0) + len(threads)
+        title = "Archived Threads:" if archived_mode else "Threads:"
+        lines = [title, f"Page {page_number} (rows {row_start}-{row_end})", ""]
         lines.append(f"{'no':>3}  {'created at':<20}  {'threadId':<36}  conversation")
         lines.append(f"{'-' * 3}  {'-' * 20}  {'-' * 36}  {'-' * 12}")
         for idx, t in enumerate(threads, 1):
@@ -240,7 +288,10 @@ class CommandRouter:
 
         state.set_last_listed_threads(listed_ids)
         lines.append("")
-        lines.append("Tip: Use the buttons below (Resume/Read/Archive, Prev/Next).")
+        if archived_mode:
+            lines.append("Tip: Use the buttons below (Unarchive/Read, Prev/Next).")
+        else:
+            lines.append("Tip: Use the buttons below (Resume/Read/Archive, Prev/Next).")
         
         return "\n".join(lines)
     

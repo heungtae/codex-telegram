@@ -48,13 +48,13 @@ async def send_threads_page(
     chat_id: int,
     offset: int,
     limit: int,
+    archived: bool = False,
     query=None,
 ):
-    result = await state.command_router.route(
-        "/threads",
-        ["--limit", str(limit), "--offset", str(offset)],
-        user_id,
-    )
+    thread_args = ["--limit", str(limit), "--offset", str(offset)]
+    if archived:
+        thread_args.append("--archived")
+    result = await state.command_router.route("/threads", thread_args, user_id)
     if result.startswith("Usage:") or result == "No threads found.":
         if query is None:
             await context.bot.send_message(chat_id=chat_id, text=result, reply_markup=main_menu_keyboard())
@@ -62,7 +62,7 @@ async def send_threads_page(
         await edit_with_log(query, context, result, user_id, reply_markup=main_menu_keyboard())
         return
     listed = user_manager.get(user_id).last_listed_thread_ids
-    keyboard = threads_keyboard(listed, offset, limit)
+    keyboard = threads_keyboard(listed, offset, limit, archived=archived)
     if query is None:
         await context.bot.send_message(chat_id=chat_id, text=result, reply_markup=keyboard)
         return
@@ -92,7 +92,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await context.bot.send_message(chat_id=chat_id, text=result, reply_markup=main_menu_keyboard())
             elif command == "threads":
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
-                await send_threads_page(context, user_id, chat_id, offset=0, limit=5)
+                await send_threads_page(context, user_id, chat_id, offset=0, limit=5, archived=False)
             elif command == "skills":
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
                 result = await run_callback_command("/skills", user_id)
@@ -109,19 +109,37 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif data.startswith("threads_page:"):
             payload = data[len("threads_page:"):]
             parts = payload.split(":")
-            if len(parts) != 2 or not parts[0].isdigit() or not parts[1].isdigit():
+            if len(parts) == 2:
+                mode = "active"
+                offset_raw, limit_raw = parts[0], parts[1]
+            elif len(parts) == 3:
+                mode, offset_raw, limit_raw = parts[0], parts[1], parts[2]
+            else:
+                mode, offset_raw, limit_raw = "", "", ""
+
+            if not offset_raw.isdigit() or not limit_raw.isdigit() or mode not in ("active", "arch"):
                 await edit_with_log(query, context, "Invalid page action.", user_id, reply_markup=main_menu_keyboard())
             else:
-                offset = max(0, int(parts[0]))
-                limit = max(1, min(100, int(parts[1])))
+                offset = max(0, int(offset_raw))
+                limit = max(1, min(100, int(limit_raw)))
+                archived_mode = mode == "arch"
                 logger.info(
-                    "Executing callback action user_id=%s data=%s offset=%s limit=%s",
+                    "Executing callback action user_id=%s data=%s offset=%s limit=%s archived=%s",
                     user_id,
                     data,
                     offset,
                     limit,
+                    archived_mode,
                 )
-                await send_threads_page(context, user_id, chat_id, offset=offset, limit=limit, query=query)
+                await send_threads_page(
+                    context,
+                    user_id,
+                    chat_id,
+                    offset=offset,
+                    limit=limit,
+                    archived=archived_mode,
+                    query=query,
+                )
 
         elif data.startswith("approve:"):
             action_id = data[8:]
@@ -160,6 +178,12 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             thread_id = data[8:]
             logger.info("Executing callback action user_id=%s data=%s", user_id, data)
             result = await state.command_router.route("/archive", [thread_id], user_id)
+            await edit_with_log(query, context, result, user_id, reply_markup=main_menu_keyboard())
+
+        elif data.startswith("unarchive:"):
+            thread_id = data[10:]
+            logger.info("Executing callback action user_id=%s data=%s", user_id, data)
+            result = await state.command_router.route("/unarchive", [thread_id], user_id)
             await edit_with_log(query, context, result, user_id, reply_markup=main_menu_keyboard())
         else:
             logger.info("Executing callback action user_id=%s data=%s (unsupported)", user_id, data)

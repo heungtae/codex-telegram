@@ -119,13 +119,13 @@ async def command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if result.startswith("Usage:") or result == "No threads found.":
             await send_reply(update, result, user_id)
             return
-        offset, limit = parse_threads_options(args)
+        offset, limit, archived = parse_threads_options(args)
         listed = user_manager.get(user_id).last_listed_thread_ids
         await send_reply(
             update,
             result,
             user_id,
-            reply_markup=threads_keyboard(listed, offset, limit),
+            reply_markup=threads_keyboard(listed, offset, limit, archived=archived),
         )
         return
 
