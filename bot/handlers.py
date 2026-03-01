@@ -9,6 +9,7 @@ from models.user import user_manager
 from utils.config import get
 from bot.keyboard import main_menu_keyboard
 from bot.thread_ui import parse_threads_options, threads_keyboard
+from bot.skills_ui import extract_skill_names, skills_keyboard
 from models import state
 
 logger = logging.getLogger("codex-telegram.bot")
@@ -127,6 +128,18 @@ async def command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             result,
             user_id,
             reply_markup=threads_keyboard(listed, offset, limit, archived=archived),
+        )
+        return
+    if command == "/skills":
+        skill_names = extract_skill_names(result)
+        if not skill_names or result.startswith("Usage:") or result.startswith("No skills found"):
+            await send_reply(update, result, user_id)
+            return
+        await send_reply(
+            update,
+            "Skills: choose one to insert template into chat.",
+            user_id,
+            reply_markup=skills_keyboard(skill_names),
         )
         return
 

@@ -6,6 +6,7 @@ from telegram.ext import ContextTypes
 
 from bot.keyboard import main_menu_keyboard
 from bot.thread_ui import threads_keyboard
+from bot.skills_ui import extract_skill_names, skills_keyboard
 from models.user import user_manager
 from models import state
 
@@ -69,6 +70,29 @@ async def send_threads_page(
     await edit_with_log(query, context, result, user_id, reply_markup=keyboard)
 
 
+async def send_skills_picker(
+    context: ContextTypes.DEFAULT_TYPE,
+    user_id: int,
+    chat_id: int,
+    query=None,
+):
+    result = await state.command_router.route("/skills", [], user_id)
+    skill_names = extract_skill_names(result)
+    if not skill_names or result.startswith("Usage:") or result.startswith("No skills found"):
+        if query is None:
+            await context.bot.send_message(chat_id=chat_id, text=result, reply_markup=main_menu_keyboard())
+            return
+        await edit_with_log(query, context, result, user_id, reply_markup=main_menu_keyboard())
+        return
+
+    picker_text = "Skills: choose one to insert template into chat."
+    keyboard = skills_keyboard(skill_names)
+    if query is None:
+        await context.bot.send_message(chat_id=chat_id, text=picker_text, reply_markup=keyboard)
+        return
+    await edit_with_log(query, context, picker_text, user_id, reply_markup=keyboard)
+
+
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if query is None:
@@ -95,8 +119,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await send_threads_page(context, user_id, chat_id, offset=0, limit=5, archived=False)
             elif command == "skills":
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
-                result = await run_callback_command("/skills", user_id)
-                await context.bot.send_message(chat_id=chat_id, text=result, reply_markup=main_menu_keyboard())
+                await send_skills_picker(context, user_id, chat_id)
             elif command == "apps":
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
                 result = await run_callback_command("/apps", user_id)
@@ -185,6 +208,19 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.info("Executing callback action user_id=%s data=%s", user_id, data)
             result = await state.command_router.route("/unarchive", [thread_id], user_id)
             await edit_with_log(query, context, result, user_id, reply_markup=main_menu_keyboard())
+
+        elif data.startswith("skillpick:"):
+            skill_name = data[len("skillpick:"):].strip()
+            logger.info("Executing callback action user_id=%s data=%s", user_id, data)
+            template = f"${skill_name}"
+            await context.bot.send_message(chat_id=chat_id, text=template)
+            await edit_with_log(
+                query,
+                context,
+                f"Inserted template: {template}",
+                user_id,
+                reply_markup=main_menu_keyboard(),
+            )
         else:
             logger.info("Executing callback action user_id=%s data=%s (unsupported)", user_id, data)
             await edit_with_log(query, context, "Unsupported button action.", user_id, reply_markup=main_menu_keyboard())
