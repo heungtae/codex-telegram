@@ -27,7 +27,13 @@ async def wait_for_codex():
 
 async def send_reply(update: Update, text: str, user_id: int, **kwargs):
     logger.info("Sending Telegram message to user_id=%s: %s", user_id, text)
-    await update.message.reply_text(text, **kwargs)
+    message = update.effective_message
+    if message is not None:
+        await message.reply_text(text, **kwargs)
+        return
+    chat = update.effective_chat
+    if chat is not None:
+        await update.get_bot().send_message(chat_id=chat.id, text=text, **kwargs)
 
 
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -130,7 +136,8 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    text = update.message.text if update.message else ""
+    message = update.effective_message
+    text = message.text if message else ""
     logger.info("Received Telegram command from user_id=%s: %s", user_id, text)
     allowed = get("users.allowed_ids", [])
     
@@ -140,8 +147,11 @@ async def command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await wait_for_codex()
     
-    command = text.split()[0]
-    args = text.split()[1:]
+    parts = text.split()
+    if not parts:
+        return
+    command = parts[0]
+    args = parts[1:]
     state_user = user_manager.get(user_id)
     if state_user.awaiting_project_add_name or state_user.awaiting_project_add_path:
         state_user.clear_project_add_flow()
@@ -176,13 +186,16 @@ async def command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if result.startswith("Usage:") or result == "No projects configured.":
             await send_reply(update, result, user_id)
             return
-        listed = user_manager.get(user_id).last_listed_project_keys
-        await send_reply(
-            update,
-            result,
-            user_id,
-            reply_markup=projects_keyboard(listed),
-        )
+        if result.startswith("Projects:"):
+            listed = user_manager.get(user_id).last_listed_project_keys
+            await send_reply(
+                update,
+                result,
+                user_id,
+                reply_markup=projects_keyboard(listed),
+            )
+            return
+        await send_reply(update, result, user_id)
         return
 
     await send_reply(update, result, user_id)

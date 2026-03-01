@@ -103,5 +103,13 @@ class UserManager:
                 return uid
         return None
 
+    def find_user_id_by_turn(self, turn_id: str | None) -> int | None:
+        if not turn_id:
+            return None
+        for uid, user in self._users.items():
+            if user.active_turn_id == turn_id:
+                return uid
+        return None
+
 
 user_manager = UserManager()

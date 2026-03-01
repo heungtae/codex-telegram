@@ -232,23 +232,29 @@ async def post_init(app: Application):
         return 10
 
     async def forward_event(method: str, params: dict | None):
+        thread_id = _extract_thread_id(method, params)
+        turn_id = _extract_turn_id(method, params)
+        user_id_by_thread = user_manager.find_user_id_by_thread(thread_id)
+
+        # Keep runtime turn state in sync even when event forwarding is filtered out.
+        if method == "turn/started" and turn_id and user_id_by_thread is not None:
+            user_manager.get(user_id_by_thread).set_turn(turn_id)
+        elif method in ("turn/completed", "turn/failed", "turn/cancelled"):
+            owner_id = user_manager.find_user_id_by_turn(turn_id)
+            if owner_id is None:
+                owner_id = user_id_by_thread
+            if owner_id is not None:
+                user_manager.get(owner_id).clear_turn()
+
         if _method_matches(method, denylist):
             return
         if allowlist and not _method_matches(method, allowlist):
             return
         if _event_level(method, params) < forward_threshold:
             return
-        thread_id = _extract_thread_id(method, params)
-        user_id = user_manager.find_user_id_by_thread(thread_id)
+        user_id = user_id_by_thread
         if user_id is None:
             return
-        user_state = user_manager.get(user_id)
-        turn_id = _extract_turn_id(method, params)
-        if method == "turn/started" and turn_id:
-            user_state.set_turn(turn_id)
-        elif method in ("turn/completed", "turn/failed", "turn/cancelled"):
-            # Completion or failure means there is no active running turn.
-            user_state.clear_turn()
 
         msg = _format_event(method, params)
         if msg is None:

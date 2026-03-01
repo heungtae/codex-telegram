@@ -157,7 +157,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             elif command == "interrupt":
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
                 result = await run_callback_command("/interrupt", user_id)
-                await context.bot.send_message(chat_id=chat_id, text=result, reply_markup=main_menu_keyboard())
+                await context.bot.send_message(chat_id=chat_id, text=result)
         
         elif data.startswith("threads_page:"):
             payload = data[len("threads_page:"):]
@@ -203,7 +203,6 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     context,
                     "Invalid approval action.",
                     user_id,
-                    reply_markup=main_menu_keyboard(),
                 )
             else:
                 request_id = int(parts[0])
@@ -214,7 +213,6 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         context,
                         "Invalid approval decision.",
                         user_id,
-                        reply_markup=main_menu_keyboard(),
                     )
                 elif state.codex_client is None:
                     await edit_with_log(
@@ -222,7 +220,6 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         context,
                         "Codex client is not ready.",
                         user_id,
-                        reply_markup=main_menu_keyboard(),
                     )
                 else:
                     accepted = state.codex_client.submit_approval_decision(request_id, choice)
@@ -232,7 +229,6 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             context,
                             f"Approval request expired or already handled: {request_id}",
                             user_id,
-                            reply_markup=main_menu_keyboard(),
                         )
                     else:
                         await edit_with_log(
@@ -240,7 +236,6 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             context,
                             f"Approval sent: request={request_id}, decision={choice}",
                             user_id,
-                            reply_markup=main_menu_keyboard(),
                         )
 
         elif data.startswith("approve:"):
