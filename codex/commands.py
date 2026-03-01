@@ -17,11 +17,11 @@ class CommandRouter:
             elif command == "/fork":
                 return await self._thread_fork(args)
             elif command == "/threads":
-                return await self._thread_list(args)
+                return await self._thread_list(args, user_id)
             elif command == "/read":
-                return await self._thread_read(args)
+                return await self._thread_read(args, user_id)
             elif command == "/archive":
-                return await self._thread_archive(args)
+                return await self._thread_archive(args, user_id)
             elif command == "/unarchive":
                 return await self._thread_unarchive(args)
             elif command == "/compact":
@@ -69,14 +69,97 @@ class CommandRouter:
         
         return f"Thread started: {thread_id}"
     
+    def _resolve_thread_arg(self, arg: str, user_id: int) -> tuple[str | None, str | None]:
+        from models.user import user_manager
+
+        candidate = (arg or "").strip()
+        if not candidate:
+            return None, "Missing thread identifier."
+        if candidate.isdigit():
+            idx = int(candidate)
+            listed = user_manager.get(user_id).last_listed_thread_ids
+            if idx < 1 or idx > len(listed):
+                return None, f"Invalid thread number: {candidate}. Run /threads first."
+            return listed[idx - 1], None
+        return candidate, None
+
+    def _thread_conversation(self, thread: dict[str, Any] | None) -> str:
+        t = thread or {}
+        value = (
+            t.get("preview")
+            or t.get("conversation")
+            or t.get("name")
+            or t.get("title")
+            or t.get("summary")
+        )
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+        return "Untitled"
+
+    def _extract_turns(self, result: dict[str, Any], thread: dict[str, Any]) -> list[dict[str, Any]]:
+        def to_turn_list(value: Any) -> list[dict[str, Any]]:
+            if isinstance(value, list):
+                return [v for v in value if isinstance(v, dict)]
+            if isinstance(value, dict):
+                data = value.get("data")
+                if isinstance(data, list):
+                    return [v for v in data if isinstance(v, dict)]
+            return []
+
+        turns = to_turn_list(result.get("turns"))
+        if turns:
+            return turns
+        return to_turn_list(thread.get("turns"))
+
+    def _first_text(self, value: Any) -> str | None:
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+        if isinstance(value, dict):
+            for key in ("text", "message", "delta", "summary", "preview", "content"):
+                found = self._first_text(value.get(key))
+                if found:
+                    return found
+            return None
+        if isinstance(value, list):
+            for item in value:
+                found = self._first_text(item)
+                if found:
+                    return found
+            return None
+        return None
+
+    def _extract_preview(self, result: dict[str, Any], thread: dict[str, Any], turns: list[dict[str, Any]]) -> str:
+        direct = (
+            self._first_text(thread.get("preview"))
+            or self._first_text(thread.get("summary"))
+            or self._first_text(result.get("preview"))
+            or self._first_text(result.get("summary"))
+        )
+        if direct:
+            return direct
+
+        for turn in reversed(turns):
+            text = (
+                self._first_text(turn.get("summary"))
+                or self._first_text(turn.get("preview"))
+                or self._first_text(turn.get("text"))
+                or self._first_text(turn.get("items"))
+                or self._first_text(turn.get("output"))
+            )
+            if text:
+                return text
+        return "(no preview)"
+
     async def _thread_resume(self, args: list[str], user_id: int) -> str:
         from models.user import user_manager
         
         if not args:
-            return "Usage: /resume <thread_id>"
+            return "Usage: /resume <thread_id|number>"
         
-        thread_id = args[0]
-        result = await self.codex.call("thread/resume", {"threadId": thread_id})
+        thread_id, err = self._resolve_thread_arg(args[0], user_id)
+        if err:
+            return err
+        await self.codex.call("thread/resume", {"threadId": thread_id})
         
         user_manager.get(user_id).set_thread(thread_id)
         
@@ -92,44 +175,105 @@ class CommandRouter:
         new_thread_id = result.get("thread", {}).get("id")
         return f"Thread forked: {new_thread_id}"
     
-    async def _thread_list(self, args: list[str]) -> str:
-        params: dict[str, Any] = {"limit": 20}
+    async def _thread_list(self, args: list[str], user_id: int) -> str:
+        from models.user import user_manager
+
+        params: dict[str, Any] = {"limit": 5}
+        show_full_id = True
+        offset: int | None = None
+        i = 0
+        while i < len(args):
+            arg = args[i]
+            if arg == "--archived":
+                params["archived"] = True
+            elif arg in ("--full", "--full-id"):
+                show_full_id = True
+            elif arg == "--limit":
+                if i + 1 >= len(args) or not args[i + 1].isdigit():
+                    return "Usage: /threads [--archived] [--full] [--limit N] [--offset N]"
+                params["limit"] = max(1, min(100, int(args[i + 1])))
+                i += 1
+            elif arg == "--offset":
+                if i + 1 >= len(args) or not args[i + 1].isdigit():
+                    return "Usage: /threads [--archived] [--full] [--limit N] [--offset N]"
+                offset = max(0, int(args[i + 1]))
+                i += 1
+            else:
+                return "Usage: /threads [--archived] [--full] [--limit N] [--offset N]"
+            i += 1
         
-        if args and args[0] == "--archived":
-            params["archived"] = True
-        
+        original_limit = int(params["limit"])
+        if offset is not None:
+            params["limit"] = min(100, original_limit + offset)
+
         result = await self.codex.call("thread/list", params)
         
         threads = result.get("data", [])
+        if offset is not None:
+            threads = threads[offset:]
+            if original_limit < len(threads):
+                threads = threads[:original_limit]
         if not threads:
             return "No threads found."
+
+        state = user_manager.get(user_id)
+        listed_ids: list[str] = []
         
-        lines = ["Threads:"]
-        for t in threads:
-            name = t.get("name", "Untitled")
+        page_number = (offset // original_limit) + 1 if offset is not None else 1
+        lines = ["Threads:", f"Page {page_number} (size {original_limit})", ""]
+        lines.append(f"{'no':>3}  {'created at':<20}  {'threadId':<36}  conversation")
+        lines.append(f"{'-' * 3}  {'-' * 20}  {'-' * 36}  {'-' * 12}")
+        for idx, t in enumerate(threads, 1):
+            name = self._thread_conversation(t)
             tid = t.get("id", "")
-            lines.append(f"• {tid[:12]}... - {name}")
+            created_at = t.get("createdAt") or t.get("created_at") or "-"
+            if isinstance(tid, str) and tid:
+                listed_ids.append(tid)
+            row_no = (offset or 0) + idx
+            status = " [active]" if state.active_thread_id and tid == state.active_thread_id else ""
+            display_id = tid if show_full_id else (f"{tid[:12]}..." if tid else "unknown")
+            created_display = str(created_at).replace("\n", " ")[:20]
+            conversation_display = str(name).replace("\n", " ").strip()[:120]
+            lines.append(
+                f"{row_no:>3}  {created_display:<20}  {display_id:<36}  {conversation_display}{status}"
+            )
+
+        state.set_last_listed_threads(listed_ids)
+        lines.append("")
+        lines.append("Tip: Use the buttons below (Resume/Read/Archive, Prev/Next).")
         
         return "\n".join(lines)
     
-    async def _thread_read(self, args: list[str]) -> str:
+    async def _thread_read(self, args: list[str], user_id: int) -> str:
         if not args:
-            return "Usage: /read <thread_id>"
+            return "Usage: /read <thread_id|number>"
         
-        thread_id = args[0]
+        thread_id, err = self._resolve_thread_arg(args[0], user_id)
+        if err:
+            return err
         result = await self.codex.call("thread/read", {"threadId": thread_id, "includeTurns": True})
         
         thread = result.get("thread", {})
-        name = thread.get("name", "Untitled")
+        name = self._thread_conversation(thread)
         status = thread.get("status", {}).get("type", "unknown")
-        
-        return f"Thread: {name}\nStatus: {status}\nID: {thread_id}"
+        turns = self._extract_turns(result, thread)
+        preview = self._extract_preview(result, thread, turns).replace("\n", " ").strip()[:500]
+
+        return (
+            f"Thread: {name}\n"
+            f"Status: {status}\n"
+            f"ID: {thread_id}\n"
+            f"Turns: {len(turns)}\n"
+            f"Preview: {preview}"
+        )
     
-    async def _thread_archive(self, args: list[str]) -> str:
+    async def _thread_archive(self, args: list[str], user_id: int) -> str:
         if not args:
-            return "Usage: /archive <thread_id>"
+            return "Usage: /archive <thread_id|number>"
         
-        thread_id = args[0]
+        thread_id, err = self._resolve_thread_arg(args[0], user_id)
+        if err:
+            return err
         await self.codex.call("thread/archive", {"threadId": thread_id})
         
         return f"Thread archived: {thread_id}"

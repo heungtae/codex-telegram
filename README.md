@@ -74,11 +74,11 @@ python3 main.py
 | Telegram | Codex API | Description |
 |----------|-----------|-------------|
 | `/start` | thread/start | Create a new thread |
-| `/resume <id>` | thread/resume | Resume a thread |
+| `/resume <id\|number>` | thread/resume | Resume a thread (supports list number) |
 | `/fork <id>` | thread/fork | Fork a thread |
-| `/threads` | thread/list | List threads |
-| `/read <id>` | thread/read | Read a thread |
-| `/archive <id>` | thread/archive | Archive a thread |
+| `/threads [--full] [--limit N] [--offset N] [--archived]` | thread/list | List threads with paging/full id options |
+| `/read <id\|number>` | thread/read | Read a thread (supports list number) |
+| `/archive <id\|number>` | thread/archive | Archive a thread (supports list number) |
 | `/unarchive <id>` | thread/unarchive | Unarchive a thread |
 | `/compact <id>` | thread/compact/start | Compact conversation history |
 | `/rollback <n>` | thread/rollback | Rollback N turns |

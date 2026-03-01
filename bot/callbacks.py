@@ -5,6 +5,7 @@ from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
 from bot.keyboard import main_menu_keyboard
+from bot.thread_ui import threads_keyboard
 from models.user import user_manager
 from models import state
 
@@ -41,6 +42,33 @@ async def run_callback_command(command: str, user_id: int) -> str:
     return await state.command_router.route(command, [], user_id)
 
 
+async def send_threads_page(
+    context: ContextTypes.DEFAULT_TYPE,
+    user_id: int,
+    chat_id: int,
+    offset: int,
+    limit: int,
+    query=None,
+):
+    result = await state.command_router.route(
+        "/threads",
+        ["--limit", str(limit), "--offset", str(offset)],
+        user_id,
+    )
+    if result.startswith("Usage:") or result == "No threads found.":
+        if query is None:
+            await context.bot.send_message(chat_id=chat_id, text=result, reply_markup=main_menu_keyboard())
+            return
+        await edit_with_log(query, context, result, user_id, reply_markup=main_menu_keyboard())
+        return
+    listed = user_manager.get(user_id).last_listed_thread_ids
+    keyboard = threads_keyboard(listed, offset, limit)
+    if query is None:
+        await context.bot.send_message(chat_id=chat_id, text=result, reply_markup=keyboard)
+        return
+    await edit_with_log(query, context, result, user_id, reply_markup=keyboard)
+
+
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if query is None:
@@ -64,8 +92,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await context.bot.send_message(chat_id=chat_id, text=result, reply_markup=main_menu_keyboard())
             elif command == "threads":
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
-                result = await run_callback_command("/threads", user_id)
-                await context.bot.send_message(chat_id=chat_id, text=result, reply_markup=main_menu_keyboard())
+                await send_threads_page(context, user_id, chat_id, offset=0, limit=5)
             elif command == "skills":
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
                 result = await run_callback_command("/skills", user_id)
@@ -79,6 +106,23 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 result = await run_callback_command("/config", user_id)
                 await context.bot.send_message(chat_id=chat_id, text=result, reply_markup=main_menu_keyboard())
         
+        elif data.startswith("threads_page:"):
+            payload = data[len("threads_page:"):]
+            parts = payload.split(":")
+            if len(parts) != 2 or not parts[0].isdigit() or not parts[1].isdigit():
+                await edit_with_log(query, context, "Invalid page action.", user_id, reply_markup=main_menu_keyboard())
+            else:
+                offset = max(0, int(parts[0]))
+                limit = max(1, min(100, int(parts[1])))
+                logger.info(
+                    "Executing callback action user_id=%s data=%s offset=%s limit=%s",
+                    user_id,
+                    data,
+                    offset,
+                    limit,
+                )
+                await send_threads_page(context, user_id, chat_id, offset=offset, limit=limit, query=query)
+
         elif data.startswith("approve:"):
             action_id = data[8:]
             logger.info("Executing callback action user_id=%s data=%s", user_id, data)
@@ -97,23 +141,26 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif data.startswith("resume:"):
             thread_id = data[7:]
             logger.info("Executing callback action user_id=%s data=%s", user_id, data)
-            user_manager.get(user_id).set_thread(thread_id)
-            await edit_with_log(query, context, f"Thread {thread_id} set as active.", user_id)
+            result = await state.command_router.route("/resume", [thread_id], user_id)
+            await edit_with_log(query, context, result, user_id, reply_markup=main_menu_keyboard())
         
         elif data.startswith("fork:"):
             thread_id = data[5:]
             logger.info("Executing callback action user_id=%s data=%s", user_id, data)
-            await edit_with_log(query, context, f"Fork thread: {thread_id}", user_id)
+            result = await state.command_router.route("/fork", [thread_id], user_id)
+            await edit_with_log(query, context, result, user_id, reply_markup=main_menu_keyboard())
         
         elif data.startswith("read:"):
             thread_id = data[5:]
             logger.info("Executing callback action user_id=%s data=%s", user_id, data)
-            await edit_with_log(query, context, f"Read thread: {thread_id}", user_id)
+            result = await state.command_router.route("/read", [thread_id], user_id)
+            await edit_with_log(query, context, result, user_id, reply_markup=main_menu_keyboard())
         
         elif data.startswith("archive:"):
             thread_id = data[8:]
             logger.info("Executing callback action user_id=%s data=%s", user_id, data)
-            await edit_with_log(query, context, f"Archive thread: {thread_id}", user_id)
+            result = await state.command_router.route("/archive", [thread_id], user_id)
+            await edit_with_log(query, context, result, user_id, reply_markup=main_menu_keyboard())
         else:
             logger.info("Executing callback action user_id=%s data=%s (unsupported)", user_id, data)
             await edit_with_log(query, context, "Unsupported button action.", user_id, reply_markup=main_menu_keyboard())

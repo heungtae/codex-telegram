@@ -8,6 +8,7 @@ from codex.events import create_event_handler
 from models.user import user_manager
 from utils.config import get
 from bot.keyboard import main_menu_keyboard
+from bot.thread_ui import parse_threads_options, threads_keyboard
 from models import state
 
 logger = logging.getLogger("codex-telegram.bot")
@@ -114,7 +115,20 @@ async def command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = text.split()[1:]
     
     result = await state.command_router.route(command, args, user_id)
-    
+    if command == "/threads":
+        if result.startswith("Usage:") or result == "No threads found.":
+            await send_reply(update, result, user_id)
+            return
+        offset, limit = parse_threads_options(args)
+        listed = user_manager.get(user_id).last_listed_thread_ids
+        await send_reply(
+            update,
+            result,
+            user_id,
+            reply_markup=threads_keyboard(listed, offset, limit),
+        )
+        return
+
     await send_reply(update, result, user_id)
 
 

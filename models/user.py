@@ -7,12 +7,16 @@ class UserState:
     active_thread_id: str | None = None
     waiting_for_approval: dict[str, Any] = field(default_factory=dict)
     last_message_id: int | None = None
+    last_listed_thread_ids: list[str] = field(default_factory=list)
     
     def set_thread(self, thread_id: str | None):
         self.active_thread_id = thread_id
     
     def clear_thread(self):
         self.active_thread_id = None
+
+    def set_last_listed_threads(self, thread_ids: list[str]):
+        self.last_listed_thread_ids = thread_ids
 
 
 class UserManager:
