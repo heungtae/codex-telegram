@@ -28,6 +28,7 @@ pip install python-telegram-bot
 ```toml
 [bot]
 token = "TELEGRAM_BOT_TOKEN"
+drop_pending_updates = true # true면 시작 전 쌓인 Telegram 업데이트를 버림(기본값)
 
 [codex]
 command = "codex"
@@ -73,6 +74,7 @@ python3 main.py
 
 | Telegram | Codex API | Description |
 |----------|-----------|-------------|
+| `/commands` | - | List available commands |
 | `/start` | thread/start | Create a new thread |
 | `/resume <id\|number>` | thread/resume | Resume a thread (supports list number) |
 | `/fork <id>` | thread/fork | Fork a thread |
@@ -92,6 +94,8 @@ python3 main.py
 | `/apps` | app/list | List apps |
 | `/mcp` | mcpServerStatus/list | List MCP servers |
 | `/config` | config/read | Read configuration |
+
+Tip: use `<command> --help` to see usage for each command.
 
 ## Message Flow
 

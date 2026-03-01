@@ -271,6 +271,13 @@ def main():
     logger.info("Starting Codex Telegram Bot...")
     
     bot_token = get("bot.token")
+    drop_pending_raw = get("bot.drop_pending_updates", True)
+    if isinstance(drop_pending_raw, bool):
+        drop_pending_updates = drop_pending_raw
+    elif isinstance(drop_pending_raw, str):
+        drop_pending_updates = drop_pending_raw.strip().lower() in ("1", "true", "yes", "on")
+    else:
+        drop_pending_updates = True
     if not bot_token or bot_token == "YOUR_TELEGRAM_BOT_TOKEN":
         logger.error("Please set bot.token in conf.toml")
         return
@@ -287,12 +294,16 @@ def main():
     app.add_handler(TypeHandler(Update, debug_update_handler), group=-1)
     app.add_handler(CommandHandler("start", start_handler))
     app.add_handler(CommandHandler("help", start_handler))
-    app.add_handler(CommandHandler(["start", "resume", "threads", "read", "archive", "unarchive", "compact", "rollback", "interrupt", "review", "exec", "models", "features", "modes", "skills", "apps", "mcp", "config"], command_handler))
+    app.add_handler(CommandHandler(["commands", "start", "resume", "threads", "read", "archive", "unarchive", "compact", "rollback", "interrupt", "review", "exec", "models", "features", "modes", "skills", "apps", "mcp", "config"], command_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
     app.add_handler(CallbackQueryHandler(callback_handler))
     app.add_error_handler(error_handler)
     
-    app.run_polling(stop_signals=None, allowed_updates=Update.ALL_TYPES)
+    app.run_polling(
+        stop_signals=None,
+        allowed_updates=Update.ALL_TYPES,
+        drop_pending_updates=drop_pending_updates,
+    )
 
 
 if __name__ == "__main__":

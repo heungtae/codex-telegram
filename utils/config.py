@@ -7,6 +7,7 @@ _config: dict[str, Any] | None = None
 
 DEFAULT_CONFIG = """[bot]
 token = "TELEGRAM_BOT_TOKEN"
+drop_pending_updates = true
 
 [codex]
 command = "codex"

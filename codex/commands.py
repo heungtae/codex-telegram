@@ -3,13 +3,79 @@ import logging
 
 logger = logging.getLogger("codex-telegram.codex")
 
+COMMAND_HELP: dict[str, str] = {
+    "/commands": "List available commands. Usage: /commands",
+    "/start": "Create a new thread. Usage: /start [model]",
+    "/resume": "Resume a thread. Usage: /resume <thread_id|number>",
+    "/fork": "Fork a thread. Usage: /fork <thread_id>",
+    "/threads": "List threads. Usage: /threads [--archived|-a] [--full] [--limit N] [--offset N]",
+    "/read": "Read thread details. Usage: /read <thread_id|number>",
+    "/archive": "Archive a thread. Usage: /archive <thread_id|number>",
+    "/unarchive": "Unarchive a thread. Usage: /unarchive <thread_id>",
+    "/compact": "Start thread compaction. Usage: /compact <thread_id>",
+    "/rollback": "Rollback turns. Usage: /rollback <n_turns>",
+    "/interrupt": "Interrupt current turn. Usage: /interrupt",
+    "/review": "Start review. Usage: /review [uncommittedChanges|baseBranch|commit|custom]",
+    "/exec": "Execute command in Codex app-server. Usage: /exec <command>",
+    "/models": "List available models. Usage: /models",
+    "/features": "List experimental features. Usage: /features",
+    "/modes": "List collaboration modes. Usage: /modes",
+    "/skills": "List skills. Usage: /skills [cwd]",
+    "/apps": "List apps. Usage: /apps",
+    "/mcp": "List MCP server statuses. Usage: /mcp",
+    "/config": "Read server configuration. Usage: /config",
+}
+
 
 class CommandRouter:
     def __init__(self, codex_client):
         self.codex = codex_client
+
+    def _normalize_cli_token(self, token: str) -> str:
+        # Normalize unicode dash variants so inputs like `—help`, `—-help`, `−h` are accepted.
+        value = (token or "").strip()
+        value = value.translate(
+            str.maketrans(
+                {
+                    "\u2014": "-",  # em dash
+                    "\u2013": "-",  # en dash
+                    "\u2212": "-",  # minus sign
+                    "\ufe63": "-",  # small hyphen-minus
+                    "\uff0d": "-",  # fullwidth hyphen-minus
+                }
+            )
+        )
+        lowered = value.lower()
+        if lowered.lstrip("-") == "help":
+            return "--help"
+        if lowered.lstrip("-") == "h":
+            return "-h"
+        return value
+
+    def _is_help_requested(self, args: list[str]) -> bool:
+        for arg in args:
+            normalized = self._normalize_cli_token(arg).lower()
+            if normalized in ("--help", "-h", "help"):
+                return True
+        return False
+
+    def _command_help(self, command: str) -> str:
+        return COMMAND_HELP.get(command, f"No help available for {command}")
+
+    def _commands_overview(self) -> str:
+        lines = ["Available commands:"]
+        for command in sorted(COMMAND_HELP.keys()):
+            lines.append(f"- {command}")
+        lines.append("")
+        lines.append("Tip: Use <command> --help for details.")
+        return "\n".join(lines)
     
     async def route(self, command: str, args: list[str], user_id: int) -> str:
         try:
+            if self._is_help_requested(args):
+                return self._command_help(command)
+            if command == "/commands":
+                return self._commands_overview()
             if command == "/start":
                 return await self._thread_start(args, user_id)
             elif command == "/resume":

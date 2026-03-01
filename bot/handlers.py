@@ -44,6 +44,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update,
         "Welcome to Codex Telegram Bot!\n\n"
         "Available commands:\n"
+        "/commands - List all commands\n"
         "/start - Start a new thread\n"
         "/resume <id> - Resume a thread\n"
         "/threads - List your threads\n"
