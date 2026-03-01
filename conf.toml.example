@@ -20,6 +20,14 @@ app_server_event_level = "INFO"
 app_server_event_allowlist = []
 app_server_event_denylist = []
 
+# Example rule:
+# [[forwarding.rules]]
+# method = "item/completed"
+# require_path = "item.type"
+# require_equals = "agentMessage"
+# text_paths = ["item.text"]
+# fallback = "drop" # drop|json
+
 [display]
 max_message_length = 4000
 send_progress = true

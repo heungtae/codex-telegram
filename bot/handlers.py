@@ -119,4 +119,13 @@ async def command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    logger.error(f"Update {update} caused error {context.error}")
+    err = context.error
+    if err is None:
+        logger.error("Update %s caused unknown error", update)
+        return
+    logger.error(
+        "Update %s caused error: %s",
+        update,
+        err,
+        exc_info=(type(err), err, err.__traceback__),
+    )

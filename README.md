@@ -47,6 +47,14 @@ level = "INFO" # app-server 로그
 app_server_event_level = "INFO" # OFF|ERROR|WARNING|INFO|DEBUG (Telegram 전달 레벨)
 app_server_event_allowlist = [] # method 패턴 허용 목록, 예: ["turn/*", "item/agentMessage/*", "codex/event/*"]
 app_server_event_denylist = []  # method 패턴 차단 목록, 예: ["codex/event/mcp_startup_*", "deprecationNotice"]
+
+# 예: item/completed 중 agentMessage의 text만 전달
+[[forwarding.rules]]
+method = "item/completed"
+require_path = "item.type"
+require_equals = "agentMessage"
+text_paths = ["item.text"]
+fallback = "drop" # drop|json
 ```
 
 ### 2. Set Environment Variable
