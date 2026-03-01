@@ -91,8 +91,8 @@ args = ["app-server"]
 allowed_ids = [123456789, 987654321]
 
 [approval]
-require_for = ["file_write", "command_exec", "tool_use"]
-auto_approve_trusted = false
+mode = "interactive"
+auto_response = "approve"
 
 [display]
 max_message_length = 4000

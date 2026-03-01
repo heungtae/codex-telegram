@@ -194,6 +194,55 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     query=query,
                 )
 
+        elif data.startswith("approval:"):
+            payload = data[len("approval:"):]
+            parts = payload.split(":")
+            if len(parts) != 2 or not parts[0].isdigit():
+                await edit_with_log(
+                    query,
+                    context,
+                    "Invalid approval action.",
+                    user_id,
+                    reply_markup=main_menu_keyboard(),
+                )
+            else:
+                request_id = int(parts[0])
+                choice = parts[1].strip().lower()
+                if choice not in ("approve", "session", "deny"):
+                    await edit_with_log(
+                        query,
+                        context,
+                        "Invalid approval decision.",
+                        user_id,
+                        reply_markup=main_menu_keyboard(),
+                    )
+                elif state.codex_client is None:
+                    await edit_with_log(
+                        query,
+                        context,
+                        "Codex client is not ready.",
+                        user_id,
+                        reply_markup=main_menu_keyboard(),
+                    )
+                else:
+                    accepted = state.codex_client.submit_approval_decision(request_id, choice)
+                    if not accepted:
+                        await edit_with_log(
+                            query,
+                            context,
+                            f"Approval request expired or already handled: {request_id}",
+                            user_id,
+                            reply_markup=main_menu_keyboard(),
+                        )
+                    else:
+                        await edit_with_log(
+                            query,
+                            context,
+                            f"Approval sent: request={request_id}, decision={choice}",
+                            user_id,
+                            reply_markup=main_menu_keyboard(),
+                        )
+
         elif data.startswith("approve:"):
             action_id = data[8:]
             logger.info("Executing callback action user_id=%s data=%s", user_id, data)

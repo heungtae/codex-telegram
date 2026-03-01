@@ -1,14 +1,12 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 
-def approval_keyboard(action_id: str) -> InlineKeyboardMarkup:
+def approval_keyboard(request_id: int) -> InlineKeyboardMarkup:
     keyboard = [
         [
-            InlineKeyboardButton("✅ Approve", callback_data=f"approve:{action_id}"),
-            InlineKeyboardButton("❌ Deny", callback_data=f"deny:{action_id}"),
-        ],
-        [
-            InlineKeyboardButton("📋 View Details", callback_data=f"view:{action_id}"),
+            InlineKeyboardButton("✅ Approve", callback_data=f"approval:{request_id}:approve"),
+            InlineKeyboardButton("🕘 Session", callback_data=f"approval:{request_id}:session"),
+            InlineKeyboardButton("❌ Deny", callback_data=f"approval:{request_id}:deny"),
         ],
     ]
     return InlineKeyboardMarkup(keyboard)

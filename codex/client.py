@@ -17,8 +17,10 @@ class CodexClient:
         self._reader_task: asyncio.Task | None = None
         self._stderr_task: asyncio.Task | None = None
         self._pending: dict[int, asyncio.Future[JSONRPCResponse]] = {}
+        self._pending_approvals: dict[int, asyncio.Future[str]] = {}
         self._event_handlers: dict[str, list[Callable]] = {}
         self._any_event_handlers: list[Callable] = []
+        self._approval_handlers: list[Callable] = []
         self._initialized = False
     
     async def start(self):
@@ -105,6 +107,16 @@ class CodexClient:
 
     def on_any(self, handler: Callable):
         self._any_event_handlers.append(handler)
+
+    def on_approval_request(self, handler: Callable):
+        self._approval_handlers.append(handler)
+
+    def submit_approval_decision(self, request_id: int, decision: str) -> bool:
+        future = self._pending_approvals.get(request_id)
+        if future is None or future.done():
+            return False
+        future.set_result(decision)
+        return True
     
     def _write(self, msg: JSONRPCRequest | JSONRPCNotification | JSONRPCResponse):
         data = self.protocol.serialize(msg)
@@ -175,6 +187,7 @@ class CodexClient:
         method = msg.method
         params = msg.params or {}
         auto_mode = str(get("approval.auto_response", "approve")).strip().lower()
+        approval_mode = str(get("approval.mode", "interactive")).strip().lower()
 
         def _write_result(result: dict[str, Any]):
             response = self.protocol.create_response(req_id=msg.id, result=result)
@@ -187,35 +200,102 @@ class CodexClient:
             )
             self._write(response)
 
-        try:
-            if method in ("item/commandExecution/requestApproval", "item/fileChange/requestApproval"):
-                if auto_mode in ("approve", "accept", "allow"):
-                    _write_result({"decision": "accept"})
-                    logger.info("Auto-approved server request method=%s id=%s", method, msg.id)
-                    return
-                if auto_mode in ("session", "approve_for_session"):
-                    _write_result({"decision": "acceptForSession"})
-                    logger.info("Auto-approved-for-session server request method=%s id=%s", method, msg.id)
-                    return
-                _write_result({"decision": "decline"})
-                logger.info("Auto-declined server request method=%s id=%s", method, msg.id)
-                return
+        def _default_choice() -> str:
+            if auto_mode in ("session", "approve_for_session"):
+                return "session"
+            if auto_mode in ("deny", "decline", "denied"):
+                return "deny"
+            return "approve"
 
+        def _result_from_choice(choice: str) -> dict[str, Any]:
+            normalized = choice.strip().lower()
+            if method in ("item/commandExecution/requestApproval", "item/fileChange/requestApproval"):
+                if normalized == "session":
+                    return {"decision": "acceptForSession"}
+                if normalized == "deny":
+                    return {"decision": "decline"}
+                return {"decision": "accept"}
             if method in ("execCommandApproval", "applyPatchApproval"):
-                if auto_mode in ("approve", "accept", "allow"):
-                    _write_result({"decision": "approved"})
-                    logger.info("Auto-approved legacy server request method=%s id=%s", method, msg.id)
+                if normalized == "session":
+                    return {"decision": "approved_for_session"}
+                if normalized == "deny":
+                    return {"decision": "denied"}
+                return {"decision": "approved"}
+            return {}
+
+        def _extract_thread_id() -> str | None:
+            thread_id = params.get("threadId")
+            if isinstance(thread_id, str) and thread_id:
+                return thread_id
+            conversation_id = params.get("conversationId")
+            if isinstance(conversation_id, str) and conversation_id:
+                return conversation_id
+            return None
+
+        try:
+            if method in (
+                "item/commandExecution/requestApproval",
+                "item/fileChange/requestApproval",
+                "execCommandApproval",
+                "applyPatchApproval",
+            ):
+                req_id = msg.id
+                if req_id is None:
+                    _write_result(_result_from_choice(_default_choice()))
                     return
-                if auto_mode in ("session", "approve_for_session"):
-                    _write_result({"decision": "approved_for_session"})
+
+                if approval_mode in ("auto", "automatic"):
+                    choice = _default_choice()
+                    result_payload = _result_from_choice(choice)
+                    _write_result(result_payload)
                     logger.info(
-                        "Auto-approved-for-session legacy server request method=%s id=%s",
+                        "Auto-mode approval resolved method=%s id=%s choice=%s payload=%s",
                         method,
-                        msg.id,
+                        req_id,
+                        choice,
+                        result_payload,
                     )
                     return
-                _write_result({"decision": "denied"})
-                logger.info("Auto-denied legacy server request method=%s id=%s", method, msg.id)
+
+                future: asyncio.Future[str] = asyncio.Future()
+                self._pending_approvals[req_id] = future
+                payload = {
+                    "id": req_id,
+                    "method": method,
+                    "threadId": _extract_thread_id(),
+                    "params": params,
+                }
+
+                for handler in self._approval_handlers:
+                    try:
+                        result = handler(payload)
+                        if inspect.isawaitable(result):
+                            await result
+                    except Exception:
+                        logger.exception("Error in approval request handler method=%s id=%s", method, req_id)
+
+                decision_choice = _default_choice()
+                try:
+                    decision_choice = await asyncio.wait_for(future, timeout=120.0)
+                except asyncio.TimeoutError:
+                    logger.info(
+                        "Approval request timeout; using default decision method=%s id=%s default=%s",
+                        method,
+                        req_id,
+                        decision_choice,
+                    )
+                finally:
+                    self._pending_approvals.pop(req_id, None)
+
+                result_payload = _result_from_choice(decision_choice)
+                _write_result(result_payload)
+                logger.info(
+                    "Resolved approval request method=%s id=%s choice=%s payload=%s",
+                    method,
+                    req_id,
+                    decision_choice,
+                    result_payload,
+                )
                 return
 
             logger.warning(

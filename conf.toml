@@ -10,8 +10,8 @@ args = ["app-server"]
 allowed_ids = []
 
 [approval]
-require_for = ["file_write", "command_exec", "tool_use"]
-auto_approve_trusted = false
+mode = "interactive"
+auto_response = "approve"
 
 [logging]
 level = "DEBUG"

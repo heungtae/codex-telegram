@@ -115,8 +115,8 @@ args = ["app-server"]
 allowed_ids = [123456789]
 
 [approval]
-require_for = ["file_write", "command_exec", "tool_use"]
-auto_approve_trusted = false
+mode = "interactive"
+auto_response = "approve"
 
 [logging]
 level = "INFO"

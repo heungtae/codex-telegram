@@ -16,8 +16,7 @@ args = ["app-server"]
 allowed_ids = []
 
 [approval]
-require_for = ["file_write", "command_exec", "tool_use"]
-auto_approve_trusted = false
+mode = "interactive"  # interactive | auto
 auto_response = "approve"  # approve | session | deny
 
 [logging]

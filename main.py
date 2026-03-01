@@ -23,6 +23,7 @@ from bot import (
     error_handler,
     callback_handler,
 )
+from bot.keyboard import approval_keyboard
 from models import state
 from models.user import user_manager
 
@@ -278,7 +279,49 @@ async def post_init(app: Application):
         except Exception:
             logger.exception("Failed to forward app-server event to Telegram")
 
+    async def forward_approval_request(payload: dict[str, Any]):
+        req_id = payload.get("id")
+        if not isinstance(req_id, int):
+            return
+        method = str(payload.get("method") or "")
+        thread_id = payload.get("threadId")
+        user_id = user_manager.find_user_id_by_thread(thread_id if isinstance(thread_id, str) else None)
+        if user_id is None:
+            logger.warning(
+                "Approval request without user mapping method=%s id=%s threadId=%s",
+                method,
+                req_id,
+                thread_id,
+            )
+            return
+
+        params = payload.get("params")
+        reason = ""
+        if isinstance(params, dict):
+            raw_reason = params.get("reason")
+            if isinstance(raw_reason, str) and raw_reason.strip():
+                reason = raw_reason.strip()
+        reason_line = f"\nReason: {reason}" if reason else ""
+        message = (
+            "Approval required.\n"
+            f"Method: {method}\n"
+            f"Request ID: {req_id}{reason_line}\n"
+            "Choose: Approve / Session / Deny"
+        )
+        logger.info(
+            "Sending approval request to Telegram user_id=%s method=%s request_id=%s",
+            user_id,
+            method,
+            req_id,
+        )
+        await app.bot.send_message(
+            chat_id=user_id,
+            text=message,
+            reply_markup=approval_keyboard(req_id),
+        )
+
     state.codex_client.on_any(forward_event)
+    state.codex_client.on_approval_request(forward_approval_request)
     
     state.codex_ready.set()
     logger.info("Codex initialized")
