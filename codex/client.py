@@ -106,7 +106,7 @@ class CodexClient:
     def on_any(self, handler: Callable):
         self._any_event_handlers.append(handler)
     
-    def _write(self, msg: JSONRPCRequest | JSONRPCNotification):
+    def _write(self, msg: JSONRPCRequest | JSONRPCNotification | JSONRPCResponse):
         data = self.protocol.serialize(msg)
         logger.debug("app-server stdin: %s", data)
         if self._proc and self._proc.stdin:
@@ -150,6 +150,8 @@ class CodexClient:
             future = self._pending.pop(msg.id, None)
             if future and not future.done():
                 future.set_result(msg)
+        elif isinstance(msg, JSONRPCRequest):
+            await self._handle_server_request(msg)
         
         elif isinstance(msg, JSONRPCNotification):
             for handler in self._any_event_handlers:
@@ -168,6 +170,64 @@ class CodexClient:
                         await result
                 except Exception as e:
                     logger.error(f"Error in event handler for {msg.method}: {e}")
+
+    async def _handle_server_request(self, msg: JSONRPCRequest):
+        method = msg.method
+        params = msg.params or {}
+        auto_mode = str(get("approval.auto_response", "approve")).strip().lower()
+
+        def _write_result(result: dict[str, Any]):
+            response = self.protocol.create_response(req_id=msg.id, result=result)
+            self._write(response)
+
+        def _write_error(code: int, message: str):
+            response = self.protocol.create_response(
+                req_id=msg.id,
+                error={"code": code, "message": message},
+            )
+            self._write(response)
+
+        try:
+            if method in ("item/commandExecution/requestApproval", "item/fileChange/requestApproval"):
+                if auto_mode in ("approve", "accept", "allow"):
+                    _write_result({"decision": "accept"})
+                    logger.info("Auto-approved server request method=%s id=%s", method, msg.id)
+                    return
+                if auto_mode in ("session", "approve_for_session"):
+                    _write_result({"decision": "acceptForSession"})
+                    logger.info("Auto-approved-for-session server request method=%s id=%s", method, msg.id)
+                    return
+                _write_result({"decision": "decline"})
+                logger.info("Auto-declined server request method=%s id=%s", method, msg.id)
+                return
+
+            if method in ("execCommandApproval", "applyPatchApproval"):
+                if auto_mode in ("approve", "accept", "allow"):
+                    _write_result({"decision": "approved"})
+                    logger.info("Auto-approved legacy server request method=%s id=%s", method, msg.id)
+                    return
+                if auto_mode in ("session", "approve_for_session"):
+                    _write_result({"decision": "approved_for_session"})
+                    logger.info(
+                        "Auto-approved-for-session legacy server request method=%s id=%s",
+                        method,
+                        msg.id,
+                    )
+                    return
+                _write_result({"decision": "denied"})
+                logger.info("Auto-denied legacy server request method=%s id=%s", method, msg.id)
+                return
+
+            logger.warning(
+                "Unhandled server request method=%s id=%s params=%s",
+                method,
+                msg.id,
+                params,
+            )
+            _write_error(-32601, f"Unsupported server request method: {method}")
+        except Exception:
+            logger.exception("Failed to handle server request method=%s id=%s", method, msg.id)
+            _write_error(-32000, f"Failed to handle server request: {method}")
 
 
 class CodexError(Exception):

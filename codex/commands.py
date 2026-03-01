@@ -1,4 +1,5 @@
 from typing import Any
+import asyncio
 import logging
 import os
 
@@ -132,7 +133,7 @@ class CommandRouter:
             elif command == "/resume":
                 return await self._thread_resume(args, user_id)
             elif command == "/fork":
-                return await self._thread_fork(args)
+                return await self._thread_fork(args, user_id)
             elif command == "/threads":
                 return await self._thread_list(args, user_id)
             elif command == "/read":
@@ -189,7 +190,7 @@ class CommandRouter:
         thread_id = result.get("thread", {}).get("id")
         
         if thread_id:
-            user_manager.get(user_id).set_thread(thread_id)
+            user_manager.set_active_thread(user_id, thread_id)
 
         if project:
             return (
@@ -339,11 +340,22 @@ class CommandRouter:
         interrupt_message = ""
         if state.active_thread_id and state.active_turn_id:
             try:
-                await self.codex.call(
-                    "turn/interrupt",
-                    {"threadId": state.active_thread_id, "turnId": state.active_turn_id},
+                await asyncio.wait_for(
+                    self.codex.call(
+                        "turn/interrupt",
+                        {"threadId": state.active_thread_id, "turnId": state.active_turn_id},
+                    ),
+                    timeout=5.0,
                 )
                 interrupt_message = "\nInterrupted running turn."
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "Timeout interrupting running turn before project switch user_id=%s thread_id=%s turn_id=%s",
+                    user_id,
+                    state.active_thread_id,
+                    state.active_turn_id,
+                )
+                interrupt_message = "\nInterrupt timed out; proceeding with project switch."
             except Exception:
                 logger.exception(
                     "Failed to interrupt running turn before project switch user_id=%s thread_id=%s turn_id=%s",
@@ -355,16 +367,36 @@ class CommandRouter:
             finally:
                 state.clear_turn()
 
-        start_result = await self.codex.call("thread/start", {"cwd": selected["path"]})
-        new_thread_id = (start_result.get("thread") or {}).get("id")
-        if isinstance(new_thread_id, str) and new_thread_id:
-            state.set_thread(new_thread_id)
-            state.clear_turn()
+        new_thread_id: str | None = None
+        thread_start_note = ""
+        try:
+            start_result = await asyncio.wait_for(
+                self.codex.call("thread/start", {"cwd": selected["path"]}),
+                timeout=8.0,
+            )
+            new_thread_id = (start_result.get("thread") or {}).get("id")
+            if isinstance(new_thread_id, str) and new_thread_id:
+                user_manager.set_active_thread(user_id, new_thread_id)
+                state.clear_turn()
+            else:
+                user_manager.clear_active_thread(user_id)
+                thread_start_note = "\nProject switched, but failed to create a new thread. Run /start."
+        except asyncio.TimeoutError:
+            user_manager.clear_active_thread(user_id)
+            thread_start_note = "\nProject switched, but creating a new thread timed out. Run /start."
+        except Exception:
+            logger.exception(
+                "Failed to start new thread after project switch user_id=%s project_key=%s",
+                user_id,
+                selected["key"],
+            )
+            user_manager.clear_active_thread(user_id)
+            thread_start_note = "\nProject switched, but failed to create a new thread. Run /start."
 
         return (
             f"Project selected: {selected['key']} - {selected['name']}\n"
             f"Workspace: {selected['path']}\n"
-            f"Thread started: {new_thread_id or 'unknown'}{interrupt_message}"
+            f"Thread started: {new_thread_id or 'unknown'}{interrupt_message}{thread_start_note}"
         )
     
     def _resolve_thread_arg(self, arg: str, user_id: int) -> tuple[str | None, str | None]:
@@ -459,11 +491,13 @@ class CommandRouter:
             return err
         await self.codex.call("thread/resume", {"threadId": thread_id})
         
-        user_manager.get(user_id).set_thread(thread_id)
+        user_manager.set_active_thread(user_id, thread_id)
         
         return f"Thread resumed: {thread_id}"
     
-    async def _thread_fork(self, args: list[str]) -> str:
+    async def _thread_fork(self, args: list[str], user_id: int) -> str:
+        from models.user import user_manager
+
         if not args:
             return "Usage: /fork <thread_id>"
         
@@ -471,6 +505,8 @@ class CommandRouter:
         result = await self.codex.call("thread/fork", {"threadId": thread_id})
         
         new_thread_id = result.get("thread", {}).get("id")
+        if isinstance(new_thread_id, str) and new_thread_id:
+            user_manager.bind_thread_owner(user_id, new_thread_id)
         return f"Thread forked: {new_thread_id}"
     
     async def _thread_list(self, args: list[str], user_id: int) -> str:

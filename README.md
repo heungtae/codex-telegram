@@ -1,40 +1,52 @@
 # Codex Telegram Bot
 
-Telegram bot to control Codex App Server
+Codex App Server를 Telegram에서 제어할 수 있게 해주는 봇입니다.
 
-## Features
+## What You Can Do
 
-- Control Codex App Server via Telegram
-- Only `allowed_users` can use the bot
-- Full support for all Codex API commands
-- Real-time event streaming (turn progress, approval requests, etc.)
+- Telegram에서 Codex 명령 실행 및 결과 확인
+- `allowed_ids` 기반 사용자 접근 제어
+- 스레드 시작/재개/조회/보관 등 대화 수명주기 관리
+- 승인(approval) 요청과 진행 이벤트를 Telegram으로 실시간 전달
 
-## Prerequisites
+## Requirements
 
-- Python 3.11+
+- Python `3.11+`
 - Telegram Bot Token
-- Codex CLI installed
+- `codex` CLI 설치 및 실행 가능 상태
 
-## Installation
+## Quick Start
+
+1. 의존성 설치
 
 ```bash
-pip install python-telegram-bot
+python3 -m pip install -r requirements.txt
 ```
 
-## Configuration
+2. 설정 파일 준비
 
-### 1. Edit conf.toml
+```bash
+cp conf.toml.example conf.toml
+```
+
+3. `conf.toml` 수정
+
+- `projects.<key>.path`: 실제 작업할 프로젝트 경로
+- `users.allowed_ids`: 봇 사용을 허용할 Telegram 사용자 ID 목록
+- `bot.token` 또는 환경변수 `TELEGRAM_BOT_TOKEN`
+
+예시:
 
 ```toml
 project = "default"
 
 [projects.default]
-name = "codex-skills project"
-path = "/home/heungtae/develop/codex-skills"
+name = "my project"
+path = "/absolute/path/to/your/project"
 
 [bot]
 token = "TELEGRAM_BOT_TOKEN"
-drop_pending_updates = true # true면 시작 전 쌓인 Telegram 업데이트를 버림(기본값)
+drop_pending_updates = true
 
 [codex]
 command = "codex"
@@ -46,37 +58,43 @@ allowed_ids = [123456789]
 [approval]
 require_for = ["file_write", "command_exec", "tool_use"]
 auto_approve_trusted = false
+auto_response = "approve" # approve | session | deny
 
 [logging]
-level = "INFO" # app-server 로그
+level = "INFO"
 
 [forwarding]
-app_server_event_level = "INFO" # OFF|ERROR|WARNING|INFO|DEBUG (Telegram 전달 레벨)
-app_server_event_allowlist = [] # method 패턴 허용 목록, 예: ["turn/*", "item/agentMessage/*", "codex/event/*"]
-app_server_event_denylist = []  # method 패턴 차단 목록, 예: ["codex/event/mcp_startup_*", "deprecationNotice"]
+app_server_event_level = "INFO"
+app_server_event_allowlist = []
+app_server_event_denylist = []
 
-# 예: item/completed 중 agentMessage의 text만 전달
-[[forwarding.rules]]
-method = "item/completed"
-require_path = "item.type"
-require_equals = "agentMessage"
-text_paths = ["item.text"]
-fallback = "drop" # drop|json
+[display]
+max_message_length = 4000
+send_progress = true
 ```
 
-### 2. Set Environment Variable
+4. (선택) 토큰을 환경변수로 주입
 
 ```bash
 export TELEGRAM_BOT_TOKEN="your_actual_bot_token"
 ```
 
-### 3. Run
+5. 실행
 
 ```bash
 python3 main.py
 ```
 
-## Available Commands
+## First Commands
+
+봇과 대화를 시작한 뒤 아래 순서로 입력하면 빠르게 확인할 수 있습니다.
+
+1. `/commands` - 전체 명령 보기
+2. `/projects --list` - 프로젝트 목록 보기
+3. `/project <key|number|name>` - 활성 프로젝트 선택
+4. `/start` - 새 스레드 시작
+
+## Command Reference
 
 | Telegram | Codex API | Description |
 |----------|-----------|-------------|
@@ -104,48 +122,65 @@ python3 main.py
 | `/mcp` | mcpServerStatus/list | List MCP servers |
 | `/config` | config/read | Read configuration |
 
-Tip: use `<command> --help` to see usage for each command.
+Tip: 각 명령은 `<command> --help`로 상세 사용법을 확인할 수 있습니다.
+
+## Security Notes
+
+- `users.allowed_ids`를 비워두면 아무도 봇을 사용할 수 없습니다.
+- 토큰은 `conf.toml`에 직접 넣기보다 환경변수 사용을 권장합니다.
+- 운영 환경에서는 `approval.require_for`를 유지해 위험 작업을 수동 승인하세요.
+- `approval.auto_response`는 App Server 승인 요청 응답 방식입니다. 기본값 `approve`는 작업이 멈추지 않게 자동 승인합니다.
 
 ## Message Flow
 
-```
-Telegram User → codex-telegram → Codex App Server (stdio)
-                ↑                      ↓
-                └────── Telegram ←─────┘
+```text
+Telegram User -> codex-telegram -> Codex App Server (stdio)
+                ^                      |
+                |                      v
+                +------ Telegram <-----+
 ```
 
 ## Project Structure
 
-```
+```text
 codex-telegram/
-├── conf.toml           # Configuration file
-├── main.py             # Bot entry point
-├── requirements.txt    # Dependencies
-├── bot/                # Telegram handlers
+├── conf.toml.example
+├── main.py
+├── requirements.txt
+├── bot/
 │   ├── handlers.py
 │   ├── callbacks.py
-│   └── keyboard.py
-├── codex/              # Codex client
+│   ├── keyboard.py
+│   ├── thread_ui.py
+│   ├── skills_ui.py
+│   └── projects_ui.py
+├── codex/
 │   ├── client.py
 │   ├── protocol.py
 │   ├── events.py
 │   └── commands.py
-├── models/             # State management
-│   ├── user.py
-│   └── thread.py
-└── utils/              # Utilities
+├── models/
+│   ├── state.py
+│   ├── thread.py
+│   └── user.py
+└── utils/
     ├── config.py
     └── logger.py
 ```
 
-## Creating a Telegram Bot
+## Create Telegram Bot Token
 
-1. Send `/newbot` to @BotFather
-2. Enter bot name
-3. Enter username (must end with `bot`)
-4. Get the token
-5. Find your Telegram ID at @userinfobot
+1. Telegram에서 `@BotFather` 열기
+2. `/newbot` 실행
+3. 봇 이름/유저네임 설정
+4. 발급된 토큰 복사
+5. `@userinfobot`으로 본인 Telegram ID 확인 후 `allowed_ids`에 추가
+
+## Documentation
+
+- 상세 설정/설치: `docs/TELEGRAM_BOT_SETUP.md`
+- 설계 메모: `docs/DESIGN.md`
 
 ## License
 
-Apache License 2.0 - See [LICENSE](LICENSE) file
+Apache License 2.0. See [LICENSE](LICENSE).

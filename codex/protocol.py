@@ -32,6 +32,14 @@ class JSONRPCResponse:
     result: Any = None
     error: dict[str, Any] | None = None
 
+    def to_dict(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {"id": self.id}
+        if self.error is not None:
+            payload["error"] = self.error
+        else:
+            payload["result"] = self.result
+        return payload
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "JSONRPCResponse":
         return cls(
@@ -77,8 +85,16 @@ class Protocol:
     
     def create_notification(self, method: str, params: dict[str, Any] | None = None) -> JSONRPCNotification:
         return JSONRPCNotification(method=method, params=params)
+
+    def create_response(
+        self,
+        req_id: int | None,
+        result: Any = None,
+        error: dict[str, Any] | None = None,
+    ) -> JSONRPCResponse:
+        return JSONRPCResponse(id=req_id, result=result, error=error)
     
-    def serialize(self, msg: JSONRPCRequest | JSONRPCNotification) -> str:
+    def serialize(self, msg: JSONRPCRequest | JSONRPCNotification | JSONRPCResponse) -> str:
         return json.dumps(msg.to_dict())
     
     def deserialize(self, data: str) -> JSONRPCRequest | JSONRPCResponse | JSONRPCNotification | None:

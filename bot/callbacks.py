@@ -255,7 +255,13 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif data.startswith("projectsel:"):
             key = data[len("projectsel:"):].strip()
             logger.info("Executing callback action user_id=%s data=%s", user_id, data)
-            result = await state.command_router.route("/project", [key], user_id)
+            try:
+                result = await asyncio.wait_for(
+                    state.command_router.route("/project", [key], user_id),
+                    timeout=12.0,
+                )
+            except asyncio.TimeoutError:
+                result = "Project switch timed out. Please try again or run /start."
             await edit_with_log(query, context, result, user_id, reply_markup=main_menu_keyboard())
         else:
             logger.info("Executing callback action user_id=%s data=%s (unsupported)", user_id, data)

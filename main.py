@@ -186,6 +186,13 @@ async def post_init(app: Application):
         if ruled is not None:
             return ruled
         text = _extract_text(p)
+        if method == "thread/status/changed":
+            waiting = p.get("waitingOnApproval")
+            status = p.get("status")
+            if waiting is True:
+                return "[app-server] Waiting for approval."
+            if isinstance(status, str) and status.strip():
+                return f"[app-server] Thread status changed: {status}"
         if method == "item/agentMessage/delta" and text:
             return text
         if method == "turn/started":
@@ -205,6 +212,8 @@ async def post_init(app: Application):
 
     def _event_level(method: str, params: dict | None) -> int:
         p = params or {}
+        if "approval" in method.lower() or p.get("waitingOnApproval") is True:
+            return 20
         if method == "item/agentMessage/delta":
             return 10
         if method == "item/completed":
@@ -258,7 +267,12 @@ async def post_init(app: Application):
             msg = msg[:head_len] + trunc_suffix
         msg = msg + footer
 
-        logger.info("Forwarding app-server event to Telegram user_id=%s method=%s", user_id, method)
+        logger.info(
+            "Forwarding app-server event to Telegram user_id=%s method=%s message=%s",
+            user_id,
+            method,
+            msg,
+        )
         try:
             await app.bot.send_message(chat_id=user_id, text=msg)
         except Exception:
