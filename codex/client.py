@@ -231,6 +231,39 @@ class CodexClient:
 
         def _result_from_choice(choice: str) -> dict[str, Any]:
             normalized = choice.strip().lower()
+            def _normalize_option_text(text: str) -> str:
+                compact = " ".join(text.strip().lower().split())
+                if compact.endswith("(recommended)"):
+                    compact = compact[: -len("(recommended)")].strip()
+                return compact
+
+            def _collect_options(question: dict[str, Any]) -> list[Any]:
+                collected: list[Any] = []
+
+                def _add_from(raw: Any):
+                    if isinstance(raw, list):
+                        collected.extend(raw)
+                        return
+                    if isinstance(raw, dict):
+                        for nested_key in ("options", "choices", "items", "values", "enum"):
+                            nested = raw.get(nested_key)
+                            if isinstance(nested, list):
+                                collected.extend(nested)
+                                return
+                        for map_key, map_value in raw.items():
+                            if isinstance(map_value, str):
+                                collected.append({"id": str(map_key), "label": map_value, "value": str(map_key)})
+                            elif isinstance(map_value, dict):
+                                option_obj = dict(map_value)
+                                if "id" not in option_obj:
+                                    option_obj["id"] = str(map_key)
+                                collected.append(option_obj)
+
+                for key in ("options", "choices", "items", "enum", "allowedValues", "enumValues"):
+                    _add_from(question.get(key))
+                _add_from(question.get("input"))
+                return collected
+
             if method in ("item/commandExecution/requestApproval", "item/fileChange/requestApproval"):
                 if normalized == "session":
                     return {"decision": "acceptForSession"}
@@ -246,20 +279,38 @@ class CodexClient:
             if method == "item/tool/requestUserInput":
                 questions = params.get("questions")
                 if not isinstance(questions, list):
-                    return {"answers": []}
+                    return {"answers": {}}
 
-                answers: list[dict[str, str]] = []
-                preferred_labels = {
-                    "approve": "approve once",
-                    "session": "approve this session",
-                    "deny": "deny",
+                # v2 app-server protocol expects an answers map keyed by question id.
+                # Each question answer carries an "answers" array for future multi-select support.
+                answers: dict[str, dict[str, list[str]]] = {}
+                preferred_tokens = {
+                    "approve": {
+                        "approve",
+                        "approve once",
+                        "run the tool and continue.",
+                        "run the tool and continue",
+                        "accept",
+                        "allow",
+                        "yes",
+                    },
+                    "session": {"session", "approve this session", "acceptforsession"},
+                    "deny": {
+                        "deny",
+                        "decline",
+                        "decline this tool call and continue.",
+                        "decline this tool call and continue",
+                        "cancel this tool call",
+                        "reject",
+                        "no",
+                    },
                 }
-                preferred = preferred_labels.get(normalized, "approve once")
                 fallback = {
                     "approve": "Approve Once",
                     "session": "Approve this Session",
                     "deny": "Deny",
                 }.get(normalized, "Approve Once")
+                expected = preferred_tokens.get(normalized, preferred_tokens["approve"])
 
                 for q in questions:
                     if not isinstance(q, dict):
@@ -267,35 +318,89 @@ class CodexClient:
                     question_id = q.get("id")
                     if not isinstance(question_id, str) or not question_id:
                         continue
-                    selected = fallback
-                    options = q.get("options")
+                    selected_answer = fallback
+                    options = _collect_options(q)
+                    if not options:
+                        logger.info(
+                            "requestUserInput question has no parsable options; question_id=%s keys=%s",
+                            question_id,
+                            ",".join(sorted(q.keys())),
+                        )
                     if isinstance(options, list):
-                        matched = None
-                        first_label = None
+                        matched_option: Any | None = None
+                        first_option: Any | None = None
                         for option in options:
-                            if not isinstance(option, dict):
+                            if first_option is None:
+                                first_option = option
+                            label: str | None = None
+                            value: str | None = None
+                            option_id: str | None = None
+                            if isinstance(option, str):
+                                if option.strip():
+                                    label = option.strip()
+                                    value = option.strip()
+                            elif isinstance(option, dict):
+                                raw_label = option.get("label")
+                                raw_text = option.get("text")
+                                raw_title = option.get("title")
+                                raw_name = option.get("name")
+                                raw_value = option.get("value")
+                                raw_id = option.get("id")
+                                if raw_id is None:
+                                    raw_id = option.get("optionId")
+                                if raw_id is None:
+                                    raw_id = option.get("key")
+                                if isinstance(raw_label, str) and raw_label.strip():
+                                    label = raw_label.strip()
+                                elif isinstance(raw_text, str) and raw_text.strip():
+                                    label = raw_text.strip()
+                                elif isinstance(raw_title, str) and raw_title.strip():
+                                    label = raw_title.strip()
+                                elif isinstance(raw_name, str) and raw_name.strip():
+                                    label = raw_name.strip()
+                                if isinstance(raw_value, str) and raw_value.strip():
+                                    value = raw_value.strip()
+                                if isinstance(raw_id, str) and raw_id.strip():
+                                    option_id = raw_id.strip()
+                            else:
                                 continue
-                            label = option.get("label")
-                            if not isinstance(label, str) or not label.strip():
-                                continue
-                            if first_label is None:
-                                first_label = label.strip()
-                            if label.strip().lower() == preferred:
-                                matched = label.strip()
+                            tokens: set[str] = set()
+                            if label:
+                                tokens.add(_normalize_option_text(label))
+                            if value:
+                                tokens.add(_normalize_option_text(value))
+                            if option_id:
+                                tokens.add(_normalize_option_text(option_id))
+                            if tokens & expected:
+                                matched_option = option
                                 break
-                        if matched is not None:
-                            selected = matched
-                        elif first_label is not None:
-                            selected = first_label
-                    answers.append(
-                        {
-                            # Keep multiple key aliases for compatibility across app-server variants.
-                            "id": question_id,
-                            "questionId": question_id,
-                            "answer": selected,
-                            "value": selected,
-                        }
-                    )
+                        chosen = matched_option if matched_option is not None else first_option
+                        if isinstance(chosen, str) and chosen.strip():
+                            selected_answer = chosen.strip()
+                        elif isinstance(chosen, dict):
+                            raw_label = chosen.get("label")
+                            raw_text = chosen.get("text")
+                            raw_title = chosen.get("title")
+                            raw_name = chosen.get("name")
+                            raw_value = chosen.get("value")
+                            raw_option_id = chosen.get("id")
+                            if raw_option_id is None:
+                                raw_option_id = chosen.get("optionId")
+                            if raw_option_id is None:
+                                raw_option_id = chosen.get("key")
+                            if isinstance(raw_label, str) and raw_label.strip():
+                                selected_answer = raw_label.strip()
+                            elif isinstance(raw_text, str) and raw_text.strip():
+                                selected_answer = raw_text.strip()
+                            elif isinstance(raw_title, str) and raw_title.strip():
+                                selected_answer = raw_title.strip()
+                            elif isinstance(raw_name, str) and raw_name.strip():
+                                selected_answer = raw_name.strip()
+                            elif isinstance(raw_value, str) and raw_value.strip():
+                                selected_answer = raw_value.strip()
+                            elif isinstance(raw_option_id, str) and raw_option_id.strip():
+                                selected_answer = raw_option_id.strip()
+                    answers[question_id] = {"answers": [selected_answer]}
                 return {"answers": answers}
             return {}
 
