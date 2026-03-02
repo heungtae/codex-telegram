@@ -121,7 +121,7 @@ After starting a chat with the bot, run commands in this order for a quick check
 | `/review` | review/start | Start code review |
 | `/exec <cmd>` | command/exec | Execute a command |
 | `/models` | model/list | List available models |
-| `/features` | experimentalFeature/list | List experimental features |
+| `/features` | experimentalFeature/list + command/exec | Show beta features and apply enable/disable via checkbox UI |
 | `/modes` | collaborationMode/list | List collaboration modes |
 | `/skills` | skills/list | List skills |
 | `/apps` | app/list | List apps |

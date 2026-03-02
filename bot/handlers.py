@@ -9,6 +9,7 @@ from bot.keyboard import main_menu_keyboard, interrupt_keyboard
 from bot.thread_ui import threads_keyboard
 from bot.skills_ui import skills_keyboard
 from bot.projects_ui import projects_keyboard
+from bot.features_ui import features_keyboard, features_panel_text
 from models import state
 
 logger = logging.getLogger("codex-telegram.bot")
@@ -57,6 +58,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/resume <id> - Resume a thread\n"
         "/threads - List your threads\n"
         "/models - List available models\n"
+        "/features - Manage beta features\n"
         "/skills - List skills\n"
         "/apps - List apps\n"
         "/mcp - MCP server status\n\n"
@@ -195,6 +197,30 @@ async def command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
         await send_reply(update, result.text, user_id)
+        return
+
+    if result.kind == "features":
+        keys = result.meta.get("feature_keys", [])
+        names = result.meta.get("feature_names", {})
+        enabled = result.meta.get("feature_enabled", {})
+        if not isinstance(keys, list) or not keys:
+            await send_reply(update, result.text, user_id)
+            return
+        state_user.set_feature_panel(
+            [k for k in keys if isinstance(k, str)],
+            names if isinstance(names, dict) else {},
+            enabled if isinstance(enabled, dict) else {},
+        )
+        await send_reply(
+            update,
+            features_panel_text(state_user.feature_panel_keys, state_user.feature_panel_names, state_user.feature_panel_draft),
+            user_id,
+            reply_markup=features_keyboard(
+                state_user.feature_panel_keys,
+                state_user.feature_panel_names,
+                state_user.feature_panel_draft,
+            ),
+        )
         return
 
     await send_reply(update, result.text, user_id)

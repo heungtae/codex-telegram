@@ -17,6 +17,10 @@ class UserState:
     last_message_id: int | None = None
     last_listed_thread_ids: list[str] = field(default_factory=list)
     last_listed_project_keys: list[str] = field(default_factory=list)
+    feature_panel_keys: list[str] = field(default_factory=list)
+    feature_panel_names: dict[str, str] = field(default_factory=dict)
+    feature_panel_current: dict[str, bool] = field(default_factory=dict)
+    feature_panel_draft: dict[str, bool] = field(default_factory=dict)
     
     def set_thread(self, thread_id: str | None):
         self.active_thread_id = thread_id
@@ -36,6 +40,14 @@ class UserState:
 
     def set_last_listed_projects(self, project_keys: list[str]):
         self.last_listed_project_keys = project_keys
+
+    def set_feature_panel(self, keys: list[str], names: dict[str, str], current: dict[str, bool]):
+        self.feature_panel_keys = [k for k in keys if isinstance(k, str) and k]
+        self.feature_panel_names = {
+            k: v for k, v in names.items() if isinstance(k, str) and k and isinstance(v, str) and v
+        }
+        self.feature_panel_current = {k: bool(current.get(k, False)) for k in self.feature_panel_keys}
+        self.feature_panel_draft = dict(self.feature_panel_current)
 
     def set_project(self, key: str, name: str, path: str):
         self.selected_project_key = key

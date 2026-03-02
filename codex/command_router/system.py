@@ -50,20 +50,66 @@ class SystemCommands:
         return text_result("\n".join(lines), model_names=model_names)
 
     async def experimental_feature_list(self) -> CommandResult:
-        result = await self.ctx.codex.call("experimentalFeature/list", {"limit": 20})
+        result = await self.ctx.codex.call("experimentalFeature/list", {"limit": 200})
 
         features = result.get("data", [])
-        if not features:
-            return text_result("No experimental features.")
+        if not isinstance(features, list) or not features:
+            return CommandResult(kind="features", text="No beta features found.", meta={"feature_keys": []})
 
-        lines = ["Experimental features:"]
+        def _normalize_stage(value: Any) -> str:
+            if not isinstance(value, str) or not value.strip():
+                return "unknown"
+            raw = value.strip()
+            converted = []
+            for i, ch in enumerate(raw):
+                if i > 0 and ch.isupper() and raw[i - 1].islower():
+                    converted.append(" ")
+                converted.append(ch)
+            return "".join(converted).lower()
+
+        feature_keys: list[str] = []
+        feature_names: dict[str, str] = {}
+        feature_enabled: dict[str, bool] = {}
         for f in features:
-            name = f.get("displayName", f.get("name", "unknown"))
-            stage = f.get("stage", "unknown")
-            enabled = "enabled" if f.get("enabled") else "disabled"
-            lines.append(f"• {name} [{stage}] ({enabled})")
+            stage = _normalize_stage(f.get("stage"))
+            if stage != "beta":
+                continue
+            key = f.get("id") or f.get("name") or f.get("key")
+            if not isinstance(key, str) or not key.strip():
+                continue
+            key = key.strip()
+            name = (
+                f.get("displayName")
+                or f.get("name")
+                or f.get("id")
+                or f.get("key")
+                or "unknown"
+            )
+            if key in feature_names:
+                continue
+            feature_keys.append(key)
+            feature_names[key] = str(name)
+            feature_enabled[key] = bool(f.get("enabled"))
 
-        return text_result("\n".join(lines))
+        if not feature_keys:
+            return CommandResult(kind="features", text="No beta features found.", meta={"feature_keys": []})
+
+        lines = ["Beta features:"]
+        for key in feature_keys:
+            name = feature_names.get(key, key)
+            enabled = "enabled" if feature_enabled.get(key, False) else "disabled"
+            lines.append(f"• {name} ({key}) [{enabled}]")
+        lines.append("")
+        lines.append("Use checkboxes below, then press Apply.")
+        return CommandResult(
+            kind="features",
+            text="\n".join(lines),
+            meta={
+                "feature_keys": feature_keys,
+                "feature_names": feature_names,
+                "feature_enabled": feature_enabled,
+            },
+        )
 
     async def collaboration_mode_list(self) -> CommandResult:
         result = await self.ctx.codex.call("collaborationMode/list")

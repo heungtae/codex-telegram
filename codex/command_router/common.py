@@ -16,7 +16,7 @@ COMMAND_HELP: dict[str, str] = {
     "/review": "Start review. Usage: /review [uncommittedChanges|baseBranch|commit|custom]",
     "/exec": "Execute command in Codex app-server. Usage: /exec <command>",
     "/models": "List available models. Usage: /models",
-    "/features": "List experimental features. Usage: /features",
+    "/features": "Manage beta features with checkbox UI. Usage: /features",
     "/modes": "List collaboration modes. Usage: /modes",
     "/skills": "List skills. Usage: /skills [cwd]",
     "/apps": "List apps. Usage: /apps",

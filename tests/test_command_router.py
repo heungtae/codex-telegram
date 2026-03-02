@@ -8,6 +8,7 @@ class FakeCodex:
     def __init__(self):
         self.calls: list[tuple[str, dict | None]] = []
         self.thread_list_data: list[dict] = []
+        self.feature_list_data: list[dict] = []
 
     async def call(self, method: str, params: dict | None = None):
         self.calls.append((method, params))
@@ -24,6 +25,8 @@ class FakeCodex:
             }
         if method == "thread/list":
             return {"data": self.thread_list_data}
+        if method == "experimentalFeature/list":
+            return {"data": self.feature_list_data}
         return {}
 
 
@@ -98,6 +101,23 @@ class CommandRouterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("threads", result.kind)
         self.assertEqual([], result.meta.get("thread_ids"))
         self.assertEqual("No threads found.", result.text)
+
+    async def test_features_returns_beta_only_with_feature_meta(self):
+        self.codex.feature_list_data = [
+            {"displayName": None, "name": None, "id": "undo", "stage": "underDevelopment", "enabled": True},
+            {"displayName": "Bubblewrap sandbox", "id": "use_linux_sandbox_bwrap", "stage": "beta", "enabled": False},
+            {"displayName": "JS REPL", "id": "js_repl", "stage": "beta", "enabled": True},
+        ]
+
+        result = await self.router.route("/features", [], 1)
+
+        self.assertEqual("features", result.kind)
+        self.assertIn("Beta features:", result.text)
+        self.assertNotIn("undo", result.text)
+        self.assertIn("Bubblewrap sandbox", result.text)
+        self.assertEqual(["use_linux_sandbox_bwrap", "js_repl"], result.meta.get("feature_keys"))
+        self.assertEqual({"use_linux_sandbox_bwrap": False, "js_repl": True}, result.meta.get("feature_enabled"))
+        self.assertIn(("experimentalFeature/list", {"limit": 200}), self.codex.calls)
 
 
 if __name__ == "__main__":

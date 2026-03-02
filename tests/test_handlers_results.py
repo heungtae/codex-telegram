@@ -58,6 +58,29 @@ class HandlerResultTests(unittest.IsolatedAsyncioTestCase):
 
         self.mock_router.route.assert_awaited_once_with("/threads", ["--current-profile"], 1)
 
+    async def test_command_handler_features_kind_uses_feature_keyboard(self):
+        self.mock_router.route.return_value = CommandResult(
+            kind="features",
+            text="Beta features:",
+            meta={
+                "feature_keys": ["js_repl"],
+                "feature_names": {"js_repl": "JavaScript REPL"},
+                "feature_enabled": {"js_repl": False},
+            },
+        )
+        update = SimpleNamespace(
+            effective_user=SimpleNamespace(id=1),
+            effective_message=SimpleNamespace(text="/features"),
+        )
+
+        with patch("bot.handlers.wait_for_codex", new=AsyncMock()), \
+             patch("bot.handlers.send_reply", new=AsyncMock()) as mock_send_reply, \
+             patch("bot.handlers.get", side_effect=lambda key, default=None: default):
+            await handlers.command_handler(update, context=SimpleNamespace())
+
+        kwargs = mock_send_reply.await_args.kwargs
+        self.assertIn("reply_markup", kwargs)
+
 
 if __name__ == "__main__":
     unittest.main()

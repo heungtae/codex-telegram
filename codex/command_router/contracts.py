@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 
-CommandKind = Literal["text", "usage", "error", "threads", "skills", "projects"]
+CommandKind = Literal["text", "usage", "error", "threads", "skills", "projects", "features"]
 
 
 @dataclass(slots=True)

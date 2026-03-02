@@ -1,5 +1,6 @@
 import logging
 import asyncio
+from asyncio.subprocess import PIPE
 from telegram import Update
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
@@ -8,6 +9,7 @@ from bot.keyboard import main_menu_keyboard
 from bot.thread_ui import threads_keyboard
 from bot.skills_ui import skills_keyboard
 from bot.projects_ui import projects_keyboard
+from bot.features_ui import features_keyboard, features_panel_text
 from models import state
 from codex.commands import CommandResult
 
@@ -42,6 +44,30 @@ async def run_callback_command(command: str, user_id: int) -> CommandResult:
     if state.command_router is None:
         return CommandResult(kind="error", text="Codex is still initializing. Please try again in a moment.")
     return await state.command_router.route(command, [], user_id)
+
+
+async def _run_local_feature_toggle(feature_key: str, enabled: bool) -> tuple[bool, str]:
+    action = "enable" if enabled else "disable"
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "codex",
+            "features",
+            action,
+            feature_key,
+            stdout=PIPE,
+            stderr=PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+    except Exception as exc:
+        return False, str(exc)
+
+    if proc.returncode == 0:
+        return True, ""
+
+    err_text = (stderr or stdout).decode(errors="replace").strip()
+    if not err_text:
+        err_text = f"exit code {proc.returncode}"
+    return False, err_text
 
 
 async def send_threads_page(
@@ -116,6 +142,43 @@ async def send_projects_picker(
     await edit_with_log(query, context, result.text, user_id, reply_markup=keyboard)
 
 
+async def send_features_picker(
+    context: ContextTypes.DEFAULT_TYPE,
+    user_id: int,
+    chat_id: int,
+    query=None,
+):
+    from models.user import user_manager
+
+    result = await state.command_router.route("/features", [], user_id)
+    keys = result.meta.get("feature_keys", [])
+    names = result.meta.get("feature_names", {})
+    enabled = result.meta.get("feature_enabled", {})
+    if result.kind != "features" or not isinstance(keys, list) or not keys:
+        if query is None:
+            await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=main_menu_keyboard())
+            return
+        await edit_with_log(query, context, result.text, user_id, reply_markup=main_menu_keyboard())
+        return
+
+    state_user = user_manager.get(user_id)
+    state_user.set_feature_panel(
+        [k for k in keys if isinstance(k, str)],
+        names if isinstance(names, dict) else {},
+        enabled if isinstance(enabled, dict) else {},
+    )
+    text = features_panel_text(state_user.feature_panel_keys, state_user.feature_panel_names, state_user.feature_panel_draft)
+    keyboard = features_keyboard(
+        state_user.feature_panel_keys,
+        state_user.feature_panel_names,
+        state_user.feature_panel_draft,
+    )
+    if query is None:
+        await context.bot.send_message(chat_id=chat_id, text=text, reply_markup=keyboard)
+        return
+    await edit_with_log(query, context, text, user_id, reply_markup=keyboard)
+
+
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if query is None:
@@ -150,6 +213,9 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
                 result = await run_callback_command("/apps", user_id)
                 await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=main_menu_keyboard())
+            elif command == "features":
+                logger.info("Executing callback action user_id=%s data=%s", user_id, data)
+                await send_features_picker(context, user_id, chat_id)
             elif command == "config":
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
                 result = await run_callback_command("/config", user_id)
@@ -310,6 +376,86 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     text="Project switch timed out. Please try again or run /start.",
                 )
             await edit_with_log(query, context, result.text, user_id, reply_markup=main_menu_keyboard())
+        elif data.startswith("feature_toggle:"):
+            from models.user import user_manager
+
+            idx_raw = data[len("feature_toggle:"):].strip()
+            if not idx_raw.isdigit():
+                await edit_with_log(query, context, "Invalid feature toggle.", user_id, reply_markup=main_menu_keyboard())
+            else:
+                idx = int(idx_raw)
+                state_user = user_manager.get(user_id)
+                if idx < 0 or idx >= len(state_user.feature_panel_keys):
+                    await edit_with_log(query, context, "Feature index out of range.", user_id, reply_markup=main_menu_keyboard())
+                else:
+                    key = state_user.feature_panel_keys[idx]
+                    current_value = state_user.feature_panel_draft.get(
+                        key,
+                        state_user.feature_panel_current.get(key, False),
+                    )
+                    state_user.feature_panel_draft[key] = not current_value
+                    text = features_panel_text(
+                        state_user.feature_panel_keys,
+                        state_user.feature_panel_names,
+                        state_user.feature_panel_draft,
+                    )
+                    keyboard = features_keyboard(
+                        state_user.feature_panel_keys,
+                        state_user.feature_panel_names,
+                        state_user.feature_panel_draft,
+                    )
+                    await edit_with_log(query, context, text, user_id, reply_markup=keyboard)
+        elif data == "feature_refresh":
+            await send_features_picker(context, user_id, chat_id, query=query)
+        elif data == "feature_apply":
+            from models.user import user_manager
+
+            state_user = user_manager.get(user_id)
+            changes: list[tuple[str, bool]] = []
+            for key in state_user.feature_panel_keys:
+                before = state_user.feature_panel_current.get(key, False)
+                after = state_user.feature_panel_draft.get(key, before)
+                if before != after:
+                    changes.append((key, after))
+            if not changes:
+                await edit_with_log(
+                    query,
+                    context,
+                    "No changes to apply.",
+                    user_id,
+                    reply_markup=features_keyboard(
+                        state_user.feature_panel_keys,
+                        state_user.feature_panel_names,
+                        state_user.feature_panel_draft,
+                    ),
+                )
+            else:
+                failed: list[str] = []
+                applied: list[str] = []
+                for key, enabled in changes:
+                    ok, detail = await _run_local_feature_toggle(key, enabled)
+                    if ok:
+                        state_user.feature_panel_current[key] = enabled
+                        state_user.feature_panel_draft[key] = enabled
+                        action = "enabled" if enabled else "disabled"
+                        applied.append(f"{key} ({action})")
+                    else:
+                        failed.append(f"{key}: {detail}")
+                await send_features_picker(context, user_id, chat_id, query=query)
+                if applied:
+                    await context.bot.send_message(
+                        chat_id=chat_id,
+                        text=(
+                            "Applied to local Codex config:\n- "
+                            + "\n- ".join(applied)
+                            + "\n\nIf runtime state does not change immediately, restart the bot/app-server."
+                        ),
+                    )
+                if failed:
+                    await context.bot.send_message(
+                        chat_id=chat_id,
+                        text="Failed to apply:\n- " + "\n- ".join(failed),
+                    )
         else:
             logger.info("Executing callback action user_id=%s data=%s (unsupported)", user_id, data)
             await edit_with_log(query, context, "Unsupported button action.", user_id, reply_markup=main_menu_keyboard())

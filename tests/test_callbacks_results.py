@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock
 from codex.commands import CommandResult
 from bot import callbacks
 from models import state
+from models.user import user_manager
 
 
 class CallbackResultTests(unittest.IsolatedAsyncioTestCase):
@@ -13,6 +14,9 @@ class CallbackResultTests(unittest.IsolatedAsyncioTestCase):
         self.mock_router = SimpleNamespace(route=AsyncMock())
         state.command_router = self.mock_router
         self.context = SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock()))
+        user_manager._users.clear()
+        user_manager._thread_owners.clear()
+        user_manager._thread_projects.clear()
 
     def tearDown(self):
         state.command_router = self.original_router
@@ -59,6 +63,28 @@ class CallbackResultTests(unittest.IsolatedAsyncioTestCase):
 
         kwargs = self.context.bot.send_message.await_args.kwargs
         self.assertEqual("Skills: choose one to insert template into chat.", kwargs["text"])
+        self.assertIn("reply_markup", kwargs)
+
+    async def test_send_features_picker_uses_feature_keyboard_on_features_kind(self):
+        self.mock_router.route.return_value = CommandResult(
+            kind="features",
+            text="Beta features:",
+            meta={
+                "feature_keys": ["js_repl"],
+                "feature_names": {"js_repl": "JavaScript REPL"},
+                "feature_enabled": {"js_repl": False},
+            },
+        )
+
+        await callbacks.send_features_picker(
+            context=self.context,
+            user_id=1,
+            chat_id=100,
+            query=None,
+        )
+
+        kwargs = self.context.bot.send_message.await_args.kwargs
+        self.assertIn("Beta features (toggle checkboxes, then Apply):", kwargs["text"])
         self.assertIn("reply_markup", kwargs)
 
 
