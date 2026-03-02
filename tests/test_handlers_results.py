@@ -86,6 +86,30 @@ class HandlerResultTests(unittest.IsolatedAsyncioTestCase):
         kwargs = mock_send_reply.await_args.kwargs
         self.assertIn("reply_markup", kwargs)
 
+    async def test_command_handler_gurdian_kind_uses_guardian_keyboard(self):
+        self.mock_router.route.return_value = CommandResult(
+            kind="guardian_settings",
+            text="Guardian settings:",
+            meta={
+                "enabled": False,
+                "timeout_seconds": 8,
+                "failure_policy": "manual_fallback",
+                "explainability": "full_chain",
+            },
+        )
+        update = SimpleNamespace(
+            effective_user=SimpleNamespace(id=1),
+            effective_message=SimpleNamespace(text="/gurdian"),
+        )
+
+        with patch("bot.handlers.wait_for_codex", new=AsyncMock()), \
+             patch("bot.handlers.send_reply", new=AsyncMock()) as mock_send_reply, \
+             patch("bot.handlers.get", side_effect=lambda key, default=None: default):
+            await handlers.command_handler(update, context=SimpleNamespace())
+
+        kwargs = mock_send_reply.await_args.kwargs
+        self.assertIn("reply_markup", kwargs)
+
     async def test_error_handler_conflict_does_not_stop_app(self):
         app = SimpleNamespace(stop_running=Mock())
         context = SimpleNamespace(

@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from codex.command_router.core import CommandRouter
 from models.user import user_manager
@@ -124,6 +125,23 @@ class CommandRouterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(["use_linux_sandbox_bwrap", "js_repl"], result.meta.get("feature_keys"))
         self.assertEqual({"use_linux_sandbox_bwrap": False, "js_repl": True}, result.meta.get("feature_enabled"))
         self.assertIn(("experimentalFeature/list", {"limit": 200}), self.codex.calls)
+
+    async def test_gurdian_returns_guardian_settings_kind(self):
+        with patch(
+            "codex.command_router.system.get_guardian_settings",
+            return_value={
+                "enabled": False,
+                "timeout_seconds": 8,
+                "failure_policy": "manual_fallback",
+                "explainability": "full_chain",
+                "apply_to_methods": ["*"],
+            },
+        ):
+            result = await self.router.route("/gurdian", [], 1)
+
+        self.assertEqual("guardian_settings", result.kind)
+        self.assertIn("Guardian settings:", result.text)
+        self.assertFalse(self.codex.calls)
 
     async def test_mcp_uses_alternate_status_fields(self):
         self.codex.mcp_server_status_data = [

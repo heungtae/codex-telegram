@@ -62,6 +62,13 @@ allowed_ids = [123456789]
 mode = "interactive" # interactive | auto
 auto_response = "approve" # approve | session | deny
 
+[approval.guardian]
+enabled = false
+timeout_seconds = 8
+failure_policy = "manual_fallback" # manual_fallback | deny | approve | session
+explainability = "full_chain" # decision_only | summary | full_chain
+apply_to_methods = ["*"]
+
 [logging]
 level = "INFO"
 
@@ -125,6 +132,7 @@ After starting a chat with the bot, run commands in this order for a quick check
 | `/exec <cmd>` | command/exec | Execute a command |
 | `/models` | model/list | List available models |
 | `/features` | experimentalFeature/list + command/exec | Show beta features and apply enable/disable via checkbox UI |
+| `/gurdian` (`/guardian`) | local config | Show guardian settings panel and apply changes via checkbox UI |
 | `/modes` | collaborationMode/list | List collaboration modes |
 | `/skills` | skills/list | List skills |
 | `/apps` | app/list | List apps |
@@ -133,12 +141,18 @@ After starting a chat with the bot, run commands in this order for a quick check
 
 Tip: Use `<command> --help` to see detailed usage for each command.
 
+UI note:
+- `Settings` menu includes: `Features`, `Apps`, `Project Select`, `Guardian`, `Models`, `Modes`, `MCP`, `App Config`.
+
 ## Security Notes
 
 - If `users.allowed_ids` is empty, nobody can use the bot.
 - It is recommended to use environment variables for tokens instead of hardcoding them in `conf.toml`.
 - With `approval.mode = "interactive"`, approvals are handled via Telegram buttons (Approve/Session/Deny).
 - With `approval.mode = "auto"`, decisions are returned immediately using `approval.auto_response`.
+- `approval.guardian.enabled` is `false` by default.
+- Guardian settings can be changed in Telegram via `Settings -> Guardian` and apply immediately.
+- Guardian review runs in a separate Codex app-server session from the user thread.
 - Run only one polling instance per bot token. Duplicate pollers will conflict.
 - `bot.conflict_action` controls startup behavior on local lock conflict:
   - `prompt`: ask in terminal (`kill` or `exit`)
@@ -167,9 +181,11 @@ codex-telegram/
 │   ├── keyboard.py
 │   ├── thread_ui.py
 │   ├── skills_ui.py
-│   └── projects_ui.py
+│   ├── projects_ui.py
+│   └── guardian_ui.py
 ├── codex/
 │   ├── client.py
+│   ├── approval_guardian.py
 │   ├── protocol.py
 │   ├── events.py
 │   └── commands.py

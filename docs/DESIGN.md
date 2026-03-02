@@ -17,6 +17,8 @@ Telegram User
 : Bootstraps Telegram application, Codex client initialization, handler registration, and polling lifecycle.
 - `codex/client.py`
 : JSON-RPC transport and request/response handling for `codex app-server`.
+- `codex/approval_guardian.py`
+: Runs approval review in a dedicated Codex app-server session and returns approve/session/deny decisions.
 - `codex/command_router/*`
 : Command dispatch and domain-specific command handlers (`threads`, `projects`, `system`, `review`).
 - `bot/handlers.py`
@@ -38,6 +40,7 @@ Key sections:
 - `[codex]`: command + args to launch app-server
 - `[users]`: allowed Telegram user IDs
 - `[approval]`: `interactive` or `auto`
+- `[approval.guardian]`: guardian on/off, timeout, fallback policy, explainability, method filters
 - `[forwarding]`: event forwarding level/allowlist/denylist/rules
 - `[projects.*]` + `project`: project profiles and default profile
 
@@ -51,7 +54,13 @@ Key sections:
 
 ### Inline Callback Path
 Main menu buttons:
-- `cmd:start`, `cmd:threads`, `cmd:skills`, `cmd:projects`, `cmd:apps`, `cmd:config`, `cmd:interrupt`
+- `cmd:start`, `cmd:threads`, `cmd:skills`, `cmd:projects`, `cmd:config`, `cmd:interrupt`
+
+Settings callbacks:
+- `cmd:config_view`, `cmd:guardian_settings`, `cmd:features`, `cmd:apps`, `cmd:projects`, `cmd:models`, `cmd:modes`, `cmd:mcp`, `cmd:menu`
+- `guardian_toggle:enabled`
+- `guardian_cycle:timeout|failure_policy|explainability`
+- `guardian_apply`, `guardian_refresh`
 
 Thread UI callbacks:
 - `threads_page:{active|arch}:{offset}:{limit}`
@@ -125,7 +134,12 @@ There are two layers:
 - In `auto` mode, responds immediately using configured `approval.auto_response`.
 - In `interactive` mode, waits for user decision future.
 
-2. Telegram UI approval flow
+2. Guardian review layer
+- If `approval.guardian.enabled = true` and method matches filters, review runs first.
+- Review executes in a separate app-server client and returns `approve|session|deny`.
+- On guardian timeout/failure, fallback policy applies (`manual_fallback` keeps Telegram buttons).
+
+3. Telegram UI approval flow
 - `on_approval_request` sends message with `Approve / Session / Deny` keyboard.
 - Callback `approval:<id>:<choice>` submits decision via `submit_approval_decision`.
 

@@ -37,6 +37,8 @@ class CommandRouter:
             "/exec": self._dispatch_exec,
             "/models": self._dispatch_models,
             "/features": self._dispatch_features,
+            "/gurdian": self._dispatch_gurdian,
+            "/guardian": self._dispatch_gurdian,
             "/modes": self._dispatch_modes,
             "/skills": self._dispatch_skills,
             "/apps": self._dispatch_apps,
@@ -106,6 +108,9 @@ class CommandRouter:
 
     async def _dispatch_features(self, _args: list[str], _user_id: int) -> CommandResult:
         return await self.system.experimental_feature_list()
+
+    async def _dispatch_gurdian(self, _args: list[str], _user_id: int) -> CommandResult:
+        return await self.system.guardian_settings()
 
     async def _dispatch_modes(self, _args: list[str], _user_id: int) -> CommandResult:
         return await self.system.collaboration_mode_list()

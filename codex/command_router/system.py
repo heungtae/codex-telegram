@@ -4,6 +4,7 @@ import json
 from .common import commands_overview
 from .context import RouterContext
 from .contracts import CommandResult, text_result, usage_result
+from utils.config import get_guardian_settings
 
 
 class SystemCommands:
@@ -124,6 +125,19 @@ class SystemCommands:
             lines.append(f"• {name}")
 
         return text_result("\n".join(lines))
+
+    async def guardian_settings(self) -> CommandResult:
+        settings = get_guardian_settings()
+        lines = [
+            "Guardian settings:",
+            f"- enabled: {bool(settings.get('enabled', False))}",
+            f"- timeout_seconds: {int(settings.get('timeout_seconds', 8))}",
+            f"- failure_policy: {settings.get('failure_policy', 'manual_fallback')}",
+            f"- explainability: {settings.get('explainability', 'full_chain')}",
+            "",
+            "Use checkboxes below, then press Apply.",
+        ]
+        return CommandResult(kind="guardian_settings", text="\n".join(lines), meta=settings)
 
     async def skills_list(self, args: list[str]) -> CommandResult:
         params: dict[str, Any] = {}

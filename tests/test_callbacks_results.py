@@ -1,6 +1,7 @@
 import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
+from unittest.mock import patch
 
 from codex.commands import CommandResult
 from bot import callbacks
@@ -85,6 +86,28 @@ class CallbackResultTests(unittest.IsolatedAsyncioTestCase):
 
         kwargs = self.context.bot.send_message.await_args.kwargs
         self.assertIn("Beta features (toggle checkboxes, then Apply):", kwargs["text"])
+        self.assertIn("reply_markup", kwargs)
+
+    async def test_send_guardian_settings_panel_uses_guardian_keyboard(self):
+        with patch(
+            "bot.callbacks.get_guardian_settings",
+            return_value={
+                "enabled": False,
+                "timeout_seconds": 8,
+                "failure_policy": "manual_fallback",
+                "explainability": "full_chain",
+                "apply_to_methods": ["*"],
+            },
+        ):
+            await callbacks.send_guardian_settings_panel(
+                context=self.context,
+                user_id=1,
+                chat_id=100,
+                query=None,
+            )
+
+        kwargs = self.context.bot.send_message.await_args.kwargs
+        self.assertIn("Guardian settings", kwargs["text"])
         self.assertIn("reply_markup", kwargs)
 
 

@@ -12,6 +12,7 @@ from bot.thread_ui import threads_keyboard
 from bot.skills_ui import skills_keyboard
 from bot.projects_ui import projects_keyboard
 from bot.features_ui import features_keyboard, features_panel_text
+from bot.guardian_ui import guardian_keyboard, guardian_panel_text
 from models import state
 from utils.single_instance import find_local_conflict_candidates
 
@@ -63,6 +64,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/threads - List your threads\n"
         "/models - List available models\n"
         "/features - Manage beta features\n"
+        "/gurdian - Manage guardian approval settings\n"
         "/skills - List skills\n"
         "/apps - List apps\n"
         "/mcp - MCP server status\n\n"
@@ -224,6 +226,16 @@ async def command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 state_user.feature_panel_names,
                 state_user.feature_panel_draft,
             ),
+        )
+        return
+
+    if result.kind == "guardian_settings":
+        state_user.set_guardian_panel(result.meta if isinstance(result.meta, dict) else {})
+        await send_reply(
+            update,
+            guardian_panel_text(state_user.guardian_panel_current, state_user.guardian_panel_draft),
+            user_id,
+            reply_markup=guardian_keyboard(state_user.guardian_panel_draft),
         )
         return
 

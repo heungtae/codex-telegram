@@ -37,11 +37,32 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton("📁 Projects", callback_data="cmd:projects"),
         ],
         [
+            InlineKeyboardButton("⚙️ Settings", callback_data="cmd:config"),
+        ],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def settings_keyboard() -> InlineKeyboardMarkup:
+    keyboard = [
+        [
             InlineKeyboardButton("🧪 Features", callback_data="cmd:features"),
             InlineKeyboardButton("📦 Apps", callback_data="cmd:apps"),
         ],
         [
-            InlineKeyboardButton("⚙️ Settings", callback_data="cmd:config"),
+            InlineKeyboardButton("📁 Project Select", callback_data="cmd:projects"),
+            InlineKeyboardButton("🛡 Guardian", callback_data="cmd:guardian_settings"),
+        ],
+        [
+            InlineKeyboardButton("🤖 Models", callback_data="cmd:models"),
+            InlineKeyboardButton("🧭 Modes", callback_data="cmd:modes"),
+        ],
+        [
+            InlineKeyboardButton("🔌 MCP", callback_data="cmd:mcp"),
+            InlineKeyboardButton("📄 App Config", callback_data="cmd:config_view"),
+        ],
+        [
+            InlineKeyboardButton("⬅ Main Menu", callback_data="cmd:menu"),
         ],
     ]
     return InlineKeyboardMarkup(keyboard)

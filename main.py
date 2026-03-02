@@ -15,7 +15,7 @@ from telegram.ext import (
     filters,
 )
 
-from utils.config import get
+from utils.config import get, get_guardian_settings
 from utils.logger import setup
 from utils.single_instance import (
     SingleInstanceLock,
@@ -24,6 +24,7 @@ from utils.single_instance import (
     token_lock_key,
 )
 from codex import CodexClient, CommandRouter
+from codex.approval_guardian import ApprovalGuardianService, GuardianDecision
 from bot import (
     start_handler,
     message_handler,
@@ -34,8 +35,6 @@ from bot import (
 from bot.keyboard import approval_keyboard
 from models import state
 from models.user import user_manager
-
-
 logger = setup("codex-telegram")
 
 
@@ -53,6 +52,7 @@ async def setup_codex() -> CodexClient:
 async def post_init(app: Application):
     state.codex_client = await setup_codex()
     state.command_router = CommandRouter(state.codex_client)
+    state.approval_guardian = ApprovalGuardianService()
     configured_level = str(get("forwarding.app_server_event_level", "INFO")).upper()
     configured_allowlist = get("forwarding.app_server_event_allowlist", [])
     configured_denylist = get("forwarding.app_server_event_denylist", [])
@@ -294,6 +294,8 @@ async def post_init(app: Application):
             logger.exception("Failed to forward app-server event to Telegram")
 
     async def forward_approval_request(payload: dict[str, Any]):
+        if state.codex_client is None:
+            return
         req_id = payload.get("id")
         if not isinstance(req_id, int):
             return
@@ -323,6 +325,87 @@ async def post_init(app: Application):
                     raw_question = first.get("question")
                     if isinstance(raw_question, str) and raw_question.strip():
                         question_text = raw_question.strip()
+
+        guardian_settings = get_guardian_settings()
+        guardian_enabled = bool(guardian_settings.get("enabled", False))
+        guardian_methods = guardian_settings.get("apply_to_methods", ["*"])
+        guardian_patterns = guardian_methods if isinstance(guardian_methods, list) else ["*"]
+        guardian_failure_policy = str(guardian_settings.get("failure_policy", "manual_fallback")).strip().lower()
+        guardian_explainability = str(guardian_settings.get("explainability", "full_chain")).strip().lower()
+        guardian_timeout_seconds = int(guardian_settings.get("timeout_seconds", 8))
+
+        def _guardian_message(decision: GuardianDecision) -> str:
+            lines = [
+                "Guardian auto decision sent.",
+                f"Method: {method}",
+                f"Request ID: {req_id}",
+                f"Decision: {decision.choice}",
+            ]
+            if guardian_explainability in ("summary", "full_chain"):
+                lines.append(f"Risk: {decision.risk_level}")
+                lines.append(f"Confidence: {decision.confidence}")
+                if decision.summary:
+                    lines.append(f"Summary: {decision.summary}")
+            if guardian_explainability == "full_chain":
+                if decision.chain:
+                    lines.append(f"Chain: {decision.chain[:1600]}")
+                if decision.raw_text:
+                    lines.append(f"Raw: {decision.raw_text[:1200]}")
+            return "\n".join(lines)
+
+        if guardian_enabled and _method_matches(method, [p for p in guardian_patterns if isinstance(p, str)]):
+            if state.approval_guardian is None:
+                state.approval_guardian = ApprovalGuardianService()
+            guardian_decision: GuardianDecision | None = None
+            guardian_error = ""
+            try:
+                guardian_decision = await state.approval_guardian.review(
+                    payload,
+                    timeout_seconds=max(1, guardian_timeout_seconds),
+                )
+            except asyncio.TimeoutError:
+                guardian_error = f"Guardian timeout after {guardian_timeout_seconds}s"
+            except Exception as exc:
+                guardian_error = f"Guardian failed: {exc}"
+
+            if guardian_decision is not None:
+                accepted = state.codex_client.submit_approval_decision(req_id, guardian_decision.choice)
+                if accepted:
+                    await app.bot.send_message(chat_id=user_id, text=_guardian_message(guardian_decision))
+                    return
+                logger.warning(
+                    "Guardian produced decision but request already expired method=%s id=%s",
+                    method,
+                    req_id,
+                )
+            else:
+                logger.warning("Guardian could not decide method=%s id=%s error=%s", method, req_id, guardian_error)
+                if guardian_failure_policy in ("approve", "session", "deny"):
+                    accepted = state.codex_client.submit_approval_decision(req_id, guardian_failure_policy)
+                    if accepted:
+                        await app.bot.send_message(
+                            chat_id=user_id,
+                            text=(
+                                "Guardian fallback decision sent.\n"
+                                f"Method: {method}\n"
+                                f"Request ID: {req_id}\n"
+                                f"Decision: {guardian_failure_policy}\n"
+                                f"Reason: {guardian_error or 'fallback policy'}"
+                            ),
+                        )
+                        return
+
+                await app.bot.send_message(
+                    chat_id=user_id,
+                    text=(
+                        "Guardian review did not complete.\n"
+                        f"Method: {method}\n"
+                        f"Request ID: {req_id}\n"
+                        f"Reason: {guardian_error or 'unknown'}\n"
+                        "Falling back to manual approval."
+                    ),
+                )
+
         reason_line = f"\nReason: {reason}" if reason else ""
         question_line = f"\nQuestion: {question_text}" if question_text else ""
         message = (
@@ -353,6 +436,9 @@ async def post_init(app: Application):
 async def post_shutdown(app: Application):
     if state.codex_client:
         await state.codex_client.stop()
+    if state.approval_guardian:
+        await state.approval_guardian.stop()
+        state.approval_guardian = None
 
 
 async def debug_update_handler(update: object, context: Any):
@@ -434,7 +520,7 @@ def main():
     app.add_handler(TypeHandler(Update, debug_update_handler), group=-1)
     app.add_handler(CommandHandler("start", start_handler))
     app.add_handler(CommandHandler("help", start_handler))
-    app.add_handler(CommandHandler(["commands", "start", "projects", "project", "resume", "threads", "read", "archive", "unarchive", "compact", "rollback", "interrupt", "review", "exec", "models", "features", "modes", "skills", "apps", "mcp", "config"], command_handler))
+    app.add_handler(CommandHandler(["commands", "start", "projects", "project", "resume", "threads", "read", "archive", "unarchive", "compact", "rollback", "interrupt", "review", "exec", "models", "features", "gurdian", "guardian", "modes", "skills", "apps", "mcp", "config"], command_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
     app.add_handler(CallbackQueryHandler(callback_handler))
     app.add_error_handler(error_handler)

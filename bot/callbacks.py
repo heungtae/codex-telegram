@@ -5,13 +5,21 @@ from telegram import Update
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
-from bot.keyboard import main_menu_keyboard
+from bot.keyboard import main_menu_keyboard, settings_keyboard
 from bot.thread_ui import threads_keyboard
 from bot.skills_ui import skills_keyboard
 from bot.projects_ui import projects_keyboard
 from bot.features_ui import features_keyboard, features_panel_text
+from bot.guardian_ui import (
+    GUARDIAN_EXPLAINABILITY_CHOICES,
+    GUARDIAN_FAILURE_POLICY_CHOICES,
+    GUARDIAN_TIMEOUT_CHOICES,
+    guardian_keyboard,
+    guardian_panel_text,
+)
 from models import state
 from codex.commands import CommandResult
+from utils.config import get_guardian_settings, save_guardian_settings
 
 logger = logging.getLogger("codex-telegram.bot")
 
@@ -68,6 +76,16 @@ async def _run_local_feature_toggle(feature_key: str, enabled: bool) -> tuple[bo
     if not err_text:
         err_text = f"exit code {proc.returncode}"
     return False, err_text
+
+
+def _next_choice(options: list, current):
+    if not options:
+        return current
+    try:
+        idx = options.index(current)
+    except ValueError:
+        return options[0]
+    return options[(idx + 1) % len(options)]
 
 
 async def send_threads_page(
@@ -179,6 +197,25 @@ async def send_features_picker(
     await edit_with_log(query, context, text, user_id, reply_markup=keyboard)
 
 
+async def send_guardian_settings_panel(
+    context: ContextTypes.DEFAULT_TYPE,
+    user_id: int,
+    chat_id: int,
+    query=None,
+):
+    from models.user import user_manager
+
+    state_user = user_manager.get(user_id)
+    current = get_guardian_settings()
+    state_user.set_guardian_panel(current)
+    text = guardian_panel_text(state_user.guardian_panel_current, state_user.guardian_panel_draft)
+    keyboard = guardian_keyboard(state_user.guardian_panel_draft)
+    if query is None:
+        await context.bot.send_message(chat_id=chat_id, text=text, reply_markup=keyboard)
+        return
+    await edit_with_log(query, context, text, user_id, reply_markup=keyboard)
+
+
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if query is None:
@@ -200,6 +237,9 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
                 result = await run_callback_command("/start", user_id)
                 await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=main_menu_keyboard())
+            elif command == "menu":
+                logger.info("Executing callback action user_id=%s data=%s", user_id, data)
+                await context.bot.send_message(chat_id=chat_id, text="Main menu", reply_markup=main_menu_keyboard())
             elif command == "threads":
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
                 await send_threads_page(context, user_id, chat_id, offset=0, limit=5, archived=False)
@@ -212,14 +252,36 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             elif command == "apps":
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
                 result = await run_callback_command("/apps", user_id)
-                await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=main_menu_keyboard())
+                await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=settings_keyboard())
             elif command == "features":
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
                 await send_features_picker(context, user_id, chat_id)
+            elif command == "models":
+                logger.info("Executing callback action user_id=%s data=%s", user_id, data)
+                result = await run_callback_command("/models", user_id)
+                await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=settings_keyboard())
+            elif command == "modes":
+                logger.info("Executing callback action user_id=%s data=%s", user_id, data)
+                result = await run_callback_command("/modes", user_id)
+                await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=settings_keyboard())
+            elif command == "mcp":
+                logger.info("Executing callback action user_id=%s data=%s", user_id, data)
+                result = await run_callback_command("/mcp", user_id)
+                await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=settings_keyboard())
             elif command == "config":
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text="Settings menu:",
+                    reply_markup=settings_keyboard(),
+                )
+            elif command == "config_view":
+                logger.info("Executing callback action user_id=%s data=%s", user_id, data)
                 result = await run_callback_command("/config", user_id)
-                await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=main_menu_keyboard())
+                await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=settings_keyboard())
+            elif command == "guardian_settings":
+                logger.info("Executing callback action user_id=%s data=%s", user_id, data)
+                await send_guardian_settings_panel(context, user_id, chat_id)
             elif command == "interrupt":
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
                 result = await run_callback_command("/interrupt", user_id)
@@ -456,6 +518,94 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         chat_id=chat_id,
                         text="Failed to apply:\n- " + "\n- ".join(failed),
                     )
+        elif data.startswith("guardian_toggle:"):
+            from models.user import user_manager
+
+            key = data[len("guardian_toggle:"):].strip()
+            state_user = user_manager.get(user_id)
+            if not state_user.guardian_panel_draft:
+                state_user.set_guardian_panel(get_guardian_settings())
+            if key != "enabled":
+                await edit_with_log(query, context, "Invalid guardian toggle.", user_id)
+            else:
+                current = bool(state_user.guardian_panel_draft.get("enabled", False))
+                state_user.guardian_panel_draft["enabled"] = not current
+                await edit_with_log(
+                    query,
+                    context,
+                    guardian_panel_text(state_user.guardian_panel_current, state_user.guardian_panel_draft),
+                    user_id,
+                    reply_markup=guardian_keyboard(state_user.guardian_panel_draft),
+                )
+        elif data.startswith("guardian_cycle:"):
+            from models.user import user_manager
+
+            key = data[len("guardian_cycle:"):].strip()
+            state_user = user_manager.get(user_id)
+            if not state_user.guardian_panel_draft:
+                state_user.set_guardian_panel(get_guardian_settings())
+
+            if key == "timeout":
+                current = state_user.guardian_panel_draft.get("timeout_seconds", GUARDIAN_TIMEOUT_CHOICES[0])
+                state_user.guardian_panel_draft["timeout_seconds"] = _next_choice(GUARDIAN_TIMEOUT_CHOICES, current)
+            elif key == "failure_policy":
+                current = state_user.guardian_panel_draft.get(
+                    "failure_policy",
+                    GUARDIAN_FAILURE_POLICY_CHOICES[0],
+                )
+                state_user.guardian_panel_draft["failure_policy"] = _next_choice(
+                    GUARDIAN_FAILURE_POLICY_CHOICES,
+                    current,
+                )
+            elif key == "explainability":
+                current = state_user.guardian_panel_draft.get(
+                    "explainability",
+                    GUARDIAN_EXPLAINABILITY_CHOICES[0],
+                )
+                state_user.guardian_panel_draft["explainability"] = _next_choice(
+                    GUARDIAN_EXPLAINABILITY_CHOICES,
+                    current,
+                )
+            else:
+                await edit_with_log(query, context, "Invalid guardian setting key.", user_id)
+                return
+
+            await edit_with_log(
+                query,
+                context,
+                guardian_panel_text(state_user.guardian_panel_current, state_user.guardian_panel_draft),
+                user_id,
+                reply_markup=guardian_keyboard(state_user.guardian_panel_draft),
+            )
+        elif data == "guardian_refresh":
+            await send_guardian_settings_panel(context, user_id, chat_id, query=query)
+        elif data == "guardian_apply":
+            from models.user import user_manager
+
+            state_user = user_manager.get(user_id)
+            if not state_user.guardian_panel_draft:
+                state_user.set_guardian_panel(get_guardian_settings())
+            timeout_raw = state_user.guardian_panel_draft.get("timeout_seconds", 8)
+            timeout_seconds = timeout_raw if isinstance(timeout_raw, int) and timeout_raw > 0 else 8
+
+            applied = save_guardian_settings(
+                enabled=bool(state_user.guardian_panel_draft.get("enabled", False)),
+                timeout_seconds=timeout_seconds,
+                failure_policy=str(state_user.guardian_panel_draft.get("failure_policy", "manual_fallback")),
+                explainability=str(state_user.guardian_panel_draft.get("explainability", "full_chain")),
+            )
+            state_user.set_guardian_panel(applied)
+            await edit_with_log(
+                query,
+                context,
+                guardian_panel_text(state_user.guardian_panel_current, state_user.guardian_panel_draft),
+                user_id,
+                reply_markup=guardian_keyboard(state_user.guardian_panel_draft),
+            )
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text="Guardian settings saved and applied immediately.",
+            )
         else:
             logger.info("Executing callback action user_id=%s data=%s (unsupported)", user_id, data)
             await edit_with_log(query, context, "Unsupported button action.", user_id, reply_markup=main_menu_keyboard())

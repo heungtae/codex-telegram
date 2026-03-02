@@ -20,6 +20,13 @@ allowed_ids = []
 mode = "interactive"  # interactive | auto
 auto_response = "approve"  # approve | session | deny
 
+[approval.guardian]
+enabled = false
+timeout_seconds = 8
+failure_policy = "manual_fallback"  # manual_fallback | deny | approve | session
+explainability = "full_chain"  # decision_only | summary | full_chain
+apply_to_methods = ["*"]
+
 [logging]
 level = "INFO"
 

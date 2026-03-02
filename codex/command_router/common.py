@@ -17,6 +17,8 @@ COMMAND_HELP: dict[str, str] = {
     "/exec": "Execute command in Codex app-server. Usage: /exec <command>",
     "/models": "List available models. Usage: /models",
     "/features": "Manage beta features with checkbox UI. Usage: /features",
+    "/gurdian": "Manage approval guardian settings with checkbox UI. Usage: /gurdian",
+    "/guardian": "Alias of /gurdian. Usage: /guardian",
     "/modes": "List collaboration modes. Usage: /modes",
     "/skills": "List skills. Usage: /skills [cwd]",
     "/apps": "List apps. Usage: /apps",
