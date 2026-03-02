@@ -1,41 +1,41 @@
 # Codex Telegram Bot
 
-Codex App Server를 Telegram에서 제어할 수 있게 해주는 봇입니다.
+A bot that lets you control Codex App Server from Telegram.
 
 ## What You Can Do
 
-- Telegram에서 Codex 명령 실행 및 결과 확인
-- `allowed_ids` 기반 사용자 접근 제어
-- 스레드 시작/재개/조회/보관 등 대화 수명주기 관리
-- 승인(approval) 요청과 진행 이벤트를 Telegram으로 실시간 전달
+- Run Codex commands from Telegram and view results
+- Control user access based on `allowed_ids`
+- Manage conversation lifecycle: start/resume/list/archive threads
+- Forward approval requests and progress events to Telegram in real time
 
 ## Requirements
 
 - Python `3.11+`
 - Telegram Bot Token
-- `codex` CLI 설치 및 실행 가능 상태
+- `codex` CLI installed and runnable
 
 ## Quick Start
 
-1. 의존성 설치
+1. Install dependencies
 
 ```bash
 python3 -m pip install -r requirements.txt
 ```
 
-2. 설정 파일 준비
+2. Prepare the configuration file
 
 ```bash
 cp conf.toml.example conf.toml
 ```
 
-3. `conf.toml` 수정
+3. Edit `conf.toml`
 
-- `projects.<key>.path`: 실제 작업할 프로젝트 경로
-- `users.allowed_ids`: 봇 사용을 허용할 Telegram 사용자 ID 목록
-- `bot.token` 또는 환경변수 `TELEGRAM_BOT_TOKEN`
+- `projects.<key>.path`: absolute path to the target project
+- `users.allowed_ids`: Telegram user IDs allowed to use this bot
+- `bot.token` or environment variable `TELEGRAM_BOT_TOKEN`
 
-예시:
+Example:
 
 ```toml
 project = "default"
@@ -79,13 +79,13 @@ max_message_length = 4000
 send_progress = true
 ```
 
-4. (선택) 토큰을 환경변수로 주입
+4. (Optional) Provide the token via environment variable
 
 ```bash
 export TELEGRAM_BOT_TOKEN="your_actual_bot_token"
 ```
 
-5. 실행
+5. Run
 
 ```bash
 python3 main.py
@@ -93,12 +93,12 @@ python3 main.py
 
 ## First Commands
 
-봇과 대화를 시작한 뒤 아래 순서로 입력하면 빠르게 확인할 수 있습니다.
+After starting a chat with the bot, run commands in this order for a quick check:
 
-1. `/commands` - 전체 명령 보기
-2. `/projects --list` - 프로젝트 목록 보기
-3. `/project <key|number|name>` - 활성 프로젝트 선택
-4. `/start` - 새 스레드 시작
+1. `/commands` - Show all commands
+2. `/projects --list` - Show project profiles
+3. `/project <key|number|name>` - Select active project
+4. `/start` - Start a new thread
 
 ## Command Reference
 
@@ -128,14 +128,14 @@ python3 main.py
 | `/mcp` | mcpServerStatus/list | List MCP servers |
 | `/config` | config/read | Read configuration |
 
-Tip: 각 명령은 `<command> --help`로 상세 사용법을 확인할 수 있습니다.
+Tip: Use `<command> --help` to see detailed usage for each command.
 
 ## Security Notes
 
-- `users.allowed_ids`를 비워두면 아무도 봇을 사용할 수 없습니다.
-- 토큰은 `conf.toml`에 직접 넣기보다 환경변수 사용을 권장합니다.
-- `approval.mode = "interactive"`면 Telegram 버튼(Approve/Session/Deny)으로 승인합니다.
-- `approval.mode = "auto"`면 버튼 없이 `approval.auto_response`로 즉시 응답합니다.
+- If `users.allowed_ids` is empty, nobody can use the bot.
+- It is recommended to use environment variables for tokens instead of hardcoding them in `conf.toml`.
+- With `approval.mode = "interactive"`, approvals are handled via Telegram buttons (Approve/Session/Deny).
+- With `approval.mode = "auto"`, decisions are returned immediately using `approval.auto_response`.
 
 ## Message Flow
 
@@ -176,16 +176,16 @@ codex-telegram/
 
 ## Create Telegram Bot Token
 
-1. Telegram에서 `@BotFather` 열기
-2. `/newbot` 실행
-3. 봇 이름/유저네임 설정
-4. 발급된 토큰 복사
-5. `@userinfobot`으로 본인 Telegram ID 확인 후 `allowed_ids`에 추가
+1. Open `@BotFather` in Telegram
+2. Run `/newbot`
+3. Set bot name and username
+4. Copy the issued token
+5. Check your Telegram user ID via `@userinfobot` and add it to `allowed_ids`
 
 ## Documentation
 
-- 상세 설정/설치: `docs/TELEGRAM_BOT_SETUP.md`
-- 설계 메모: `docs/DESIGN.md`
+- Setup and configuration details: `docs/TELEGRAM_BOT_SETUP.md`
+- Design notes: `docs/DESIGN.md`
 
 ## License
 

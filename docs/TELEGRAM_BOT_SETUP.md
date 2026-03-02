@@ -1,48 +1,48 @@
-# Telegram Bot 생성 및 연동 가이드
+# Telegram Bot Setup and Integration Guide
 
-이 문서는 `codex-telegram` 프로젝트 기준으로 Telegram Bot을 생성하고, 로컬 환경에 연동해 실행하는 전체 절차를 설명합니다.
+This document explains the full process for creating a Telegram bot and integrating it with the `codex-telegram` project.
 
-## 1. 준비 사항
+## 1. Prerequisites
 
-- OS: macOS / Linux / WSL 권장
-- Python: 3.11 이상
-- Telegram 앱 설치 (모바일 또는 데스크톱)
-- Codex CLI 설치 및 실행 가능 상태 (`codex` 명령)
+- OS: macOS / Linux / WSL recommended
+- Python: 3.11+
+- Telegram app installed (mobile or desktop)
+- Codex CLI installed and runnable (`codex` command)
 
-프로젝트 루트:
+Project root:
 
 ```bash
 cd /home/heungtae/develop/ai-agent/codex-telegram
 ```
 
-## 2. BotFather에서 봇 생성
+## 2. Create a Bot in BotFather
 
-1. Telegram에서 `@BotFather` 검색 후 채팅 시작
-2. `/newbot` 입력
-3. 봇 표시 이름 입력 (예: `Codex Assistant Bot`)
-4. 봇 유저네임 입력 (`...bot` 으로 끝나야 함, 예: `my_codex_helper_bot`)
-5. 발급된 HTTP API 토큰 저장
+1. Open `@BotFather` in Telegram
+2. Run `/newbot`
+3. Enter bot display name (example: `Codex Assistant Bot`)
+4. Enter bot username (must end with `bot`, example: `my_codex_helper_bot`)
+5. Save the issued HTTP API token
 
-예시 토큰 형식:
+Example token format:
 
 ```text
 1234567890:AAHxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
-보안 주의:
-- 토큰은 비밀번호와 동일하게 취급
-- Git에 커밋 금지
-- 외부 공유 금지
+Security notes:
+- Treat the token like a password
+- Never commit it to Git
+- Never share it publicly
 
-## 3. (권장) 봇 기본 설정
+## 3. Recommended Bot Defaults
 
-BotFather에서 추가로 아래 설정을 권장합니다.
+Recommended extra setup in BotFather:
 
-### 3.1 명령어 메뉴 등록
+### 3.1 Register Command Menu
 
-- `/setcommands` 실행
-- 대상 봇 선택
-- 아래 내용을 붙여넣기
+- Run `/setcommands`
+- Select your target bot
+- Paste the following:
 
 ```text
 start - Start a new thread
@@ -66,14 +66,14 @@ config - Read configuration
 help - Show help
 ```
 
-### 3.2 그룹 사용 정책
+### 3.2 Group Privacy Policy
 
-- 개인 DM만 쓸 경우: 기본값 유지 가능
-- 그룹에서도 쓸 경우: `/setprivacy` -> `Disable` 고려
+- If you only use DM: default is fine
+- If you also use groups: consider `/setprivacy` -> `Disable`
 
-## 4. 이 프로젝트에 필요한 Python 의존성 설치
+## 4. Install Python Dependencies
 
-가상환경 생성/활성화 후 설치:
+Create and activate a virtual environment, then install:
 
 ```bash
 python3 -m venv .venv
@@ -81,27 +81,26 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-현재 주요 의존성:
-
+Main dependency:
 - `python-telegram-bot>=20.0`
 
-## 5. 설정 파일 준비
+## 5. Prepare Configuration
 
-이 프로젝트는 루트의 `conf.toml`이 아니라 사용자 홈 설정 경로를 사용합니다.
+This project uses a user-level config path rather than a repo-local `conf.toml`.
 
-실제 경로:
+Actual path:
 
 ```text
 ~/.config/codex-telegram/conf.toml
 ```
 
-코드에서 `utils/config.py`가 위 파일을 자동 생성합니다.
+`utils/config.py` auto-creates this file when needed.
 
-### 5.1 기본 템플릿 생성(자동)
+### 5.1 Auto-create Template
 
-아직 파일이 없다면 실행 시 자동 생성됩니다. 먼저 실행해 생성해도 되고, 수동으로 미리 작성해도 됩니다.
+If the file does not exist, it is created automatically at startup.
 
-### 5.2 수동 작성 예시
+### 5.2 Manual Example
 
 ```toml
 [bot]
@@ -126,104 +125,103 @@ max_message_length = 4000
 send_progress = true
 ```
 
-## 6. Telegram 사용자 ID 확인 및 접근 제어
+## 6. Check Telegram User ID and Access Control
 
-이 프로젝트는 `users.allowed_ids`에 없는 사용자 접근을 차단할 수 있습니다.
+You can block users not listed in `users.allowed_ids`.
 
-사용자 ID 확인 방법:
+How to find your user ID:
 
-1. Telegram에서 `@userinfobot` 검색
-2. `/start` 입력
-3. 받은 numeric ID를 `allowed_ids`에 추가
+1. Open `@userinfobot` in Telegram
+2. Send `/start`
+3. Add the returned numeric ID to `allowed_ids`
 
-예시:
+Example:
 
 ```toml
 [users]
 allowed_ids = [123456789, 987654321]
 ```
 
-참고:
-- `allowed_ids = []` 이면 코드상 제한 없이 동작할 수 있으므로 운영 환경에서는 반드시 제한 권장
+Note:
+- `allowed_ids = []` may allow unrestricted access depending on runtime behavior. Restrict it in production.
 
-## 7. 실행
+## 7. Run
 
-프로젝트 루트에서:
+From project root:
 
 ```bash
 source .venv/bin/activate
 python3 main.py
 ```
 
-정상 동작 시:
+Expected behavior:
+- Log includes `Starting Codex Telegram Bot...`
+- Open bot DM in Telegram and send `/start`
+- Verify thread creation and command responses
 
-- 로그에 `Starting Codex Telegram Bot...`
-- Telegram에서 봇 DM 열고 `/start` 전송
-- 스레드 생성/명령 응답 확인
+## 8. Runtime Flow (Summary)
 
-## 8. 동작 방식(요약)
+- Receive Telegram messages
+- Route command/text in `python-telegram-bot` handlers
+- Communicate with Codex App Server (`codex app-server`)
+- Send results back to Telegram
 
-- Telegram 메시지 수신
-- `python-telegram-bot` 기반 핸들러에서 명령/텍스트 분기
-- 내부적으로 Codex App Server (`codex app-server`)와 통신
-- 결과를 Telegram으로 다시 전송
+This project runs in polling mode (`app.run_polling(...)`).
 
-이 프로젝트는 polling 방식으로 동작합니다 (`app.run_polling(...)`).
+## 9. Operations Tips
 
-## 9. 운영 팁
+- Always set `allowed_ids` to block unauthorized use
+- Default log level is `INFO`; use `DEBUG` for troubleshooting
+- If token leaks, revoke/regenerate immediately in BotFather
+- Use process managers (systemd/pm2/supervisor) for always-on operation
 
-- `allowed_ids`를 반드시 설정해 비인가 사용 차단
-- 로그 레벨은 기본 `INFO`, 문제 분석 시 `DEBUG`
-- 토큰 유출 시 즉시 BotFather에서 `/revoke` 또는 재발급
-- systemd/pm2/supervisor 등 프로세스 매니저로 상시 구동 권장
-
-## 10. 자주 발생하는 문제와 해결
+## 10. Common Issues and Fixes
 
 ### 10.1 `Please set bot.token in conf.toml`
 
-원인:
-- `~/.config/codex-telegram/conf.toml`에 토큰이 없거나 placeholder 값
+Cause:
+- Missing token or placeholder value in `~/.config/codex-telegram/conf.toml`
 
-해결:
-- 실제 BotFather 토큰으로 교체
+Fix:
+- Replace with the real BotFather token
 
-### 10.2 봇이 응답하지 않음
+### 10.2 Bot does not respond
 
-점검:
-- `python3 main.py` 프로세스 실행 중인지
-- 토큰이 유효한지
-- 네트워크 차단 여부
-- Telegram에서 봇이 block 상태인지
+Checks:
+- Is `python3 main.py` running?
+- Is token valid?
+- Any network restrictions?
+- Is the bot blocked in Telegram?
 
 ### 10.3 `You are not authorized to use this bot.`
 
-원인:
-- 사용자 ID가 `allowed_ids`에 없음
+Cause:
+- Your user ID is not in `allowed_ids`
 
-해결:
-- 본인 ID 확인 후 `allowed_ids`에 추가
-- 파일 저장 후 프로세스 재시작
+Fix:
+- Add your ID to `allowed_ids`
+- Save file and restart the process
 
-### 10.4 `codex` 관련 실행 오류
+### 10.4 `codex` execution errors
 
-원인:
-- `codex` 명령 미설치 또는 PATH 문제
+Cause:
+- `codex` is not installed or PATH is wrong
 
-해결:
-- 터미널에서 `codex --help` 확인
-- `conf.toml`의 `[codex] command`/`args` 점검
+Fix:
+- Run `codex --help` in terminal
+- Check `[codex] command` and `args` in `conf.toml`
 
-## 11. 빠른 점검 체크리스트
+## 11. Quick Checklist
 
-- [ ] BotFather로 봇 생성 완료
-- [ ] 토큰을 `~/.config/codex-telegram/conf.toml`에 설정
-- [ ] 내 Telegram ID를 `allowed_ids`에 등록
-- [ ] `pip install -r requirements.txt` 완료
-- [ ] `python3 main.py` 실행 후 로그 정상
-- [ ] Telegram DM에서 `/start` 응답 확인
+- [ ] Bot created in BotFather
+- [ ] Token configured in `~/.config/codex-telegram/conf.toml`
+- [ ] Your Telegram user ID added to `allowed_ids`
+- [ ] `pip install -r requirements.txt` completed
+- [ ] `python3 main.py` runs and logs are healthy
+- [ ] `/start` works in Telegram DM
 
-## 12. 권장 다음 단계
+## 12. Recommended Next Steps
 
-- 명령어별 권한 정책 분리 (`/exec`, `/review` 등 고위험 명령 제한)
-- Docker/systemd 기반 자동 재시작 구성
-- 장애 추적을 위한 구조적 로그/알림 연동
+- Split permissions by command (restrict high-risk commands like `/exec`, `/review`)
+- Add auto-restart setup via Docker/systemd
+- Integrate structured logging/alerts for incident tracking

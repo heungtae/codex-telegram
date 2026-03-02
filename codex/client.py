@@ -129,7 +129,7 @@ class CodexClient:
             try:
                 if not self._proc or not self._proc.stdout:
                     break
-                line = await self._proc.stdout.readline()
+                line = await self._readline_unbounded(self._proc.stdout)
                 if not line:
                     break
 
@@ -149,13 +149,35 @@ class CodexClient:
             try:
                 if not self._proc or not self._proc.stderr:
                     break
-                line = await self._proc.stderr.readline()
+                line = await self._readline_unbounded(self._proc.stderr)
                 if not line:
                     break
                 logger.debug("app-server stderr: %s", line.decode(errors="replace").rstrip("\n"))
             except Exception as e:
                 logger.error(f"Error reading stderr stream: {e}")
                 break
+
+    async def _readline_unbounded(self, stream: asyncio.StreamReader) -> bytes:
+        chunks: list[bytes] = []
+        while True:
+            try:
+                part = await stream.readuntil(b"\n")
+                if chunks:
+                    chunks.append(part)
+                    return b"".join(chunks)
+                return part
+            except asyncio.LimitOverrunError as exc:
+                if exc.consumed > 0:
+                    chunks.append(await stream.readexactly(exc.consumed))
+                    continue
+                one = await stream.read(1)
+                if not one:
+                    return b"".join(chunks)
+                chunks.append(one)
+            except asyncio.IncompleteReadError as exc:
+                if exc.partial:
+                    chunks.append(exc.partial)
+                return b"".join(chunks)
     
     async def _handle_message(self, msg: JSONRPCRequest | JSONRPCResponse | JSONRPCNotification):
         if isinstance(msg, JSONRPCResponse) and msg.id is not None:
