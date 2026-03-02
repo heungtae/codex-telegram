@@ -1,135 +1,151 @@
-# Codex-Telegram Bridge 설계서
+# Codex-Telegram Bridge Design
 
-## 개요
-Telegram을 통해 Codex App Server의 모든 기능을 사용하기 위한 브릿지
+## Overview
+`codex-telegram` is a Telegram interface for Codex App Server. It provides command routing, per-user runtime state, event forwarding, and interactive approval handling.
 
-## 아키텍처
-```
-Telegram User → codex-telegram → Codex App Server (stdio)
-```
-
-## 프로젝트 구조
-```
-codex-telegram/
-├── conf.toml                    # 설정 파일 (allowed_users 등)
-├── main.py                      # Bot 실행 진입점
-├── bot/
-│   ├── __init__.py
-│   ├── handlers.py              # Telegram command/message handlers
-│   ├── callbacks.py             # Callback query handlers (approval)
-│   └── keyboard.py              # Inline keyboards
-├── codex/
-│   ├── __init__.py
-│   ├── client.py                 # Codex App Server client (stdio)
-│   ├── protocol.py               # JSON-RPC message handling
-│   ├── events.py                 # Event notification handlers
-│   └── commands.py               # Command registry & router
-├── models/
-│   ├── __init__.py
-│   ├── user.py                   # User state management
-│   └── thread.py                 # Thread state management
-└── utils/
-    ├── __init__.py
-    ├── config.py                 # conf.toml loader
-    └── logger.py                 # Logging setup
+## High-Level Architecture
+```text
+Telegram User
+  <-> python-telegram-bot handlers/callbacks
+  <-> Command Router + User State
+  <-> Codex Client (JSON-RPC over stdio)
+  <-> codex app-server
 ```
 
-## 주요 기능
+## Runtime Components
+- `main.py`
+: Bootstraps Telegram application, Codex client initialization, handler registration, and polling lifecycle.
+- `codex/client.py`
+: JSON-RPC transport and request/response handling for `codex app-server`.
+- `codex/command_router/*`
+: Command dispatch and domain-specific command handlers (`threads`, `projects`, `system`, `review`).
+- `bot/handlers.py`
+: Telegram command and text-message handling.
+- `bot/callbacks.py`
+: Inline keyboard callback handling (threads paging/actions, project/skill pickers, approvals).
+- `models/user.py`
+: In-memory per-user and per-thread runtime state.
+- `utils/config.py`
+: Configuration loader and project profile persistence.
 
-### 1. allowed_users 필터링
-- `conf.toml`의 `users.allowed_ids`에 Telegram user ID를 등록
-- 등록된 사용자만 Bot 사용 가능
+## Configuration Model
+- Active config path: `~/.config/codex-telegram/conf.toml`
+- If missing, config is auto-generated with defaults.
+- Environment-variable substitution is applied when a config string exactly matches an env key.
 
-### 2. Command 매핑 (Telegram ↔ Codex API)
+Key sections:
+- `[bot]`: token, pending update behavior
+- `[codex]`: command + args to launch app-server
+- `[users]`: allowed Telegram user IDs
+- `[approval]`: `interactive` or `auto`
+- `[forwarding]`: event forwarding level/allowlist/denylist/rules
+- `[projects.*]` + `project`: project profiles and default profile
 
-| Telegram Command | Codex API | Description |
-|-----------------|-----------|-------------|
-| `/start` | `thread/start` | 새 스레드 생성 |
-| `/resume <id>` | `thread/resume` | 기존 스레드 복원 |
-| `/fork <id>` | `thread/fork` | 스레드 포크 |
-| `/threads` | `thread/list` | 스레드 목록 조회 |
-| `/read <id>` | `thread/read` | 스레드 읽기 |
-| `/archive <id>` | `thread/archive` | 스레드 아카이브 |
-| `/unarchive <id>` | `thread/unarchive` | 스레드 복원 |
-| `/compact <id>` | `thread/compact/start` | 히스토리 압축 |
-| `/rollback <n>` | `thread/rollback` | N개 턴 롤백 |
-| `/interrupt` | `turn/interrupt` | 진행 중인 턴 취소 |
-| `/review` | `review/start` | 코드 리뷰 시작 |
-| `/exec <cmd>` | `command/exec` | 명령어 실행 |
-| `/models` | `model/list` | 모델 목록 |
-| `/features` | `experimentalFeature/list` | 실험적 기능 |
-| `/modes` | `collaborationMode/list` | 협업 모드 |
-| `/skills` | `skills/list` | 스킬 목록 |
-| `/apps` | `app/list` | 앱 목록 |
-| `/mcp` | `mcpServerStatus/list` | MCP 서버 상태 |
-| `/config` | `config/read` | 설정 읽기 |
+## Telegram Entry Points
 
-### 3. Event Streaming (Codex → Telegram)
-Codex에서 발생하는 이벤트를 실시간으로 처리:
-- `thread/started`, `thread/archived`, `thread/unarchived`
-- `turn/started`, `turn/completed`, `turn/diff/updated`
-- `item/started`, `item/completed`, `item/agentMessage/delta`
-- `thread/status/changed` (승인 요청 알림)
+### Command and Message Path
+- `/start`, `/help`, and command list in `main.py` are routed to `bot/handlers.py`.
+- Text messages (`~filters.COMMAND`) start `turn/start` on the active thread.
+- If no active thread exists, users are prompted to run `/start`.
+- If a turn is already running, users are prompted to interrupt first.
 
-### 4. Approval 요청 시스템
-1. Codex가 `thread/status/changed` + `waitingOnApproval` 알림 전송
-2. Bot이 사용자에게 Inline Keyboard로 승인 요청
-3. 사용자가 "approve" / "deny" / "view" 선택
-4. 응답에 따라 작업 계속/## 설정 (conf.toml)
+### Inline Callback Path
+Main menu buttons:
+- `cmd:start`, `cmd:threads`, `cmd:skills`, `cmd:projects`, `cmd:apps`, `cmd:config`, `cmd:interrupt`
 
-```중단
+Thread UI callbacks:
+- `threads_page:{active|arch}:{offset}:{limit}`
+- `resume:{threadId}`, `read:{threadId}`, `archive:{threadId}`, `unarchive:{threadId}`, `fork:{threadId}`
 
-toml
-[bot]
-token = "YOUR_TELEGRAM_BOT_TOKEN"
+Other callbacks:
+- `skillpick:{name}` inserts `$<skill>` template
+- `projectsel:{key}` selects project and starts a fresh thread
+- `approval:{requestId}:{approve|session|deny}` submits approval decision
 
-[codex]
-command = "codex"
-args = ["app-server"]
+## Command Router and Supported Commands
+`CommandRouter` maps commands to handlers:
+- Threads: `/start`, `/resume`, `/fork`, `/threads`, `/read`, `/archive`, `/unarchive`, `/compact`, `/rollback`, `/interrupt`
+- System: `/commands`, `/exec`, `/models`, `/features`, `/modes`, `/skills`, `/apps`, `/mcp`, `/config`
+- Projects: `/projects`, `/project`
+- Review: `/review`
 
-[users]
-allowed_ids = [123456789, 987654321]
+## Thread and Project Behavior
 
-[approval]
-mode = "interactive"
-auto_response = "approve"
+### Project-aware thread creation
+- `/start` resolves effective project (`selected` -> `default` -> `current workspace`) and calls `thread/start` with `cwd`.
+- Thread-to-project mapping is tracked in memory (`_thread_projects`).
 
-[display]
-max_message_length = 4000
-send_progress = true
-```
+### Project switching (`/project`)
+- Selects project by key/number/name.
+- If a turn is running, attempts `turn/interrupt` with timeout.
+- Starts a new thread in selected project workspace.
+- Updates active thread and project mapping.
 
-## 메시지 흐름
+### Thread list modes (`/threads`)
+Supported options:
+- `--archived`
+- `--by-profile`
+- `--current-profile`
+- `--limit N`
+- `--offset N`
+- `--full`
 
-### 일반 요청 처리
-```
-User: /start
-  ▶ Bot: allowed_users 확인
-  ▶ Codex: thread/start 호출
-  ▶ Codex: thread/started 이벤트
-  ▶ Codex: turn/started → item/started → item/agentMessage/delta... → turn/completed
-  ▶ Bot: 최종 결과를 Telegram으로 전송
-```
+Current UX behavior:
+- Inline `My Threads` button uses `--current-profile` by default.
+- Plain `/threads` with no args in command handler also defaults to `--current-profile`.
+- `--current-profile` strictly filters by selected/default profile.
+- For older threads without in-memory profile mapping, best-effort profile inference is attempted from thread path fields (`cwd`, `path`, `workspace`, etc.) against configured project paths.
 
-### 승인 필요시
-```
-User: 파일 쓰기 요청
-  ▶ Codex: thread/status/changed { waitingOnApproval }
-  ▶ Bot: "승인 요청" 메시지 + Inline Keyboard 전송
-  ▶ User: [승인] 버튼 클릭
-  ▶ Bot: Codex에 승인 신호 전송
-  ▶ Codex: 작업 계속 진행
-```
+## Event Forwarding Design
+`main.py` registers a wildcard Codex event handler (`on_any`) and applies forwarding policy:
+- Denylist check
+- Allowlist check (if configured)
+- Event-level threshold check (`DEBUG|INFO|WARNING|ERROR|OFF`)
 
-## 의존성
-- Python 3.11+
-- python-telegram-bot
-- tomllib (표준 라이브러리)
+Formatting behavior:
+- Rule-based extraction from `forwarding.rules` if configured
+- Method-specific formatting for common events
+- Message truncation to fit Telegram limits
+- `threadId` footer appended to forwarded messages
 
-## 실행
-```bash
-pip install python-telegram-bot
-cp conf.toml conf.toml.example
-# conf.toml에 Telegram Bot Token 및 설정 입력
-python main.py
-```
+Turn-state sync:
+- `turn/started` sets `active_turn_id`
+- `turn/completed|turn/failed|turn/cancelled` clears `active_turn_id`
+- This synchronization runs even if event forwarding is filtered out.
+
+## Approval Handling
+There are two layers:
+
+1. Codex request handling in `CodexClient._handle_server_request`
+- Supports approval methods such as:
+  - `item/commandExecution/requestApproval`
+  - `item/fileChange/requestApproval`
+  - `execCommandApproval`
+  - `applyPatchApproval`
+- In `auto` mode, responds immediately using configured `approval.auto_response`.
+- In `interactive` mode, waits for user decision future.
+
+2. Telegram UI approval flow
+- `on_approval_request` sends message with `Approve / Session / Deny` keyboard.
+- Callback `approval:<id>:<choice>` submits decision via `submit_approval_decision`.
+
+## State Model
+`models/user.py` maintains in-memory state:
+- Per-user active thread/turn
+- Selected project
+- Project-add interaction flow state
+- Last listed thread/project IDs (for numeric shortcuts)
+- Thread ownership map (`threadId -> userId`)
+- Thread project map (`threadId -> projectKey`)
+
+Note:
+- Thread/project mapping is runtime memory, not persisted across restarts.
+
+## Operational Notes
+- App-server event forwarding is configurable and can be reduced/noised-filtered via allowlist/denylist/rules.
+- Bot runs in polling mode with `concurrent_updates(True)`.
+- Unauthorized users are blocked based on `users.allowed_ids`.
+
+## Known Design Constraints
+- Profile mapping is primarily in-memory; accuracy for legacy threads after restart depends on path-based inference quality.
+- Thread list pagination fetches up to `limit + offset` then slices locally when offset is used.
