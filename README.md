@@ -2,7 +2,7 @@
 
 A bot that lets you control Codex App Server from Telegram.
 
-![Codex Telegram Bot Integration](./codex-telegram.png)
+<img src="./docs/images/codex-telegram.png" alt="Codex Telegram Bot Integration" width="520" />
 
 ## What You Can Do
 
