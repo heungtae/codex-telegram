@@ -1,6 +1,8 @@
 import asyncio
 import logging
+import time
 from telegram import Update
+from telegram.error import Conflict
 from telegram.ext import ContextTypes
 
 from models.user import user_manager
@@ -11,8 +13,10 @@ from bot.skills_ui import skills_keyboard
 from bot.projects_ui import projects_keyboard
 from bot.features_ui import features_keyboard, features_panel_text
 from models import state
+from utils.single_instance import find_local_conflict_candidates
 
 logger = logging.getLogger("codex-telegram.bot")
+_last_conflict_log_at = 0.0
 
 
 async def wait_for_codex():
@@ -227,9 +231,22 @@ async def command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global _last_conflict_log_at
     err = context.error
     if err is None:
         logger.error("Update %s caused unknown error", update)
+        return
+    if isinstance(err, Conflict):
+        now = time.monotonic()
+        if now - _last_conflict_log_at >= 30:
+            _last_conflict_log_at = now
+            token = str(get("bot.token", "")).strip()
+            candidates = find_local_conflict_candidates(token)
+            logger.error(
+                "Telegram polling conflict: another getUpdates consumer is active for this token. "
+                "local_candidates=%s",
+                ", ".join(str(pid) for pid, _ in candidates) if candidates else "none",
+            )
         return
     logger.error(
         "Update %s caused error: %s",

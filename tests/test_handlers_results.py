@@ -1,6 +1,8 @@
 import unittest
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
+
+from telegram.error import Conflict
 
 from codex.commands import CommandResult
 from bot import handlers
@@ -13,11 +15,14 @@ class HandlerResultTests(unittest.IsolatedAsyncioTestCase):
         self.original_router = state.command_router
         self.mock_router = SimpleNamespace(route=AsyncMock())
         state.command_router = self.mock_router
+        self.original_conflict_log_at = handlers._last_conflict_log_at
+        handlers._last_conflict_log_at = 0.0
         user_manager._users.clear()
         user_manager._thread_owners.clear()
 
     def tearDown(self):
         state.command_router = self.original_router
+        handlers._last_conflict_log_at = self.original_conflict_log_at
 
     async def test_command_handler_projects_kind_uses_projects_keyboard(self):
         self.mock_router.route.return_value = CommandResult(
@@ -80,6 +85,16 @@ class HandlerResultTests(unittest.IsolatedAsyncioTestCase):
 
         kwargs = mock_send_reply.await_args.kwargs
         self.assertIn("reply_markup", kwargs)
+
+    async def test_error_handler_conflict_does_not_stop_app(self):
+        app = SimpleNamespace(stop_running=Mock())
+        context = SimpleNamespace(
+            error=Conflict("terminated by other getUpdates request"),
+            application=app,
+        )
+        await handlers.error_handler(update=None, context=context)
+        await handlers.error_handler(update=None, context=context)
+        app.stop_running.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -1,6 +1,8 @@
 import asyncio
 import json
 import logging
+import os
+import sys
 from typing import Any
 
 from telegram import Update
@@ -15,6 +17,12 @@ from telegram.ext import (
 
 from utils.config import get
 from utils.logger import setup
+from utils.single_instance import (
+    SingleInstanceLock,
+    find_local_conflict_candidates,
+    terminate_pid,
+    token_lock_key,
+)
 from codex import CodexClient, CommandRouter
 from bot import (
     start_handler,
@@ -303,15 +311,24 @@ async def post_init(app: Application):
 
         params = payload.get("params")
         reason = ""
+        question_text = ""
         if isinstance(params, dict):
             raw_reason = params.get("reason")
             if isinstance(raw_reason, str) and raw_reason.strip():
                 reason = raw_reason.strip()
+            questions = params.get("questions")
+            if isinstance(questions, list) and questions:
+                first = questions[0]
+                if isinstance(first, dict):
+                    raw_question = first.get("question")
+                    if isinstance(raw_question, str) and raw_question.strip():
+                        question_text = raw_question.strip()
         reason_line = f"\nReason: {reason}" if reason else ""
+        question_line = f"\nQuestion: {question_text}" if question_text else ""
         message = (
             "Approval required.\n"
             f"Method: {method}\n"
-            f"Request ID: {req_id}{reason_line}\n"
+            f"Request ID: {req_id}{reason_line}{question_line}\n"
             "Choose: Approve / Session / Deny"
         )
         logger.info(
@@ -363,6 +380,47 @@ def main():
     if not bot_token or bot_token == "YOUR_TELEGRAM_BOT_TOKEN":
         logger.error("Please set bot.token in conf.toml")
         return
+
+    lock = SingleInstanceLock(f"codex-telegram-{token_lock_key(bot_token)}")
+    if not lock.acquire():
+        owner_pid = lock.read_owner_pid()
+        candidates = find_local_conflict_candidates(bot_token, exclude_pid=os.getpid())
+        action_raw = str(get("bot.conflict_action", "prompt")).strip().lower()
+        logger.error(
+            "Another bot instance may be running for the same token (pid=%s).",
+            owner_pid if owner_pid is not None else "unknown",
+        )
+        if candidates:
+            logger.error("Local conflict candidates: %s", ", ".join(str(pid) for pid, _ in candidates))
+        action = action_raw
+        if action == "prompt":
+            if sys.stdin.isatty():
+                choice = input(
+                    "Conflict detected. Choose action: [k]ill existing process and continue / [e]xit: "
+                ).strip().lower()
+                action = "kill" if choice.startswith("k") else "exit"
+            else:
+                action = "exit"
+                logger.error("Conflict action is prompt, but no TTY is attached. Falling back to exit.")
+        if action == "kill":
+            terminated_any = False
+            if owner_pid is not None and lock.terminate_owner():
+                terminated_any = True
+            target_pids = [pid for pid, _ in candidates if pid != owner_pid and pid != os.getpid()]
+            for pid in target_pids:
+                if terminate_pid(pid):
+                    terminated_any = True
+                    logger.info("Terminated local conflict candidate pid=%s.", pid)
+            if not terminated_any:
+                logger.error("No local process could be terminated for conflict resolution.")
+                return
+            if not lock.acquire():
+                logger.error("Existing process was terminated but lock is still unavailable.")
+                return
+            logger.info("Conflict resolved and lock acquired.")
+        else:
+            logger.info("Exiting due to polling conflict.")
+            return
     
     app = (
         Application.builder()
@@ -381,11 +439,14 @@ def main():
     app.add_handler(CallbackQueryHandler(callback_handler))
     app.add_error_handler(error_handler)
     
-    app.run_polling(
-        stop_signals=None,
-        allowed_updates=Update.ALL_TYPES,
-        drop_pending_updates=drop_pending_updates,
-    )
+    try:
+        app.run_polling(
+            stop_signals=None,
+            allowed_updates=Update.ALL_TYPES,
+            drop_pending_updates=drop_pending_updates,
+        )
+    finally:
+        lock.release()
 
 
 if __name__ == "__main__":

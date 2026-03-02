@@ -105,6 +105,8 @@ If the file does not exist, it is created automatically at startup.
 ```toml
 [bot]
 token = "1234567890:AAHxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+drop_pending_updates = true
+conflict_action = "prompt" # prompt | kill | exit
 
 [codex]
 command = "codex"
@@ -210,6 +212,24 @@ Cause:
 Fix:
 - Run `codex --help` in terminal
 - Check `[codex] command` and `args` in `conf.toml`
+
+### 10.5 `Conflict: terminated by other getUpdates request`
+
+Cause:
+- Another process or host is running the same bot token in polling mode
+
+Fix:
+- Stop duplicate instances (local process manager, container, CI job, etc.)
+- Run only one polling instance per token
+- If high availability is needed, switch to webhook architecture instead of multiple pollers
+
+Note:
+- This project now acquires a local single-instance lock per bot token and exits early on duplicates.
+- You can control lock conflict behavior with `bot.conflict_action`:
+  - `prompt`: ask whether to kill existing local process or exit
+  - `kill`: terminate local lock-owner process automatically
+  - `exit`: always exit immediately
+- If conflict comes from another host, local kill cannot resolve it; process exits.
 
 ## 11. Quick Checklist
 

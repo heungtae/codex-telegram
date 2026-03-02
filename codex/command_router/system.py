@@ -187,16 +187,126 @@ class SystemCommands:
 
     async def mcp_server_status(self) -> CommandResult:
         result = await self.ctx.codex.call("mcpServerStatus/list", {"limit": 20})
+        config_result: dict[str, Any] = {}
+        try:
+            config_result = await self.ctx.codex.call("config/read")
+        except Exception:
+            config_result = {}
 
         servers = result.get("data", [])
         if not servers:
             return text_result("No MCP servers configured.")
 
-        lines = ["MCP Servers:"]
+        config = config_result.get("config", {})
+        if not isinstance(config, dict):
+            config = {}
+        configured_servers = config.get("mcp_servers", {})
+        if not isinstance(configured_servers, dict):
+            configured_servers = {}
+
+        def _server_name(server: dict[str, Any]) -> str:
+            return str(
+                server.get("displayName")
+                or server.get("name")
+                or server.get("id")
+                or "unknown"
+            )
+
+        def _status(name: str, server: dict[str, Any]) -> str:
+            enabled = server.get("enabled")
+            if isinstance(enabled, bool):
+                return "enabled" if enabled else "disabled"
+            cfg = configured_servers.get(name)
+            if isinstance(cfg, dict):
+                cfg_enabled = cfg.get("enabled")
+                if isinstance(cfg_enabled, bool):
+                    return "enabled" if cfg_enabled else "disabled"
+                return "enabled"
+            return "unknown"
+
+        def _auth_label(server: dict[str, Any], cfg: dict[str, Any] | None) -> str:
+            auth_status = server.get("authStatus")
+            if isinstance(auth_status, str) and auth_status.strip():
+                auth = auth_status.strip()
+            elif isinstance(cfg, dict) and isinstance(cfg.get("bearer_token_env_var"), str):
+                auth = "bearer_token"
+            else:
+                return "unknown"
+
+            normalized = []
+            for i, ch in enumerate(auth):
+                if i > 0 and ch.isupper() and auth[i - 1].islower():
+                    normalized.append(" ")
+                normalized.append(ch)
+            text = "".join(normalized).replace("_", " ").strip().lower()
+            if text == "bearer token":
+                return "Bearer token"
+            if text == "oauth":
+                return "OAuth"
+            return " ".join(part.capitalize() for part in text.split())
+
+        def _tools(server: dict[str, Any]) -> list[str]:
+            value = server.get("tools")
+            if isinstance(value, dict):
+                return sorted([str(k) for k in value.keys()])
+            if isinstance(value, list):
+                names: list[str] = []
+                for item in value:
+                    if isinstance(item, str):
+                        names.append(item)
+                    elif isinstance(item, dict):
+                        name = item.get("name") or item.get("id")
+                        if isinstance(name, str) and name:
+                            names.append(name)
+                return names
+            return []
+
+        def _names_from_entries(entries: Any) -> list[str]:
+            if not isinstance(entries, list):
+                return []
+            result_names: list[str] = []
+            for entry in entries:
+                if isinstance(entry, str):
+                    result_names.append(entry)
+                    continue
+                if not isinstance(entry, dict):
+                    continue
+                name = (
+                    entry.get("displayName")
+                    or entry.get("name")
+                    or entry.get("id")
+                    or entry.get("uri")
+                    or entry.get("template")
+                )
+                if isinstance(name, str) and name:
+                    result_names.append(name)
+            return result_names
+
+        lines = ["🔌  MCP Tools"]
         for s in servers:
-            name = s.get("name", "unknown")
-            status = s.get("status", "unknown")
-            lines.append(f"• {name} [{status}]")
+            name = _server_name(s)
+            cfg = configured_servers.get(name)
+            cfg_dict = cfg if isinstance(cfg, dict) else None
+            url = (cfg_dict or {}).get("url")
+            url_text = str(url) if isinstance(url, str) and url else "unknown"
+            tool_names = _tools(s)
+            resource_names = _names_from_entries(s.get("resources"))
+            template_names = _names_from_entries(s.get("resourceTemplates"))
+
+            lines.append(f"  • {name}")
+            lines.append(f"    • Status: {_status(name, s)}")
+            lines.append(f"    • Auth: {_auth_label(s, cfg_dict)}")
+            lines.append(f"    • URL: {url_text}")
+            lines.append(
+                "    • Tools: " + (", ".join(tool_names) if tool_names else "(none)")
+            )
+            lines.append(
+                "    • Resources: " + (", ".join(resource_names) if resource_names else "(none)")
+            )
+            lines.append(
+                "    • Resource templates: "
+                + (", ".join(template_names) if template_names else "(none)")
+            )
 
         return text_result("\n".join(lines))
 

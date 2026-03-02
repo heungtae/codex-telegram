@@ -15,6 +15,7 @@ path = "/path/to/your/project"
 [bot]
 token = "TELEGRAM_BOT_TOKEN"
 drop_pending_updates = true
+conflict_action = "prompt"
 
 [codex]
 command = "codex"

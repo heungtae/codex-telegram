@@ -47,6 +47,7 @@ path = "/absolute/path/to/your/project"
 [bot]
 token = "TELEGRAM_BOT_TOKEN"
 drop_pending_updates = true
+conflict_action = "prompt" # prompt | kill | exit
 
 [codex]
 command = "codex"
@@ -136,6 +137,11 @@ Tip: Use `<command> --help` to see detailed usage for each command.
 - It is recommended to use environment variables for tokens instead of hardcoding them in `conf.toml`.
 - With `approval.mode = "interactive"`, approvals are handled via Telegram buttons (Approve/Session/Deny).
 - With `approval.mode = "auto"`, decisions are returned immediately using `approval.auto_response`.
+- Run only one polling instance per bot token. Duplicate pollers will conflict.
+- `bot.conflict_action` controls startup behavior on local lock conflict:
+  - `prompt`: ask in terminal (`kill` or `exit`)
+  - `kill`: terminate lock-owner process then continue
+  - `exit`: stop immediately
 
 ## Message Flow
 

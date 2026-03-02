@@ -9,6 +9,8 @@ class FakeCodex:
         self.calls: list[tuple[str, dict | None]] = []
         self.thread_list_data: list[dict] = []
         self.feature_list_data: list[dict] = []
+        self.mcp_server_status_data: list[dict] = []
+        self.config_data: dict = {}
 
     async def call(self, method: str, params: dict | None = None):
         self.calls.append((method, params))
@@ -27,6 +29,10 @@ class FakeCodex:
             return {"data": self.thread_list_data}
         if method == "experimentalFeature/list":
             return {"data": self.feature_list_data}
+        if method == "mcpServerStatus/list":
+            return {"data": self.mcp_server_status_data}
+        if method == "config/read":
+            return {"config": self.config_data}
         return {}
 
 
@@ -118,6 +124,50 @@ class CommandRouterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(["use_linux_sandbox_bwrap", "js_repl"], result.meta.get("feature_keys"))
         self.assertEqual({"use_linux_sandbox_bwrap": False, "js_repl": True}, result.meta.get("feature_enabled"))
         self.assertIn(("experimentalFeature/list", {"limit": 200}), self.codex.calls)
+
+    async def test_mcp_uses_alternate_status_fields(self):
+        self.codex.mcp_server_status_data = [
+            {
+                "name": "fxframework",
+                "authStatus": "bearerToken",
+                "tools": {"addClusterNode": {}, "describeTopology": {}},
+                "resources": [],
+                "resourceTemplates": [],
+            },
+        ]
+        self.codex.config_data = {
+            "mcp_servers": {
+                "fxframework": {
+                    "url": "http://127.0.0.1:9001/mcp",
+                    "bearer_token_env_var": "FX_AUTH_TOKEN",
+                }
+            }
+        }
+
+        result = await self.router.route("/mcp", [], 1)
+
+        self.assertEqual("text", result.kind)
+        self.assertIn("🔌  MCP Tools", result.text)
+        self.assertIn("  • fxframework", result.text)
+        self.assertIn("    • Status: enabled", result.text)
+        self.assertIn("    • Auth: Bearer token", result.text)
+        self.assertIn("    • URL: http://127.0.0.1:9001/mcp", result.text)
+        self.assertIn("    • Tools: addClusterNode, describeTopology", result.text)
+        self.assertIn("    • Resources: (none)", result.text)
+        self.assertIn("    • Resource templates: (none)", result.text)
+        self.assertIn(("mcpServerStatus/list", {"limit": 20}), self.codex.calls)
+        self.assertIn(("config/read", None), self.codex.calls)
+
+    async def test_mcp_falls_back_to_auth_status_when_status_missing(self):
+        self.codex.mcp_server_status_data = [
+            {"name": "fxframework", "authStatus": "bearerToken", "tools": {}, "resources": [], "resourceTemplates": []},
+        ]
+        self.codex.config_data = {"mcp_servers": {"fxframework": {"url": "http://127.0.0.1:9001/mcp"}}}
+
+        result = await self.router.route("/mcp", [], 1)
+
+        self.assertEqual("text", result.kind)
+        self.assertIn("    • Auth: Bearer token", result.text)
 
 
 if __name__ == "__main__":

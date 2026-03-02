@@ -243,6 +243,60 @@ class CodexClient:
                 if normalized == "deny":
                     return {"decision": "denied"}
                 return {"decision": "approved"}
+            if method == "item/tool/requestUserInput":
+                questions = params.get("questions")
+                if not isinstance(questions, list):
+                    return {"answers": []}
+
+                answers: list[dict[str, str]] = []
+                preferred_labels = {
+                    "approve": "approve once",
+                    "session": "approve this session",
+                    "deny": "deny",
+                }
+                preferred = preferred_labels.get(normalized, "approve once")
+                fallback = {
+                    "approve": "Approve Once",
+                    "session": "Approve this Session",
+                    "deny": "Deny",
+                }.get(normalized, "Approve Once")
+
+                for q in questions:
+                    if not isinstance(q, dict):
+                        continue
+                    question_id = q.get("id")
+                    if not isinstance(question_id, str) or not question_id:
+                        continue
+                    selected = fallback
+                    options = q.get("options")
+                    if isinstance(options, list):
+                        matched = None
+                        first_label = None
+                        for option in options:
+                            if not isinstance(option, dict):
+                                continue
+                            label = option.get("label")
+                            if not isinstance(label, str) or not label.strip():
+                                continue
+                            if first_label is None:
+                                first_label = label.strip()
+                            if label.strip().lower() == preferred:
+                                matched = label.strip()
+                                break
+                        if matched is not None:
+                            selected = matched
+                        elif first_label is not None:
+                            selected = first_label
+                    answers.append(
+                        {
+                            # Keep multiple key aliases for compatibility across app-server variants.
+                            "id": question_id,
+                            "questionId": question_id,
+                            "answer": selected,
+                            "value": selected,
+                        }
+                    )
+                return {"answers": answers}
             return {}
 
         def _extract_thread_id() -> str | None:
@@ -260,6 +314,7 @@ class CodexClient:
                 "item/fileChange/requestApproval",
                 "execCommandApproval",
                 "applyPatchApproval",
+                "item/tool/requestUserInput",
             ):
                 req_id = msg.id
                 if req_id is None:
