@@ -37,6 +37,11 @@ class CallbackResultTests(unittest.IsolatedAsyncioTestCase):
         kwargs = self.context.bot.send_message.await_args.kwargs
         self.assertEqual("No threads found.", kwargs["text"])
         self.assertIn("reply_markup", kwargs)
+        self.mock_router.route.assert_awaited_once_with(
+            "/threads",
+            ["--limit", "5", "--offset", "0", "--current-profile"],
+            1,
+        )
 
     async def test_send_skills_picker_uses_picker_message_on_skills_kind(self):
         self.mock_router.route.return_value = CommandResult(

@@ -53,7 +53,7 @@ async def send_threads_page(
     archived: bool = False,
     query=None,
 ):
-    thread_args = ["--limit", str(limit), "--offset", str(offset)]
+    thread_args = ["--limit", str(limit), "--offset", str(offset), "--current-profile"]
     if archived:
         thread_args.append("--archived")
     result = await state.command_router.route("/threads", thread_args, user_id)

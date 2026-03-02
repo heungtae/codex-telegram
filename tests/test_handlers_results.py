@@ -40,6 +40,24 @@ class HandlerResultTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("Projects:\n...", args[1])
         self.assertIn("reply_markup", kwargs)
 
+    async def test_command_handler_threads_without_args_defaults_to_current_profile(self):
+        self.mock_router.route.return_value = CommandResult(
+            kind="threads",
+            text="Threads by profile:\n...",
+            meta={"thread_ids": [], "offset": 0, "limit": 5, "archived": False},
+        )
+        update = SimpleNamespace(
+            effective_user=SimpleNamespace(id=1),
+            effective_message=SimpleNamespace(text="/threads"),
+        )
+
+        with patch("bot.handlers.wait_for_codex", new=AsyncMock()), \
+             patch("bot.handlers.send_reply", new=AsyncMock()), \
+             patch("bot.handlers.get", side_effect=lambda key, default=None: default):
+            await handlers.command_handler(update, context=SimpleNamespace())
+
+        self.mock_router.route.assert_awaited_once_with("/threads", ["--current-profile"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

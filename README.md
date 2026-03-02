@@ -111,7 +111,7 @@ python3 main.py
 | `/start` | thread/start | Create a new thread |
 | `/resume <id\|number>` | thread/resume | Resume a thread (supports list number) |
 | `/fork <id>` | thread/fork | Fork a thread |
-| `/threads [--full] [--limit N] [--offset N] [--archived]` | thread/list | List threads with paging/full id options |
+| `/threads [--full] [--by-profile] [--current-profile] [--limit N] [--offset N] [--archived]` | thread/list | List threads with paging/full id options |
 | `/read <id\|number>` | thread/read | Read a thread (supports list number) |
 | `/archive <id\|number>` | thread/archive | Archive a thread (supports list number) |
 | `/unarchive <id>` | thread/unarchive | Unarchive a thread |

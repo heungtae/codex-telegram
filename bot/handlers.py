@@ -150,6 +150,8 @@ async def command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     command = parts[0]
     args = parts[1:]
+    if command == "/threads" and not args:
+        args = ["--current-profile"]
     state_user = user_manager.get(user_id)
     if state_user.awaiting_project_add_name or state_user.awaiting_project_add_path:
         state_user.clear_project_add_flow()

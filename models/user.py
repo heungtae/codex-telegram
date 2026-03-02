@@ -69,6 +69,7 @@ class UserManager:
     def __init__(self):
         self._users: dict[int, UserState] = {}
         self._thread_owners: dict[str, int] = {}
+        self._thread_projects: dict[str, str] = {}
     
     def get(self, user_id: int) -> UserState:
         if user_id not in self._users:
@@ -78,11 +79,13 @@ class UserManager:
     def has_active_thread(self, user_id: int) -> bool:
         return self.get(user_id).active_thread_id is not None
 
-    def set_active_thread(self, user_id: int, thread_id: str | None):
+    def set_active_thread(self, user_id: int, thread_id: str | None, project_key: str | None = None):
         user = self.get(user_id)
         user.set_thread(thread_id)
         if isinstance(thread_id, str) and thread_id:
             self._thread_owners[thread_id] = user_id
+            if isinstance(project_key, str) and project_key:
+                self._thread_projects[thread_id] = project_key
 
     def clear_active_thread(self, user_id: int):
         user = self.get(user_id)
@@ -91,6 +94,15 @@ class UserManager:
     def bind_thread_owner(self, user_id: int, thread_id: str | None):
         if isinstance(thread_id, str) and thread_id:
             self._thread_owners[thread_id] = user_id
+
+    def bind_thread_project(self, thread_id: str | None, project_key: str | None):
+        if isinstance(thread_id, str) and thread_id and isinstance(project_key, str) and project_key:
+            self._thread_projects[thread_id] = project_key
+
+    def get_thread_project(self, thread_id: str | None) -> str | None:
+        if not thread_id:
+            return None
+        return self._thread_projects.get(thread_id)
 
     def find_user_id_by_thread(self, thread_id: str | None) -> int | None:
         if not thread_id:

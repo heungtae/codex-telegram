@@ -233,7 +233,7 @@ class ProjectCommands:
             )
             new_thread_id = (start_result.get("thread") or {}).get("id")
             if isinstance(new_thread_id, str) and new_thread_id:
-                user_manager.set_active_thread(user_id, new_thread_id)
+                user_manager.set_active_thread(user_id, new_thread_id, project_key=selected["key"])
                 state.clear_turn()
             else:
                 user_manager.clear_active_thread(user_id)

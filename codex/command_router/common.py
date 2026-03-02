@@ -6,7 +6,7 @@ COMMAND_HELP: dict[str, str] = {
     "/start": "Create a new thread and show workspace. Usage: /start [model]",
     "/resume": "Resume a thread. Usage: /resume <thread_id|number>",
     "/fork": "Fork a thread. Usage: /fork <thread_id>",
-    "/threads": "List threads. Usage: /threads [--archived|-a] [--full] [--limit N] [--offset N]",
+    "/threads": "List threads. Usage: /threads [--archived|-a] [--full] [--by-profile] [--current-profile] [--limit N] [--offset N]",
     "/read": "Read thread details. Usage: /read <thread_id|number>",
     "/archive": "Archive a thread. Usage: /archive <thread_id|number>",
     "/unarchive": "Unarchive a thread. Usage: /unarchive <thread_id>",

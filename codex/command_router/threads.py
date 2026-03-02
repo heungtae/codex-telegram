@@ -1,8 +1,10 @@
+import os
 from typing import Any
 
 from .common import first_text
 from .context import RouterContext
 from .contracts import CommandResult, text_result, usage_result
+from utils.config import get
 
 
 class ThreadCommands:
@@ -86,7 +88,7 @@ class ThreadCommands:
         thread_id = result.get("thread", {}).get("id")
 
         if thread_id:
-            user_manager.set_active_thread(user_id, thread_id)
+            user_manager.set_active_thread(user_id, thread_id, project_key=(project or {}).get("key"))
 
         if project:
             return text_result(
@@ -123,6 +125,9 @@ class ThreadCommands:
         new_thread_id = result.get("thread", {}).get("id")
         if isinstance(new_thread_id, str) and new_thread_id:
             user_manager.bind_thread_owner(user_id, new_thread_id)
+            source_project_key = user_manager.get_thread_project(thread_id)
+            if source_project_key:
+                user_manager.bind_thread_project(new_thread_id, source_project_key)
         return text_result(f"Thread forked: {new_thread_id}", thread_id=new_thread_id)
 
     async def list_threads(self, args: list[str], user_id: int) -> CommandResult:
@@ -136,17 +141,23 @@ class ThreadCommands:
                 return "--" + value[1:]
             return value
 
-        usage = "Usage: /threads [--archived] [--full] [--limit N] [--offset N]"
+        usage = "Usage: /threads [--archived] [--full] [--by-profile] [--current-profile] [--limit N] [--offset N]"
         params: dict[str, Any] = {"limit": 5}
         show_full_id = True
         offset: int | None = None
         archived_mode = False
+        by_profile_mode = False
+        current_profile_mode = False
         i = 0
         while i < len(args):
             arg = _normalize_flag(args[i])
             if arg in ("--archived", "-a", "archived"):
                 params["archived"] = True
                 archived_mode = True
+            elif arg in ("--by-profile", "--profile", "profile"):
+                by_profile_mode = True
+            elif arg in ("--current-profile", "--current", "current-profile", "current"):
+                current_profile_mode = True
             elif arg in ("--full", "--full-id"):
                 show_full_id = True
             elif arg == "--limit":
@@ -198,20 +209,92 @@ class ThreadCommands:
                     filtered.append(t)
             threads = filtered
 
+        state = user_manager.get(user_id)
+        current_profile_key = state.selected_project_key
+        if not current_profile_key:
+            default_key = get("project")
+            if isinstance(default_key, str) and default_key.strip():
+                current_profile_key = default_key.strip()
+        if not current_profile_key:
+            current_profile_key = "current"
+
+        project_name_by_key: dict[str, str] = {}
+        project_path_by_key: dict[str, str] = {}
+        projects_raw = get("projects", {})
+        if isinstance(projects_raw, dict):
+            for key, value in projects_raw.items():
+                if not isinstance(key, str) or not isinstance(value, dict):
+                    continue
+                name = value.get("name")
+                if isinstance(name, str) and name.strip():
+                    project_name_by_key[key] = name.strip()
+                path = value.get("path")
+                if isinstance(path, str) and path.strip():
+                    project_path_by_key[key] = os.path.realpath(path.strip())
+
+        def _infer_profile_key(thread: dict[str, Any]) -> str | None:
+            tid = thread.get("id")
+            if isinstance(tid, str):
+                mapped = user_manager.get_thread_project(tid)
+                if mapped:
+                    return mapped
+
+            # Best-effort inference for old threads without in-memory mapping.
+            candidates: list[str] = []
+            for key in ("cwd", "path", "workspace", "workspacePath", "projectPath"):
+                value = thread.get(key)
+                if isinstance(value, str) and value.strip():
+                    candidates.append(value.strip())
+            context_value = thread.get("context")
+            if isinstance(context_value, dict):
+                for key in ("cwd", "path", "workspace", "workspacePath", "projectPath"):
+                    value = context_value.get(key)
+                    if isinstance(value, str) and value.strip():
+                        candidates.append(value.strip())
+
+            for candidate in candidates:
+                real_candidate = os.path.realpath(candidate)
+                for key, real_path in project_path_by_key.items():
+                    if real_candidate == real_path:
+                        if isinstance(tid, str) and tid:
+                            user_manager.bind_thread_project(tid, key)
+                        return key
+            return None
+
+        if current_profile_mode:
+            matched_threads: list[dict[str, Any]] = []
+            for t in threads:
+                if not isinstance(t, dict):
+                    continue
+                profile_key = _infer_profile_key(t)
+                if profile_key == current_profile_key:
+                    matched_threads.append(t)
+            threads = matched_threads
+
         if offset is not None:
             threads = threads[offset:]
             if original_limit < len(threads):
                 threads = threads[:original_limit]
 
-        state = user_manager.get(user_id)
         listed_ids: list[str] = []
         page_number = (offset // original_limit) + 1 if offset is not None else 1
         row_start = (offset or 0) + 1
         row_end = (offset or 0) + len(threads)
-        title = "Archived Threads:" if archived_mode else "Threads:"
+        current_profile_name = project_name_by_key.get(current_profile_key, current_profile_key)
+        title = "Archived Threads by profile:" if archived_mode and by_profile_mode else (
+            "Threads by profile:" if by_profile_mode else ("Archived Threads:" if archived_mode else "Threads:")
+        )
+        if current_profile_mode:
+            title = (
+                f"Archived Threads (current profile: {current_profile_key} - {current_profile_name}):"
+                if archived_mode
+                else f"Threads (current profile: {current_profile_key} - {current_profile_name}):"
+            )
         lines = [title, f"Page {page_number} (rows {row_start}-{row_end})", ""]
         lines.append(f"{'no':>3}  {'created at':<20}  {'threadId':<36}  conversation")
         lines.append(f"{'-' * 3}  {'-' * 20}  {'-' * 36}  {'-' * 12}")
+
+        rows: list[tuple[str | None, str]] = []
         for idx, t in enumerate(threads, 1):
             name = self._thread_conversation(t)
             tid = t.get("id", "")
@@ -223,16 +306,42 @@ class ThreadCommands:
             display_id = tid if show_full_id else (f"{tid[:12]}..." if tid else "unknown")
             created_display = str(created_at).replace("\n", " ")[:20]
             conversation_display = str(name).replace("\n", " ").strip()[:120]
-            lines.append(
-                f"{row_no:>3}  {created_display:<20}  {display_id:<36}  {conversation_display}{status}"
-            )
+            line = f"{row_no:>3}  {created_display:<20}  {display_id:<36}  {conversation_display}{status}"
+            profile_key = _infer_profile_key(t)
+            rows.append((profile_key, line))
+
+        if by_profile_mode:
+            grouped: dict[str, list[str]] = {}
+            for profile_key, line in rows:
+                key = profile_key if profile_key else "_unmapped"
+                grouped.setdefault(key, []).append(line)
+            for profile_key, group_rows in grouped.items():
+                if profile_key == "_unmapped":
+                    lines.append("[profile: unmapped]")
+                else:
+                    profile_name = project_name_by_key.get(profile_key, profile_key)
+                    lines.append(f"[profile: {profile_key} - {profile_name}]")
+                lines.extend(group_rows)
+                lines.append("")
+            if lines and lines[-1] == "":
+                lines.pop()
+        else:
+            lines.extend(line for _, line in rows)
 
         state.set_last_listed_threads(listed_ids)
         if not threads:
             return CommandResult(
                 kind="threads",
                 text="No threads found.",
-                meta={"thread_ids": [], "offset": offset or 0, "limit": original_limit, "archived": archived_mode},
+                meta={
+                    "thread_ids": [],
+                    "offset": offset or 0,
+                    "limit": original_limit,
+                    "archived": archived_mode,
+                    "by_profile": by_profile_mode,
+                    "current_profile": current_profile_mode,
+                    "current_profile_key": current_profile_key,
+                },
             )
 
         lines.append("")
@@ -244,7 +353,15 @@ class ThreadCommands:
         return CommandResult(
             kind="threads",
             text="\n".join(lines),
-            meta={"thread_ids": listed_ids, "offset": offset or 0, "limit": original_limit, "archived": archived_mode},
+            meta={
+                "thread_ids": listed_ids,
+                "offset": offset or 0,
+                "limit": original_limit,
+                "archived": archived_mode,
+                "by_profile": by_profile_mode,
+                "current_profile": current_profile_mode,
+                "current_profile_key": current_profile_key,
+            },
         )
 
     async def read(self, args: list[str], user_id: int) -> CommandResult:
