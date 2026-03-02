@@ -251,6 +251,155 @@ class CodexClientServerRequestTests(unittest.IsolatedAsyncioTestCase):
         answers = ((response.get("result") or {}).get("answers") or {})
         self.assertEqual({"answers": ["Run the tool and continue."]}, answers.get("q7"))
 
+    async def test_tool_request_user_input_maps_mcp_label_for_session(self):
+        client = CodexClient()
+        written = []
+        client._write = lambda msg: written.append(msg)  # type: ignore[method-assign]
+        req = JSONRPCRequest(
+            method="item/tool/requestUserInput",
+            id=14,
+            params={
+                "questions": [
+                    {
+                        "id": "q8",
+                        "options": [
+                            {"label": "Run the tool and continue.", "description": "Approve once."},
+                            {
+                                "label": "Run the tool and remember this choice for this session.",
+                                "description": "Remember choice for this session.",
+                            },
+                            {"label": "Decline this tool call and continue.", "description": "Skip tool call."},
+                        ],
+                    }
+                ]
+            },
+        )
+
+        with patch(
+            "codex.client.get",
+            side_effect=lambda key, default=None: (
+                "auto" if key == "approval.mode" else "session" if key == "approval.auto_response" else default
+            ),
+        ):
+            await client._handle_server_request(req)
+
+        response = written[0].to_dict()
+        answers = ((response.get("result") or {}).get("answers") or {})
+        self.assertEqual(
+            {"answers": ["Run the tool and remember this choice for this session."]},
+            answers.get("q8"),
+        )
+
+    async def test_mcp_session_auto_approve_is_enabled_after_session_choice(self):
+        client = CodexClient()
+        written = []
+        approval_handler_calls = {"count": 0}
+        client._write = lambda msg: written.append(msg)  # type: ignore[method-assign]
+
+        def approval_handler(payload):
+            approval_handler_calls["count"] += 1
+            client.submit_approval_decision(payload["id"], "session")
+
+        client.on_approval_request(approval_handler)
+
+        first_req = JSONRPCRequest(
+            method="item/tool/requestUserInput",
+            id=15,
+            params={
+                "questions": [
+                    {
+                        "id": "mcp_tool_call_approval_call_first",
+                        "options": [
+                            {"label": "Run the tool and continue.", "description": "Approve once."},
+                            {
+                                "label": "Run the tool and remember this choice for this session.",
+                                "description": "Remember choice for this session.",
+                            },
+                            {"label": "Decline this tool call and continue.", "description": "Skip tool call."},
+                        ],
+                    }
+                ]
+            },
+        )
+        second_req = JSONRPCRequest(
+            method="item/tool/requestUserInput",
+            id=16,
+            params={
+                "questions": [
+                    {
+                        "id": "mcp_tool_call_approval_call_second",
+                        "options": [
+                            {"label": "Run the tool and continue.", "description": "Approve once."},
+                            {
+                                "label": "Run the tool and remember this choice for this session.",
+                                "description": "Remember choice for this session.",
+                            },
+                            {"label": "Decline this tool call and continue.", "description": "Skip tool call."},
+                        ],
+                    }
+                ]
+            },
+        )
+
+        with patch(
+            "codex.client.get",
+            side_effect=lambda key, default=None: (
+                "interactive" if key == "approval.mode" else "approve" if key == "approval.auto_response" else default
+            ),
+        ):
+            await client._handle_server_request(first_req)
+            await client._handle_server_request(second_req)
+
+        self.assertTrue(client._mcp_session_auto_approve_enabled)
+        self.assertEqual(1, approval_handler_calls["count"])
+
+        first_answers = ((written[0].to_dict().get("result") or {}).get("answers") or {})
+        second_answers = ((written[1].to_dict().get("result") or {}).get("answers") or {})
+        expected = {"answers": ["Run the tool and remember this choice for this session."]}
+        self.assertEqual(expected, first_answers.get("mcp_tool_call_approval_call_first"))
+        self.assertEqual(expected, second_answers.get("mcp_tool_call_approval_call_second"))
+
+    async def test_mcp_session_auto_approve_does_not_apply_to_non_mcp_question(self):
+        client = CodexClient()
+        client._mcp_session_auto_approve_enabled = True
+        written = []
+        approval_handler_calls = {"count": 0}
+        client._write = lambda msg: written.append(msg)  # type: ignore[method-assign]
+
+        def approval_handler(payload):
+            approval_handler_calls["count"] += 1
+            client.submit_approval_decision(payload["id"], "approve")
+
+        client.on_approval_request(approval_handler)
+
+        req = JSONRPCRequest(
+            method="item/tool/requestUserInput",
+            id=17,
+            params={
+                "questions": [
+                    {
+                        "id": "q9",
+                        "options": [
+                            {"label": "A", "description": "option A"},
+                            {"label": "B", "description": "option B"},
+                        ],
+                    }
+                ]
+            },
+        )
+
+        with patch(
+            "codex.client.get",
+            side_effect=lambda key, default=None: (
+                "interactive" if key == "approval.mode" else "approve" if key == "approval.auto_response" else default
+            ),
+        ):
+            await client._handle_server_request(req)
+
+        self.assertEqual(1, approval_handler_calls["count"])
+        answers = ((written[0].to_dict().get("result") or {}).get("answers") or {})
+        self.assertEqual({"answers": ["A"]}, answers.get("q9"))
+
 
 if __name__ == "__main__":
     unittest.main()

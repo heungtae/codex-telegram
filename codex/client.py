@@ -21,6 +21,7 @@ class CodexClient:
         self._event_handlers: dict[str, list[Callable]] = {}
         self._any_event_handlers: list[Callable] = []
         self._approval_handlers: list[Callable] = []
+        self._mcp_session_auto_approve_enabled = False
         self._initialized = False
     
     async def start(self):
@@ -229,6 +230,42 @@ class CodexClient:
                 return "deny"
             return "approve"
 
+        def _is_mcp_request_user_input(payload: dict[str, Any]) -> bool:
+            questions = payload.get("questions")
+            if not isinstance(questions, list):
+                return False
+
+            for q in questions:
+                if not isinstance(q, dict):
+                    continue
+                question_id = q.get("id")
+                if isinstance(question_id, str) and question_id.startswith("mcp_tool_call_approval_"):
+                    return True
+
+                options = q.get("options")
+                if not isinstance(options, list):
+                    continue
+
+                labels: list[str] = []
+                for option in options:
+                    if isinstance(option, str) and option.strip():
+                        labels.append(option.strip().lower())
+                        continue
+                    if not isinstance(option, dict):
+                        continue
+                    for key in ("label", "text", "title", "name"):
+                        raw = option.get(key)
+                        if isinstance(raw, str) and raw.strip():
+                            labels.append(raw.strip().lower())
+                            break
+
+                has_once = any("run the tool and continue" in label for label in labels)
+                has_session = any("remember this choice for this session" in label for label in labels)
+                if has_once and has_session:
+                    return True
+
+            return False
+
         def _result_from_choice(choice: str) -> dict[str, Any]:
             normalized = choice.strip().lower()
             def _normalize_option_text(text: str) -> str:
@@ -294,7 +331,13 @@ class CodexClient:
                         "allow",
                         "yes",
                     },
-                    "session": {"session", "approve this session", "acceptforsession"},
+                    "session": {
+                        "session",
+                        "approve this session",
+                        "run the tool and remember this choice for this session.",
+                        "run the tool and remember this choice for this session",
+                        "acceptforsession",
+                    },
                     "deny": {
                         "deny",
                         "decline",
@@ -439,6 +482,20 @@ class CodexClient:
                     )
                     return
 
+                if method == "item/tool/requestUserInput":
+                    if self._mcp_session_auto_approve_enabled and _is_mcp_request_user_input(params):
+                        choice = "session"
+                        result_payload = _result_from_choice(choice)
+                        _write_result(result_payload)
+                        logger.info(
+                            "Session auto-approval resolved method=%s id=%s choice=%s payload=%s",
+                            method,
+                            req_id,
+                            choice,
+                            result_payload,
+                        )
+                        return
+
                 future: asyncio.Future[str] = asyncio.Future()
                 self._pending_approvals[req_id] = future
                 payload = {
@@ -468,6 +525,21 @@ class CodexClient:
                     )
                 finally:
                     self._pending_approvals.pop(req_id, None)
+
+                if method == "item/tool/requestUserInput" and _is_mcp_request_user_input(params):
+                    if decision_choice == "session":
+                        if not self._mcp_session_auto_approve_enabled:
+                            logger.info(
+                                "Enabled MCP session auto-approval after request id=%s",
+                                req_id,
+                            )
+                        self._mcp_session_auto_approve_enabled = True
+                    elif decision_choice == "deny" and self._mcp_session_auto_approve_enabled:
+                        self._mcp_session_auto_approve_enabled = False
+                        logger.info(
+                            "Disabled MCP session auto-approval after deny decision id=%s",
+                            req_id,
+                        )
 
                 result_payload = _result_from_choice(decision_choice)
                 _write_result(result_payload)
