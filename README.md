@@ -1,43 +1,43 @@
-# Codex Telegram Bot
+# Codex 텔레그램 봇
 
-A bot that lets you control Codex App Server from Telegram.
+텔레그램에서 Codex App Server를 제어할 수 있는 봇입니다.
 
 <img src="./docs/images/codex-telegram.png" alt="Codex Telegram Bot Integration" width="520" />
 
-## What You Can Do
+## 할 수 있는 일
 
-- Run Codex commands from Telegram and view results
-- Control user access based on `allowed_ids`
-- Manage conversation lifecycle: start/resume/list/archive threads
-- Forward approval requests and progress events to Telegram in real time
+- 텔레그램에서 Codex 명령을 실행하고 결과를 확인
+- `allowed_ids` 기준으로 사용자 접근 제어
+- 대화 수명주기 관리: 스레드 시작/재개/조회/보관
+- 승인 요청 및 진행 이벤트를 텔레그램으로 실시간 전달
 
-## Requirements
+## 요구 사항
 
 - Python `3.11+`
 - Telegram Bot Token
-- `codex` CLI installed and runnable
+- 설치 및 실행 가능한 `codex` CLI
 
-## Quick Start
+## 빠른 시작
 
-1. Install dependencies
+1. 의존성 설치
 
 ```bash
 python3 -m pip install -r requirements.txt
 ```
 
-2. Prepare the configuration file
+2. 설정 파일 준비
 
 ```bash
 cp conf.toml.example conf.toml
 ```
 
-3. Edit `conf.toml`
+3. `conf.toml` 편집
 
-- `projects.<key>.path`: absolute path to the target project
-- `users.allowed_ids`: Telegram user IDs allowed to use this bot
-- `bot.token` or environment variable `TELEGRAM_BOT_TOKEN`
+- `projects.<key>.path`: 대상 프로젝트의 절대 경로
+- `users.allowed_ids`: 이 봇 사용을 허용할 Telegram 사용자 ID 목록
+- `bot.token` 또는 환경 변수 `TELEGRAM_BOT_TOKEN`
 
-Example:
+예시:
 
 ```toml
 project = "default"
@@ -89,77 +89,77 @@ max_message_length = 4000
 send_progress = true
 ```
 
-4. (Optional) Provide the token via environment variable
+4. (선택) 환경 변수로 토큰 설정
 
 ```bash
 export TELEGRAM_BOT_TOKEN="your_actual_bot_token"
 ```
 
-5. Run
+5. 실행
 
 ```bash
 python3 main.py
 ```
 
-## First Commands
+## 처음 실행 시 명령 순서
 
-After starting a chat with the bot, run commands in this order for a quick check:
+봇과 채팅을 시작한 뒤, 빠른 점검을 위해 아래 순서로 실행하세요.
 
-1. `/commands` - Show all commands
-2. `/projects --list` - Show project profiles
-3. `/project <key|number|name>` - Select active project
-4. `/start` - Start a new thread
+1. `/commands` - 전체 명령어 보기
+2. `/projects --list` - 프로젝트 프로필 보기
+3. `/project <key|number|name>` - 활성 프로젝트 선택
+4. `/start` - 새 스레드 시작
 
-## Command Reference
+## 명령어 참조
 
-| Telegram | Codex API | Description |
-|----------|-----------|-------------|
-| `/commands` | - | List available commands |
-| `/projects --list` | - | List configured projects |
-| `/projects --add <key>` | - | Start interactive project add flow |
-| `/project <key\|number\|name>` | - | Select active project |
-| `/start` | thread/start | Create a new thread |
-| `/resume <id\|number>` | thread/resume | Resume a thread (supports list number) |
-| `/fork <id>` | thread/fork | Fork a thread |
-| `/threads [--full] [--by-profile] [--current-profile] [--limit N] [--offset N] [--archived]` | thread/list | List threads with paging/full id options |
-| `/read <id\|number>` | thread/read | Read a thread (supports list number) |
-| `/archive <id\|number>` | thread/archive | Archive a thread (supports list number) |
-| `/unarchive <id>` | thread/unarchive | Unarchive a thread |
-| `/compact <id>` | thread/compact/start | Compact conversation history |
-| `/rollback <n>` | thread/rollback | Rollback N turns |
-| `/interrupt` | turn/interrupt | Interrupt running turn |
-| `/review` | review/start | Start code review |
-| `/exec <cmd>` | command/exec | Execute a command |
-| `/models` | model/list | List available models |
-| `/features` | experimentalFeature/list + command/exec | Show beta features and apply enable/disable via checkbox UI |
-| `/gurdian` (`/guardian`) | local config | Show guardian settings panel and apply changes via checkbox UI |
-| `/modes` | collaborationMode/list | List collaboration modes |
-| `/skills` | skills/list | List skills |
-| `/apps` | app/list | List apps |
-| `/mcp` | mcpServerStatus/list | List MCP servers |
-| `/config` | config/read | Read configuration |
+| Telegram | Codex API | 설명 |
+|----------|-----------|------|
+| `/commands` | - | 사용 가능한 명령어 목록 |
+| `/projects --list` | - | 설정된 프로젝트 목록 |
+| `/projects --add <key>` | - | 인터랙티브 프로젝트 추가 절차 시작 |
+| `/project <key\|number\|name>` | - | 활성 프로젝트 선택 |
+| `/start` | thread/start | 새 스레드 생성 |
+| `/resume <id\|number>` | thread/resume | 스레드 재개 (목록 번호 지원) |
+| `/fork <id>` | thread/fork | 스레드 포크 |
+| `/threads [--full] [--by-profile] [--current-profile] [--limit N] [--offset N] [--archived]` | thread/list | 페이징/전체 ID 옵션으로 스레드 목록 조회 |
+| `/read <id\|number>` | thread/read | 스레드 읽기 (목록 번호 지원) |
+| `/archive <id\|number>` | thread/archive | 스레드 보관 (목록 번호 지원) |
+| `/unarchive <id>` | thread/unarchive | 스레드 보관 해제 |
+| `/compact <id>` | thread/compact/start | 대화 이력 압축 |
+| `/rollback <n>` | thread/rollback | 최근 N턴 롤백 |
+| `/interrupt` | turn/interrupt | 실행 중인 턴 중단 |
+| `/review` | review/start | 코드 리뷰 시작 |
+| `/exec <cmd>` | command/exec | 명령어 실행 |
+| `/models` | model/list | 사용 가능한 모델 목록 |
+| `/features` | experimentalFeature/list + command/exec | 베타 기능 표시 및 체크박스 UI로 활성/비활성 적용 |
+| `/gurdian` (`/guardian`) | local config | 가디언 설정 패널 표시 및 체크박스 UI로 변경 적용 |
+| `/modes` | collaborationMode/list | 협업 모드 목록 |
+| `/skills` | skills/list | 스킬 목록 |
+| `/apps` | app/list | 앱 목록 |
+| `/mcp` | mcpServerStatus/list | MCP 서버 목록 |
+| `/config` | config/read | 설정 읽기 |
 
-Tip: Use `<command> --help` to see detailed usage for each command.
+팁: 각 명령어의 상세 사용법은 `<command> --help`로 확인할 수 있습니다.
 
-UI note:
-- `Settings` menu includes: `Features`, `Apps`, `Project Select`, `Guardian`, `Models`, `Modes`, `MCP`, `App Config`.
+UI 참고:
+- `Settings` 메뉴에는 `Features`, `Apps`, `Project Select`, `Guardian`, `Models`, `Modes`, `MCP`, `App Config`가 있습니다.
 
-## Security Notes
+## 보안 참고 사항
 
-- If `users.allowed_ids` is empty, nobody can use the bot.
-- It is recommended to use environment variables for tokens instead of hardcoding them in `conf.toml`.
-- With `approval.mode = "interactive"`, approvals are handled via Telegram buttons (Approve/Session/Deny).
-- With `approval.mode = "auto"`, decisions are returned immediately using `approval.auto_response`.
-- `approval.guardian.enabled` is `false` by default.
-- Guardian settings can be changed in Telegram via `Settings -> Guardian` and apply immediately.
-- Guardian review runs in a separate Codex app-server session from the user thread.
-- Run only one polling instance per bot token. Duplicate pollers will conflict.
-- `bot.conflict_action` controls startup behavior on local lock conflict:
-  - `prompt`: ask in terminal (`kill` or `exit`)
-  - `kill`: terminate lock-owner process then continue
-  - `exit`: stop immediately
+- `users.allowed_ids`가 비어 있으면 아무도 봇을 사용할 수 없습니다.
+- `conf.toml`에 토큰을 하드코딩하기보다 환경 변수 사용을 권장합니다.
+- `approval.mode = "interactive"`일 때 승인은 텔레그램 버튼(Approve/Session/Deny)으로 처리됩니다.
+- `approval.mode = "auto"`일 때는 `approval.auto_response` 값으로 즉시 결정이 반환됩니다.
+- `approval.guardian.enabled`의 기본값은 `false`입니다.
+- 가디언 설정은 텔레그램 `Settings -> Guardian`에서 변경하면 즉시 반영됩니다.
+- 가디언 검토는 사용자 스레드와 분리된 Codex app-server 세션에서 실행됩니다.
+- 봇 토큰당 폴링 인스턴스는 하나만 실행하세요. 중복 실행 시 충돌합니다.
+- `bot.conflict_action`은 로컬 락 충돌 시 시작 동작을 제어합니다.
+  - `prompt`: 터미널에서 선택 요청 (`kill` 또는 `exit`)
+  - `kill`: 락 소유 프로세스를 종료한 뒤 계속 실행
+  - `exit`: 즉시 종료
 
-## Message Flow
+## 메시지 흐름
 
 ```text
 Telegram User -> codex-telegram -> Codex App Server (stdio)
@@ -168,7 +168,7 @@ Telegram User -> codex-telegram -> Codex App Server (stdio)
                 +------ Telegram <-----+
 ```
 
-## Project Structure
+## 프로젝트 구조
 
 ```text
 codex-telegram/
@@ -198,19 +198,19 @@ codex-telegram/
     └── logger.py
 ```
 
-## Create Telegram Bot Token
+## Telegram Bot Token 발급
 
-1. Open `@BotFather` in Telegram
-2. Run `/newbot`
-3. Set bot name and username
-4. Copy the issued token
-5. Check your Telegram user ID via `@userinfobot` and add it to `allowed_ids`
+1. 텔레그램에서 `@BotFather` 열기
+2. `/newbot` 실행
+3. 봇 이름과 사용자명 설정
+4. 발급된 토큰 복사
+5. `@userinfobot`으로 본인 Telegram 사용자 ID를 확인해 `allowed_ids`에 추가
 
-## Documentation
+## 문서
 
-- Setup and configuration details: `docs/TELEGRAM_BOT_SETUP.md`
-- Design notes: `docs/DESIGN.md`
+- 설정 및 구성 상세: `docs/TELEGRAM_BOT_SETUP.md`
+- 설계 노트: `docs/DESIGN.md`
 
-## License
+## 라이선스
 
-Apache License 2.0. See [LICENSE](LICENSE).
+Apache License 2.0. 자세한 내용은 [LICENSE](LICENSE)를 참고하세요.
