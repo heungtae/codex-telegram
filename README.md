@@ -2,6 +2,8 @@
 
 A bot that lets you control Codex App Server from Telegram.
 
+![Codex Telegram Bot Integration](./codex-telegram.png)
+
 ## What You Can Do
 
 - Run Codex commands from Telegram and view results
