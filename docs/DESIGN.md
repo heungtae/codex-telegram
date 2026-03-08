@@ -36,7 +36,7 @@ Telegram User
 - Environment-variable substitution is applied when a config string exactly matches an env key.
 
 Key sections:
-- `[bot]`: token, pending update behavior, startup conflict strategy
+- `[telegram.bot]`: token, pending update behavior, startup conflict strategy
 - `[codex]`: command + args to launch app-server
 - `[users]`: allowed Telegram user IDs
 - `[approval]`: `interactive` or `auto`

@@ -4,10 +4,23 @@ project = "default"
 name = "my project"
 path = "/absolute/path/to/your/project"
 
-[bot]
+[telegram]
+enabled = true
+
+[telegram.bot]
 token = "TELEGRAM_BOT_TOKEN"
 drop_pending_updates = true
 conflict_action = "prompt" # prompt | kill | exit
+
+[web]
+enabled = false
+host = "127.0.0.1"
+port = 8080
+password = "env:CODEX_WEB_PASSWORD"
+password_env = "CODEX_WEB_PASSWORD"
+allowed_users = ["admin"]
+session_ttl_seconds = 43200
+cookie_secure = false
 
 [codex]
 command = "codex"

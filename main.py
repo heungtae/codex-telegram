@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import sys
+import threading
 from typing import Any
 
 from telegram import Update
@@ -15,7 +16,7 @@ from telegram.ext import (
     filters,
 )
 
-from utils.config import get, get_guardian_settings
+from utils.config import get, get_guardian_settings, get_telegram_bot
 from utils.logger import setup
 from utils.single_instance import (
     SingleInstanceLock,
@@ -35,7 +36,33 @@ from bot import (
 from bot.keyboard import approval_keyboard
 from models import state
 from models.user import user_manager
+from web import create_web_app
+from web.runtime import event_hub
 logger = setup("codex-telegram")
+_web_server = None
+_web_server_thread = None
+
+
+class WebServerThread:
+    def __init__(self, host: str, port: int):
+        self.host = host
+        self.port = port
+        self.server = None
+
+    def run(self):
+        try:
+            import uvicorn
+
+            app = create_web_app()
+            config = uvicorn.Config(app, host=self.host, port=self.port, log_level="info", access_log=False)
+            self.server = uvicorn.Server(config)
+            self.server.run()
+        except Exception:
+            logger.exception("Failed to start Web UI server")
+
+    def stop(self):
+        if self.server is not None:
+            self.server.should_exit = True
 
 
 async def setup_codex() -> CodexClient:
@@ -49,7 +76,7 @@ async def setup_codex() -> CodexClient:
     return client
 
 
-async def post_init(app: Application):
+async def post_init(app: Application | None):
     state.codex_client = await setup_codex()
     state.command_router = CommandRouter(state.codex_client)
     state.approval_guardian = ApprovalGuardianService()
@@ -254,6 +281,28 @@ async def post_init(app: Application):
             if owner_id is not None:
                 user_manager.get(owner_id).clear_turn()
 
+        if user_id_by_thread is not None:
+            event_type = "app_event"
+            if method == "item/agentMessage/delta":
+                event_type = "turn_delta"
+            elif method == "turn/started":
+                event_type = "turn_started"
+            elif method == "turn/completed":
+                event_type = "turn_completed"
+            elif method == "turn/failed":
+                event_type = "turn_failed"
+            await event_hub.publish_event(
+                user_id_by_thread,
+                {
+                    "type": event_type,
+                    "method": method,
+                    "thread_id": thread_id,
+                    "turn_id": turn_id,
+                    "text": _extract_text(params) or "",
+                    "params": params or {},
+                },
+            )
+
         if _method_matches(method, denylist):
             return
         if allowlist and not _method_matches(method, allowlist):
@@ -262,6 +311,8 @@ async def post_init(app: Application):
             return
         user_id = user_id_by_thread
         if user_id is None:
+            return
+        if user_id <= 0 or app is None:
             return
 
         msg = _format_event(method, params)
@@ -288,10 +339,11 @@ async def post_init(app: Application):
             method,
             msg,
         )
-        try:
-            await app.bot.send_message(chat_id=user_id, text=msg)
-        except Exception:
-            logger.exception("Failed to forward app-server event to Telegram")
+        if user_id > 0 and app is not None:
+            try:
+                await app.bot.send_message(chat_id=user_id, text=msg)
+            except Exception:
+                logger.exception("Failed to forward app-server event to Telegram")
 
     async def forward_approval_request(payload: dict[str, Any]):
         if state.codex_client is None:
@@ -371,7 +423,8 @@ async def post_init(app: Application):
             if guardian_decision is not None:
                 accepted = state.codex_client.submit_approval_decision(req_id, guardian_decision.choice)
                 if accepted:
-                    await app.bot.send_message(chat_id=user_id, text=_guardian_message(guardian_decision))
+                    if user_id > 0 and app is not None:
+                        await app.bot.send_message(chat_id=user_id, text=_guardian_message(guardian_decision))
                     return
                 logger.warning(
                     "Guardian produced decision but request already expired method=%s id=%s",
@@ -383,28 +436,30 @@ async def post_init(app: Application):
                 if guardian_failure_policy in ("approve", "session", "deny"):
                     accepted = state.codex_client.submit_approval_decision(req_id, guardian_failure_policy)
                     if accepted:
-                        await app.bot.send_message(
-                            chat_id=user_id,
-                            text=(
-                                "Guardian fallback decision sent.\n"
-                                f"Method: {method}\n"
-                                f"Request ID: {req_id}\n"
-                                f"Decision: {guardian_failure_policy}\n"
-                                f"Reason: {guardian_error or 'fallback policy'}"
-                            ),
-                        )
+                        if user_id > 0 and app is not None:
+                            await app.bot.send_message(
+                                chat_id=user_id,
+                                text=(
+                                    "Guardian fallback decision sent.\n"
+                                    f"Method: {method}\n"
+                                    f"Request ID: {req_id}\n"
+                                    f"Decision: {guardian_failure_policy}\n"
+                                    f"Reason: {guardian_error or 'fallback policy'}"
+                                ),
+                            )
                         return
 
-                await app.bot.send_message(
-                    chat_id=user_id,
-                    text=(
-                        "Guardian review did not complete.\n"
-                        f"Method: {method}\n"
-                        f"Request ID: {req_id}\n"
-                        f"Reason: {guardian_error or 'unknown'}\n"
-                        "Falling back to manual approval."
-                    ),
-                )
+                if user_id > 0 and app is not None:
+                    await app.bot.send_message(
+                        chat_id=user_id,
+                        text=(
+                            "Guardian review did not complete.\n"
+                            f"Method: {method}\n"
+                            f"Request ID: {req_id}\n"
+                            f"Reason: {guardian_error or 'unknown'}\n"
+                            "Falling back to manual approval."
+                        ),
+                    )
 
         reason_line = f"\nReason: {reason}" if reason else ""
         question_line = f"\nQuestion: {question_text}" if question_text else ""
@@ -420,11 +475,22 @@ async def post_init(app: Application):
             method,
             req_id,
         )
-        await app.bot.send_message(
-            chat_id=user_id,
-            text=message,
-            reply_markup=approval_keyboard(req_id),
-        )
+        approval_payload = {
+            "id": req_id,
+            "type": "approval_required",
+            "method": method,
+            "thread_id": thread_id if isinstance(thread_id, str) else None,
+            "reason": reason,
+            "question": question_text,
+        }
+        await event_hub.add_approval(user_id, req_id, approval_payload)
+        await event_hub.publish_event(user_id, approval_payload)
+        if user_id > 0 and app is not None:
+            await app.bot.send_message(
+                chat_id=user_id,
+                text=message,
+                reply_markup=approval_keyboard(req_id),
+            )
 
     state.codex_client.on_any(forward_event)
     state.codex_client.on_approval_request(forward_approval_request)
@@ -433,7 +499,7 @@ async def post_init(app: Application):
     logger.info("Codex initialized")
 
 
-async def post_shutdown(app: Application):
+async def post_shutdown(app: Application | None):
     if state.codex_client:
         await state.codex_client.stop()
     if state.approval_guardian:
@@ -452,26 +518,78 @@ async def debug_update_handler(update: object, context: Any):
     )
 
 
+def _parse_bool(value: Any, default: bool = False) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        raw = value.strip().lower()
+        if raw in ("1", "true", "yes", "on"):
+            return True
+        if raw in ("0", "false", "no", "off"):
+            return False
+    return default
+
+
+async def _run_without_telegram() -> None:
+    await post_init(None)
+    logger.info("Telegram channel disabled. Running codex runtime for Web only.")
+    try:
+        while True:
+            await asyncio.sleep(3600)
+    finally:
+        await post_shutdown(None)
+
+
 def main():
+    global _web_server
+    global _web_server_thread
     logger.info("Starting Codex Telegram Bot...")
-    
-    bot_token = get("bot.token")
-    drop_pending_raw = get("bot.drop_pending_updates", True)
+
+    web_enabled = _parse_bool(get("web.enabled", False), default=False)
+    telegram_enabled = _parse_bool(get("telegram.enabled", True), default=True)
+    web_host = str(get("web.host", "127.0.0.1")).strip() or "127.0.0.1"
+    web_port_raw = get("web.port", 8080)
+    try:
+        web_port = int(web_port_raw)
+    except Exception:
+        web_port = 8080
+    web_endpoint = f"http://{web_host}:{web_port}"
+    logger.info("Web endpoint configured: %s (enabled=%s)", web_endpoint, web_enabled)
+    logger.info("Telegram channel enabled=%s", telegram_enabled)
+    if web_enabled:
+        _web_server = WebServerThread(web_host, web_port)
+        _web_server_thread = threading.Thread(target=_web_server.run, daemon=True, name="codex-web-server")
+        _web_server_thread.start()
+        logger.info("Web UI started at %s", web_endpoint)
+
+    if not telegram_enabled:
+        try:
+            asyncio.run(_run_without_telegram())
+        finally:
+            if _web_server is not None:
+                _web_server.stop()
+            if _web_server_thread is not None:
+                _web_server_thread.join(timeout=3)
+        return
+
+    bot_token = get_telegram_bot("token")
+    drop_pending_raw = get_telegram_bot("drop_pending_updates", True)
     if isinstance(drop_pending_raw, bool):
         drop_pending_updates = drop_pending_raw
     elif isinstance(drop_pending_raw, str):
         drop_pending_updates = drop_pending_raw.strip().lower() in ("1", "true", "yes", "on")
     else:
         drop_pending_updates = True
+
     if not bot_token or bot_token == "YOUR_TELEGRAM_BOT_TOKEN":
-        logger.error("Please set bot.token in conf.toml")
+        logger.error("Please set telegram.bot.token in conf.toml")
         return
 
     lock = SingleInstanceLock(f"codex-telegram-{token_lock_key(bot_token)}")
     if not lock.acquire():
         owner_pid = lock.read_owner_pid()
         candidates = find_local_conflict_candidates(bot_token, exclude_pid=os.getpid())
-        action_raw = str(get("bot.conflict_action", "prompt")).strip().lower()
+        action_raw = str(get_telegram_bot("conflict_action", "prompt")).strip().lower()
         logger.error(
             "Another bot instance may be running for the same token (pid=%s).",
             owner_pid if owner_pid is not None else "unknown",
@@ -532,6 +650,10 @@ def main():
             drop_pending_updates=drop_pending_updates,
         )
     finally:
+        if _web_server is not None:
+            _web_server.stop()
+        if _web_server_thread is not None:
+            _web_server_thread.join(timeout=3)
         lock.release()
 
 

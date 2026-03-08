@@ -1,21 +1,26 @@
-# Codex Telegram Bot
+# Codex Telegram + Web
 
-A bot that lets you control the Codex App Server from Telegram.
+A bridge that lets you control the Codex App Server from Telegram and Web UI.
 
 <img src="./docs/images/codex-telegram.png" alt="Codex Telegram Bot Integration" width="520" />
 
 ## What You Can Do
 
 - Run Codex commands in Telegram and view results
+- Run Codex commands in ChatGPT-style Web UI (`FastAPI + React`)
+- Use Telegram-equivalent command shortcut buttons in Web UI (plus direct `/command` execution input)
 - Control user access with `allowed_ids`
 - Manage conversation lifecycle: start/resume/list/archive threads
-- Receive approval requests and progress events in real time via Telegram
+- Receive approval requests and progress events in real time via Telegram and Web (SSE)
 
 ## Requirements
 
 - Python `3.11+`
 - Telegram Bot Token
 - Installed and runnable `codex` CLI
+- For Web UI: `web.password` and `web.allowed_users` configured
+
+If `telegram.enabled = false`, Telegram token is not required.
 
 ## Quick Start
 
@@ -35,7 +40,7 @@ cp conf.toml.example conf.toml
 
 - `projects.<key>.path`: absolute path to the target project
 - `users.allowed_ids`: list of Telegram user IDs allowed to use this bot
-- `bot.token` or environment variable `TELEGRAM_BOT_TOKEN`
+- `telegram.bot.token` or environment variable `TELEGRAM_BOT_TOKEN`
 
 Example:
 
@@ -46,10 +51,23 @@ project = "default"
 name = "my project"
 path = "/absolute/path/to/your/project"
 
-[bot]
+[telegram]
+enabled = true
+
+[telegram.bot]
 token = "TELEGRAM_BOT_TOKEN"
 drop_pending_updates = true
 conflict_action = "prompt" # prompt | kill | exit
+
+[web]
+enabled = true
+host = "127.0.0.1"
+port = 8080
+password = "env:CODEX_WEB_PASSWORD"
+password_env = "CODEX_WEB_PASSWORD"
+allowed_users = ["admin"]
+session_ttl_seconds = 43200
+cookie_secure = false
 
 [codex]
 command = "codex"
@@ -101,6 +119,18 @@ export TELEGRAM_BOT_TOKEN="your_actual_bot_token"
 python3 main.py
 ```
 
+6. Open Web UI (if `web.enabled = true`)
+
+```text
+http://127.0.0.1:8080
+```
+
+Set web password via env:
+
+```bash
+export CODEX_WEB_PASSWORD="your_strong_password"
+```
+
 ## First-Run Command Sequence
 
 After starting a chat with the bot, run the following for a quick check:
@@ -147,7 +177,7 @@ UI note:
 ## Security Notes
 
 - Keep `users.allowed_ids` explicitly populated with trusted Telegram user IDs only. If empty, nobody can use the bot.
-- Prefer `TELEGRAM_BOT_TOKEN` environment variable over `bot.token`, and never commit real tokens to version control.
+- Prefer `TELEGRAM_BOT_TOKEN` environment variable over `telegram.bot.token`, and never commit real tokens to version control.
 - If a token is exposed, revoke and reissue it immediately via `@BotFather` (for example, `/revoke`), then restart the bot with the new token.
 - Prefer `approval.mode = "interactive"` in production. Use `approval.mode = "auto"` only in tightly controlled environments.
 - If `approval.mode = "auto"` is required, choose a conservative `approval.auto_response` (typically `deny` or `session`).
@@ -155,7 +185,7 @@ UI note:
 - Guardian setting changes in Telegram `Settings -> Guardian` are applied immediately.
 - Guardian checks run in a dedicated Codex app-server session isolated from user conversation threads.
 - Run exactly one polling instance per bot token to avoid update and lock conflicts.
-- `bot.conflict_action` controls lock-conflict startup behavior. For unattended production, `exit` is the safest default.
+- `telegram.bot.conflict_action` controls lock-conflict startup behavior. For unattended production, `exit` is the safest default.
 - Treat logs as sensitive operational data because they may include prompts, commands, and execution context; restrict access and retention.
 - Run the bot with a non-root account and limit configured project paths to trusted directories only.
 

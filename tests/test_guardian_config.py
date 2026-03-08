@@ -1,7 +1,7 @@
 import tempfile
 import unittest
-from pathlib import Path
 from unittest.mock import patch
+from pathlib import Path
 
 import utils.config as config
 
@@ -69,6 +69,34 @@ max_tokens = 700
         self.assertIn('explainability = "summary"', raw)
         self.assertIn("[approval.guardian.llm]", raw)
         self.assertIn('model = "gpt-4.1-mini"', raw)
+
+    def test_get_web_password_from_password_env(self):
+        self.config_path.write_text(
+            """
+[web]
+password = "CHANGE_ME"
+password_env = "CODEX_WEB_PASSWORD"
+""".strip()
+            + "\n",
+            encoding="utf-8",
+        )
+        config.reload()
+        with patch.dict("os.environ", {"CODEX_WEB_PASSWORD": "from-env"}, clear=False):
+            self.assertEqual("from-env", config.get_web_password())
+
+    def test_get_web_password_from_env_prefix(self):
+        self.config_path.write_text(
+            """
+[web]
+password = "env:CODEX_WEB_PASSWORD"
+password_env = ""
+""".strip()
+            + "\n",
+            encoding="utf-8",
+        )
+        config.reload()
+        with patch.dict("os.environ", {"CODEX_WEB_PASSWORD": "from-prefix"}, clear=False):
+            self.assertEqual("from-prefix", config.get_web_password())
 
 
 if __name__ == "__main__":

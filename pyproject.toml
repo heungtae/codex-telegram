@@ -13,7 +13,9 @@ authors = [
   { name = "heungtae" }
 ]
 dependencies = [
-  "python-telegram-bot>=20.0"
+  "python-telegram-bot>=20.0",
+  "fastapi>=0.111.0",
+  "uvicorn>=0.30.0"
 ]
 classifiers = [
   "Development Status :: 3 - Alpha",
@@ -40,5 +42,5 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["bot*", "codex*", "models*", "utils*"]
+include = ["bot*", "codex*", "models*", "utils*", "web*"]
 exclude = ["tests*"]

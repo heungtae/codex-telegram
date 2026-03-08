@@ -103,7 +103,10 @@ If the file does not exist, it is created automatically at startup.
 ### 5.2 Manual Example
 
 ```toml
-[bot]
+[telegram]
+enabled = true
+
+[telegram.bot]
 token = "1234567890:AAHxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 drop_pending_updates = true
 conflict_action = "prompt" # prompt | kill | exit
@@ -179,7 +182,7 @@ This project runs in polling mode (`app.run_polling(...)`).
 
 ## 10. Common Issues and Fixes
 
-### 10.1 `Please set bot.token in conf.toml`
+### 10.1 `Please set telegram.bot.token in conf.toml`
 
 Cause:
 - Missing token or placeholder value in `~/.config/codex-telegram/conf.toml`
@@ -225,7 +228,7 @@ Fix:
 
 Note:
 - This project now acquires a local single-instance lock per bot token and exits early on duplicates.
-- You can control lock conflict behavior with `bot.conflict_action`:
+- You can control lock conflict behavior with `telegram.bot.conflict_action`:
   - `prompt`: ask whether to kill existing local process or exit
   - `kill`: terminate local lock-owner process automatically
   - `exit`: always exit immediately

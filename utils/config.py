@@ -12,10 +12,23 @@ DEFAULT_CONFIG = """project = "default"
 name = "codex-telegram"
 path = "/path/to/your/project"
 
-[bot]
+[telegram]
+enabled = true
+
+[telegram.bot]
 token = "TELEGRAM_BOT_TOKEN"
 drop_pending_updates = true
 conflict_action = "prompt"
+
+[web]
+enabled = false
+host = "127.0.0.1"
+port = 8080
+password = "CHANGE_ME"
+password_env = ""
+allowed_users = []
+session_ttl_seconds = 43200
+cookie_secure = false
 
 [codex]
 command = "codex"
@@ -110,6 +123,29 @@ def get(key: str, default: Any = None) -> Any:
         if value is None:
             return default
     return value
+
+
+def get_telegram_bot(key: str, default: Any = None) -> Any:
+    modern = get(f"telegram.bot.{key}", None)
+    if modern is not None:
+        return modern
+    return get(f"bot.{key}", default)
+
+
+def get_web_password() -> str:
+    password_env = str(get("web.password_env", "") or "").strip()
+    if password_env:
+        from_env = os.getenv(password_env, "")
+        if from_env.strip():
+            return from_env
+
+    configured = str(get("web.password", "") or "").strip()
+    if configured.startswith("env:"):
+        env_key = configured[4:].strip()
+        if env_key:
+            return str(os.getenv(env_key, "") or "").strip()
+        return ""
+    return configured
 
 
 def _escape_toml_string(value: str) -> str:
