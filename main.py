@@ -71,7 +71,7 @@ async def setup_codex() -> CodexClient:
     await client.initialize({
         "name": "codex-telegram",
         "title": "Codex Telegram Bot",
-        "version": "0.1.0",
+        "version": "0.2.0",
     })
     return client
 
