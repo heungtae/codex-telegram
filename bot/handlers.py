@@ -15,6 +15,7 @@ from bot.features_ui import features_keyboard, features_panel_text
 from bot.guardian_ui import guardian_keyboard, guardian_panel_text
 from models import state
 from utils.single_instance import find_local_conflict_candidates
+from utils.local_command import run_bang_command
 
 logger = logging.getLogger("codex-telegram.bot")
 _last_conflict_log_at = 0.0
@@ -84,13 +85,18 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if allowed and user_id not in allowed:
         return
     
-    await wait_for_codex()
-    
     state_user = user_manager.get(user_id)
     if state_user.awaiting_project_add_name or state_user.awaiting_project_add_path:
         result = await state.command_router.handle_project_add_input(user_id, text)
         await send_reply(update, result.text, user_id)
         return
+
+    if text.startswith("!"):
+        result_text = await run_bang_command(text, state_user.selected_project_path)
+        await send_reply(update, result_text, user_id)
+        return
+
+    await wait_for_codex()
 
     if not state_user.active_thread_id:
         await send_reply(

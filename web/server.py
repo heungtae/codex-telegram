@@ -3,12 +3,11 @@ import json
 import logging
 import os
 import shlex
-from asyncio.subprocess import PIPE
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request, Response
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from models import state
@@ -21,12 +20,14 @@ from utils.config import (
     save_guardian_settings,
     save_project_profile,
 )
+from utils.local_command import resolve_command_cwd, run_bang_command
 from web.runtime import event_hub, session_manager
 
 logger = logging.getLogger("codex-telegram.web")
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 COOKIE_NAME = "codex_web_session"
+INDEX_HTML_PATH = STATIC_DIR / "index.html"
 
 
 def _normalize_bool(value: Any, default: bool = False) -> bool:
@@ -39,6 +40,15 @@ def _normalize_bool(value: Any, default: bool = False) -> bool:
         if raw in {"0", "false", "no", "off"}:
             return False
     return default
+
+
+def _asset_url(filename: str) -> str:
+    asset_path = STATIC_DIR / filename
+    try:
+        version = int(asset_path.stat().st_mtime)
+    except OSError:
+        version = 0
+    return f"/assets/{filename}?v={version}"
 
 
 async def _wait_for_codex() -> None:
@@ -186,8 +196,8 @@ async def _run_local_feature_toggle(feature_key: str, enabled: bool) -> tuple[bo
             "features",
             action,
             feature_key,
-            stdout=PIPE,
-            stderr=PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
         stdout, stderr = await proc.communicate()
     except Exception as exc:
@@ -207,8 +217,11 @@ def create_web_app() -> FastAPI:
     app.mount("/assets", StaticFiles(directory=str(STATIC_DIR)), name="assets")
 
     @app.get("/")
-    async def index() -> FileResponse:
-        return FileResponse(STATIC_DIR / "index.html")
+    async def index() -> HTMLResponse:
+        html = INDEX_HTML_PATH.read_text(encoding="utf-8")
+        html = html.replace("/assets/styles.css", _asset_url("styles.css"))
+        html = html.replace("/assets/app.jsx", _asset_url("app.jsx"))
+        return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
     @app.post("/api/auth/login")
     async def login(payload: dict[str, Any], response: Response) -> dict[str, Any]:
@@ -424,6 +437,21 @@ def create_web_app() -> FastAPI:
 
         await _wait_for_codex()
         state_user = user_manager.get(session.user_id)
+        if text.startswith("!"):
+            workspace = state_user.selected_project_path
+            if not workspace and state.command_router is not None:
+                effective = state.command_router.projects.resolve_effective_project(session.user_id)
+                if isinstance(effective, dict) and isinstance(effective.get("path"), str):
+                    workspace = effective["path"]
+            output = await run_bang_command(text, workspace)
+            return {
+                "ok": True,
+                "local_command": True,
+                "thread_id": state_user.active_thread_id,
+                "workspace": resolve_command_cwd(workspace),
+                "output": output,
+            }
+
         thread_id = str(payload.get("thread_id", "")).strip() or state_user.active_thread_id
 
         if not thread_id:

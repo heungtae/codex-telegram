@@ -207,10 +207,15 @@ function App() {
     }
     setMessages((prev) => [...prev, { role: "user", text }]);
     setStatus("running");
-    await api("/api/chat/messages", {
+    const result = await api("/api/chat/messages", {
       method: "POST",
       body: JSON.stringify({ text, thread_id: activeThread || undefined }),
     });
+    if (result.local_command) {
+      setMessages((prev) => [...prev, { role: "assistant", text: result.output || "" }]);
+      setStatus("idle");
+      loadSessionSummary().catch(() => {});
+    }
   };
 
   const autoResizeInput = () => {

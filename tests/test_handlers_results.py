@@ -120,6 +120,45 @@ class HandlerResultTests(unittest.IsolatedAsyncioTestCase):
         await handlers.error_handler(update=None, context=context)
         app.stop_running.assert_not_called()
 
+    async def test_message_handler_bang_command_runs_locally_without_codex_turn(self):
+        user = user_manager.get(1)
+        user.active_thread_id = "thread-1"
+        user.selected_project_path = "/tmp/demo-project"
+        update = SimpleNamespace(
+            effective_user=SimpleNamespace(id=1),
+            message=SimpleNamespace(text="!git status"),
+        )
+
+        with patch("bot.handlers.send_reply", new=AsyncMock()) as mock_send_reply, \
+             patch("bot.handlers.get", side_effect=lambda key, default=None: default), \
+             patch("bot.handlers.run_bang_command", new=AsyncMock(return_value="$ git status\ncwd: /tmp/demo-project\nexit code: 0\n\nstdout:\nOn branch main")) as mock_run, \
+             patch("bot.handlers.wait_for_codex", new=AsyncMock()) as mock_wait:
+            await handlers.message_handler(update, context=SimpleNamespace())
+
+        mock_run.assert_awaited_once_with("!git status", "/tmp/demo-project")
+        mock_wait.assert_not_awaited()
+        self.mock_router.route.assert_not_called()
+        self.assertIsNone(user.active_turn_id)
+        sent_text = mock_send_reply.await_args.args[1]
+        self.assertIn("$ git status", sent_text)
+        self.assertIn("exit code: 0", sent_text)
+        self.assertIn("On branch main", sent_text)
+
+    async def test_message_handler_bang_command_without_body_returns_usage(self):
+        update = SimpleNamespace(
+            effective_user=SimpleNamespace(id=1),
+            message=SimpleNamespace(text="!   "),
+        )
+
+        with patch("bot.handlers.send_reply", new=AsyncMock()) as mock_send_reply, \
+             patch("bot.handlers.get", side_effect=lambda key, default=None: default), \
+             patch("bot.handlers.wait_for_codex", new=AsyncMock()) as mock_wait:
+            await handlers.message_handler(update, context=SimpleNamespace())
+
+        mock_wait.assert_not_awaited()
+        self.mock_router.route.assert_not_called()
+        self.assertEqual("Usage: !<linux command>", mock_send_reply.await_args.args[1])
+
 
 if __name__ == "__main__":
     unittest.main()

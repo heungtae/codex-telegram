@@ -34,7 +34,7 @@ Repository = "https://github.com/heungtae/codex-telegram"
 Issues = "https://github.com/heungtae/codex-telegram/issues"
 
 [project.scripts]
-codex-telegram = "main:main"
+codex-telegram = "codex_telegram.cli:main"
 
 [tool.setuptools]
 py-modules = ["main"]
