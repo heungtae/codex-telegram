@@ -16,7 +16,7 @@ from telegram.ext import (
     filters,
 )
 
-from utils.config import get, get_guardian_settings, get_telegram_bot
+from utils.config import get, get_guardian_settings, get_reviewer_settings, get_telegram_bot
 from utils.logger import setup
 from utils.single_instance import (
     SingleInstanceLock,
@@ -26,6 +26,7 @@ from utils.single_instance import (
 )
 from codex import CodexClient, CommandRouter
 from codex.approval_guardian import ApprovalGuardianService, GuardianDecision
+from codex.result_verifier import ResultVerifierService, VerifierDecision
 from bot import (
     start_handler,
     message_handler,
@@ -80,6 +81,7 @@ async def post_init(app: Application | None):
     state.codex_client = await setup_codex()
     state.command_router = CommandRouter(state.codex_client)
     state.approval_guardian = ApprovalGuardianService()
+    state.result_verifier = ResultVerifierService()
     configured_level = str(get("forwarding.app_server_event_level", "INFO")).upper()
     configured_allowlist = get("forwarding.app_server_event_allowlist", [])
     configured_denylist = get("forwarding.app_server_event_denylist", [])
@@ -266,20 +268,401 @@ async def post_init(app: Application | None):
             return 20
         return 10
 
+    def _first_text(value: Any) -> str | None:
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+        if isinstance(value, dict):
+            for key in ("text", "message", "delta", "summary", "preview", "content"):
+                found = _first_text(value.get(key))
+                if found:
+                    return found
+            return None
+        if isinstance(value, list):
+            for item in value:
+                found = _first_text(item)
+                if found:
+                    return found
+        return None
+
+    def _guess_role(turn: dict[str, Any]) -> str:
+        candidates = [
+            turn.get("role"),
+            turn.get("author"),
+            turn.get("source"),
+            turn.get("type"),
+            (turn.get("status") or {}).get("type") if isinstance(turn.get("status"), dict) else None,
+        ]
+        for candidate in candidates:
+            raw = str(candidate or "").strip().lower()
+            if raw in {"user", "human"}:
+                return "user"
+            if raw in {"assistant", "model", "agent"}:
+                return "assistant"
+        return "assistant"
+
+    async def _read_recent_context(thread_id: str, recent_turn_pairs: int) -> list[dict[str, str]]:
+        if state.codex_client is None:
+            return []
+        try:
+            result = await state.codex_client.call("thread/read", {"threadId": thread_id, "includeTurns": True})
+        except Exception:
+            return []
+
+        turns_raw = result.get("turns")
+        thread = result.get("thread", {})
+        turns: list[dict[str, Any]] = [t for t in turns_raw if isinstance(t, dict)] if isinstance(turns_raw, list) else []
+        thread_turns = thread.get("turns")
+        if isinstance(thread_turns, list):
+            turns.extend([t for t in thread_turns if isinstance(t, dict)])
+
+        extracted: list[dict[str, str]] = []
+        for turn in turns:
+            text = _first_text(turn)
+            if not text:
+                items = turn.get("items")
+                if isinstance(items, list):
+                    for item in items:
+                        if isinstance(item, dict):
+                            text = _first_text(item)
+                            if text:
+                                break
+            if not text:
+                continue
+            extracted.append({"role": _guess_role(turn), "text": text})
+        limit = max(1, recent_turn_pairs) * 2
+        return extracted[-limit:]
+
+    async def _read_latest_turn_text(thread_id: str) -> str:
+        context = await _read_recent_context(thread_id, 1)
+        for entry in reversed(context):
+            text = entry.get("text", "").strip()
+            if text:
+                return text
+        return ""
+
+    async def _send_telegram_message(user_id: int, text: str, thread_id: str | None):
+        if user_id <= 0 or app is None or not text.strip():
+            return
+        footer = f"\n\nthreadId: {thread_id or 'unknown'}"
+        max_body_len = 3900 - len(footer)
+        body = text
+        if len(body) > max_body_len:
+            body = body[: max(1, max_body_len - len("\n...(truncated)"))] + "\n...(truncated)"
+        try:
+            await app.bot.send_message(chat_id=user_id, text=body + footer)
+        except Exception:
+            logger.exception("Failed to send validation result to Telegram user_id=%s", user_id)
+
+    async def _publish_validation_result(
+        user_id: int,
+        thread_id: str | None,
+        turn_id: str | None,
+        text: str,
+        note: str = "",
+    ):
+        final_text = text.strip()
+        if note.strip():
+            final_text = f"{final_text}\n\n{note.strip()}" if final_text else note.strip()
+        await event_hub.publish_event(
+            user_id,
+            {
+                "type": "turn_delta",
+                "thread_id": thread_id,
+                "turn_id": turn_id,
+                "text": final_text,
+                "params": {},
+            },
+        )
+        await event_hub.publish_event(
+            user_id,
+            {
+                "type": "turn_completed",
+                "thread_id": thread_id,
+                "turn_id": turn_id,
+                "text": "",
+                "params": {},
+            },
+        )
+        await _send_telegram_message(user_id, final_text, thread_id)
+
+    async def _publish_validation_failure(
+        user_id: int,
+        thread_id: str | None,
+        turn_id: str | None,
+        message: str,
+    ):
+        await event_hub.publish_event(
+            user_id,
+            {
+                "type": "turn_failed",
+                "thread_id": thread_id,
+                "turn_id": turn_id,
+                "text": message,
+                "params": {},
+            },
+        )
+        await _send_telegram_message(user_id, message, thread_id)
+
+    def _clip_text(value: str, limit: int = 800) -> str:
+        text = str(value or "").strip()
+        if len(text) <= limit:
+            return text
+        return text[: max(1, limit - len("\n...(truncated)"))] + "\n...(truncated)"
+
+    async def _publish_system_message(
+        user_id: int | None,
+        thread_id: str | None,
+        turn_id: str | None,
+        text: str,
+    ):
+        if user_id is None:
+            return
+        message = text.strip()
+        if not message:
+            return
+        await event_hub.publish_event(
+            user_id,
+            {
+                "type": "system_message",
+                "thread_id": thread_id,
+                "turn_id": turn_id,
+                "text": message,
+            },
+        )
+
+    def _build_retry_prompt(
+        original_input: str,
+        recent_context: list[dict[str, str]],
+        candidate_output: str,
+        decision: VerifierDecision,
+        attempt_number: int,
+        max_attempts: int,
+    ) -> str:
+        context_lines = [f"- {row.get('role', 'unknown')}: {row.get('text', '')}" for row in recent_context if row.get("text")]
+        context_text = "\n".join(context_lines) if context_lines else "(none)"
+        missing = ""
+        if decision.missing_requirements:
+            missing = "\n".join(f"- {item}" for item in decision.missing_requirements)
+        return (
+            "Revise your previous answer to satisfy the user's request.\n"
+            "Do not mention the reviewer, validation, or internal retry process.\n"
+            f"Attempt: {attempt_number}/{max_attempts}\n\n"
+            f"Original user request:\n{original_input}\n\n"
+            f"Recent conversation context:\n{context_text}\n\n"
+            f"Previous answer to revise:\n{candidate_output}\n\n"
+            f"Reviewer summary:\n{decision.summary or '(none)'}\n\n"
+            f"Required fixes:\n{decision.feedback or '(none)'}\n\n"
+            f"Missing requirements:\n{missing or '(none)'}\n"
+        )
+
+    async def _handle_validation_completion(user_id: int, thread_id: str, turn_id: str | None):
+        state_user = user_manager.get(user_id)
+        session = state_user.validation_session
+        if session is None or session.thread_id != thread_id:
+            state_user.clear_turn()
+            return
+
+        candidate = session.current_candidate()
+        if not candidate:
+            candidate = await _read_latest_turn_text(thread_id)
+            if candidate:
+                session.reset_buffer()
+                session.append_text(candidate)
+
+        if not candidate:
+            state_user.clear_turn()
+            state_user.clear_validation_session()
+            await _publish_validation_failure(
+                user_id,
+                thread_id,
+                turn_id,
+                "Turn completed without a usable assistant result.",
+            )
+            return
+
+        reviewer_settings = get_reviewer_settings()
+        timeout_seconds = int(reviewer_settings.get("timeout_seconds", 8))
+        recent_context = await _read_recent_context(thread_id, session.recent_turn_pairs)
+        if state.result_verifier is None:
+            state.result_verifier = ResultVerifierService()
+
+        reviewer_request_message = (
+            "Reviewer request\n"
+            f"Attempt: {session.attempt_count}/{session.max_attempts}\n"
+            f"User request:\n{_clip_text(session.original_input, 600)}\n\n"
+            f"Candidate output:\n{_clip_text(candidate, 900)}"
+        )
+        logger.info(
+            "Reviewer request thread_id=%s turn_id=%s attempt=%s/%s payload=%s",
+            thread_id,
+            turn_id,
+            session.attempt_count,
+            session.max_attempts,
+            reviewer_request_message,
+        )
+        await _publish_system_message(user_id, thread_id, turn_id, reviewer_request_message)
+
+        try:
+            decision = await state.result_verifier.verify(
+                {
+                    "user_request": session.original_input,
+                    "recent_context": recent_context,
+                    "candidate_output": candidate,
+                },
+                timeout_seconds=max(1, timeout_seconds),
+            )
+        except asyncio.TimeoutError:
+            decision = None
+            verifier_error = f"Reviewer timeout after {timeout_seconds}s"
+        except Exception as exc:
+            decision = None
+            verifier_error = f"Reviewer failed: {exc}"
+        else:
+            verifier_error = ""
+
+        if decision is None:
+            logger.info(
+                "Reviewer unavailable thread_id=%s turn_id=%s reason=%s",
+                thread_id,
+                turn_id,
+                verifier_error,
+            )
+            await _publish_system_message(
+                user_id,
+                thread_id,
+                turn_id,
+                f"Reviewer unavailable.\nReason: {verifier_error}",
+            )
+            state_user.clear_turn()
+            state_user.clear_validation_session()
+            await _publish_validation_result(
+                user_id,
+                thread_id,
+                turn_id,
+                candidate,
+                note=f"Reviewer unavailable; returning current result. ({verifier_error})",
+            )
+            return
+
+        reviewer_result_message = (
+            "Reviewer result\n"
+            f"Decision: {decision.decision}\n"
+            f"Summary: {decision.summary or '(none)'}\n"
+            f"Feedback: {_clip_text(decision.feedback or '(none)', 900)}"
+        )
+        logger.info(
+            "Reviewer result thread_id=%s turn_id=%s decision=%s summary=%s feedback=%s",
+            thread_id,
+            turn_id,
+            decision.decision,
+            decision.summary,
+            _clip_text(decision.feedback, 400),
+        )
+        await _publish_system_message(user_id, thread_id, turn_id, reviewer_result_message)
+
+        if decision.decision == "pass":
+            state_user.clear_turn()
+            state_user.clear_validation_session()
+            await _publish_validation_result(user_id, thread_id, turn_id, candidate)
+            return
+
+        if session.attempt_count >= session.max_attempts:
+            state_user.clear_turn()
+            state_user.clear_validation_session()
+            await _publish_validation_result(
+                user_id,
+                thread_id,
+                turn_id,
+                candidate,
+                note="Reviewer reached max attempts; returning the last result.",
+            )
+            return
+
+        session.attempt_count += 1
+        session.last_feedback = decision.feedback or decision.summary
+        session.reset_buffer()
+        retry_prompt = _build_retry_prompt(
+            session.original_input,
+            recent_context,
+            candidate,
+            decision,
+            session.attempt_count,
+            session.max_attempts,
+        )
+        try:
+            retry_result = await state.codex_client.call(
+                "turn/start",
+                {
+                    "threadId": thread_id,
+                    "input": [{"type": "text", "text": retry_prompt}],
+                },
+            )
+        except Exception as exc:
+            state_user.clear_turn()
+            state_user.clear_validation_session()
+            await _publish_validation_result(
+                user_id,
+                thread_id,
+                turn_id,
+                candidate,
+                note=f"Reviewer requested a retry but restart failed: {exc}",
+            )
+            return
+
+        new_turn = retry_result.get("turn", {}) if isinstance(retry_result, dict) else {}
+        new_turn_id = new_turn.get("id") if isinstance(new_turn, dict) else None
+        if isinstance(new_turn_id, str) and new_turn_id:
+            session.set_turn(new_turn_id)
+            state_user.set_turn(new_turn_id)
+        else:
+            session.set_turn(None)
+
     async def forward_event(method: str, params: dict | None):
         thread_id = _extract_thread_id(method, params)
         turn_id = _extract_turn_id(method, params)
         user_id_by_thread = user_manager.find_user_id_by_thread(thread_id)
+        owner_id = user_manager.find_user_id_by_turn(turn_id)
+        if owner_id is None:
+            owner_id = user_id_by_thread
+        state_user = user_manager.get(owner_id) if owner_id is not None else None
+        validation_session = (
+            state_user.validation_session
+            if state_user is not None
+            and state_user.validation_session is not None
+            and state_user.validation_session.thread_id == thread_id
+            else None
+        )
 
         # Keep runtime turn state in sync even when event forwarding is filtered out.
-        if method == "turn/started" and turn_id and user_id_by_thread is not None:
-            user_manager.get(user_id_by_thread).set_turn(turn_id)
+        if method == "turn/started" and turn_id and owner_id is not None:
+            user_manager.get(owner_id).set_turn(turn_id)
+            if validation_session is not None:
+                validation_session.set_turn(turn_id)
         elif method in ("turn/completed", "turn/failed", "turn/cancelled"):
-            owner_id = user_manager.find_user_id_by_turn(turn_id)
-            if owner_id is None:
-                owner_id = user_id_by_thread
-            if owner_id is not None:
+            if owner_id is not None and validation_session is None:
                 user_manager.get(owner_id).clear_turn()
+
+        if validation_session is not None and owner_id is not None:
+            if method == "item/agentMessage/delta":
+                text = _extract_text(params)
+                if text:
+                    validation_session.append_text(text)
+                return
+            if method == "turn/started":
+                return
+            if method == "turn/completed":
+                await _handle_validation_completion(owner_id, thread_id or validation_session.thread_id, turn_id)
+                return
+            if method in ("turn/failed", "turn/cancelled"):
+                state_user.clear_turn()
+                state_user.clear_validation_session()
+                await _publish_validation_failure(
+                    owner_id,
+                    thread_id or validation_session.thread_id,
+                    turn_id,
+                    f"Turn {method.split('/')[-1]}.",
+                )
+                return
 
         if user_id_by_thread is not None:
             event_type = "app_event"
@@ -384,7 +767,7 @@ async def post_init(app: Application | None):
         guardian_patterns = guardian_methods if isinstance(guardian_methods, list) else ["*"]
         guardian_failure_policy = str(guardian_settings.get("failure_policy", "manual_fallback")).strip().lower()
         guardian_explainability = str(guardian_settings.get("explainability", "full_chain")).strip().lower()
-        guardian_timeout_seconds = int(guardian_settings.get("timeout_seconds", 8))
+        guardian_timeout_seconds = int(guardian_settings.get("timeout_seconds", 20))
 
         def _guardian_message(decision: GuardianDecision) -> str:
             lines = [
@@ -405,11 +788,27 @@ async def post_init(app: Application | None):
                     lines.append(f"Raw: {decision.raw_text[:1200]}")
             return "\n".join(lines)
 
+        guardian_request_message = (
+            "Guardian request\n"
+            f"Method: {method}\n"
+            f"Request ID: {req_id}\n"
+            f"Reason: {reason or '(none)'}\n"
+            f"Question: {question_text or '(none)'}"
+        )
+
         if guardian_enabled and _method_matches(method, [p for p in guardian_patterns if isinstance(p, str)]):
             if state.approval_guardian is None:
                 state.approval_guardian = ApprovalGuardianService()
             guardian_decision: GuardianDecision | None = None
             guardian_error = ""
+            logger.info(
+                "Guardian request thread_id=%s request_id=%s method=%s details=%s",
+                thread_id,
+                req_id,
+                method,
+                guardian_request_message,
+            )
+            await _publish_system_message(user_id, thread_id if isinstance(thread_id, str) else None, None, guardian_request_message)
             try:
                 guardian_decision = await state.approval_guardian.review(
                     payload,
@@ -421,6 +820,22 @@ async def post_init(app: Application | None):
                 guardian_error = f"Guardian failed: {exc}"
 
             if guardian_decision is not None:
+                logger.info(
+                    "Guardian result thread_id=%s request_id=%s method=%s decision=%s risk=%s confidence=%s summary=%s",
+                    thread_id,
+                    req_id,
+                    method,
+                    guardian_decision.choice,
+                    guardian_decision.risk_level,
+                    guardian_decision.confidence,
+                    guardian_decision.summary,
+                )
+                await _publish_system_message(
+                    user_id,
+                    thread_id if isinstance(thread_id, str) else None,
+                    None,
+                    _guardian_message(guardian_decision),
+                )
                 accepted = state.codex_client.submit_approval_decision(req_id, guardian_decision.choice)
                 if accepted:
                     if user_id > 0 and app is not None:
@@ -433,6 +848,15 @@ async def post_init(app: Application | None):
                 )
             else:
                 logger.warning("Guardian could not decide method=%s id=%s error=%s", method, req_id, guardian_error)
+                await _publish_system_message(
+                    user_id,
+                    thread_id if isinstance(thread_id, str) else None,
+                    None,
+                    "Guardian unavailable.\n"
+                    f"Method: {method}\n"
+                    f"Request ID: {req_id}\n"
+                    f"Reason: {guardian_error or 'unknown'}",
+                )
                 if guardian_failure_policy in ("approve", "session", "deny"):
                     accepted = state.codex_client.submit_approval_decision(req_id, guardian_failure_policy)
                     if accepted:
@@ -469,8 +893,10 @@ async def post_init(app: Application | None):
             f"Request ID: {req_id}{reason_line}{question_line}\n"
             "Choose: Approve / Session / Deny"
         )
+        channel = "telegram" if user_id > 0 else "web"
         logger.info(
-            "Sending approval request to Telegram user_id=%s method=%s request_id=%s",
+            "Dispatching approval request channel=%s user_id=%s method=%s request_id=%s",
+            channel,
             user_id,
             method,
             req_id,
@@ -505,6 +931,9 @@ async def post_shutdown(app: Application | None):
     if state.approval_guardian:
         await state.approval_guardian.stop()
         state.approval_guardian = None
+    if state.result_verifier:
+        await state.result_verifier.stop()
+        state.result_verifier = None
 
 
 async def debug_update_handler(update: object, context: Any):
@@ -638,7 +1067,7 @@ def main():
     app.add_handler(TypeHandler(Update, debug_update_handler), group=-1)
     app.add_handler(CommandHandler("start", start_handler))
     app.add_handler(CommandHandler("help", start_handler))
-    app.add_handler(CommandHandler(["commands", "start", "projects", "project", "resume", "threads", "read", "archive", "unarchive", "compact", "rollback", "interrupt", "review", "exec", "models", "features", "gurdian", "guardian", "modes", "skills", "apps", "mcp", "config"], command_handler))
+    app.add_handler(CommandHandler(["commands", "start", "projects", "project", "resume", "threads", "read", "archive", "unarchive", "compact", "rollback", "interrupt", "review", "exec", "models", "features", "gurdian", "guardian", "reviewer", "verifier", "modes", "skills", "apps", "mcp", "config"], command_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
     app.add_handler(CallbackQueryHandler(callback_handler))
     app.add_error_handler(error_handler)

@@ -13,8 +13,10 @@ from bot.skills_ui import skills_keyboard
 from bot.projects_ui import projects_keyboard
 from bot.features_ui import features_keyboard, features_panel_text
 from bot.guardian_ui import guardian_keyboard, guardian_panel_text
+from bot.reviewer_ui import reviewer_keyboard, reviewer_panel_text
 from models import state
 from utils.single_instance import find_local_conflict_candidates
+from utils.config import get_reviewer_settings
 from utils.local_command import run_bang_command
 
 logger = logging.getLogger("codex-telegram.bot")
@@ -66,6 +68,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/models - List available models\n"
         "/features - Manage beta features\n"
         "/gurdian - Manage guardian approval settings\n"
+        "/reviewer - Manage result reviewer settings\n"
         "/skills - List skills\n"
         "/apps - List apps\n"
         "/mcp - MCP server status\n\n"
@@ -126,6 +129,17 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_reply(update, "Processing...", user_id, reply_markup=interrupt_keyboard())
     
     try:
+        reviewer_settings = get_reviewer_settings()
+        reviewer_enabled = bool(reviewer_settings.get("enabled", False))
+        if reviewer_enabled and state_user.active_thread_id:
+            state_user.set_validation_session(
+                state_user.active_thread_id,
+                text,
+                int(reviewer_settings.get("max_attempts", 1)),
+                int(reviewer_settings.get("recent_turn_pairs", 3)),
+            )
+        else:
+            state_user.clear_validation_session()
         result = await state.codex_client.call("turn/start", {
             "threadId": state_user.active_thread_id,
             "input": [{"type": "text", "text": text}],
@@ -135,6 +149,8 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         turn_id = turn.get("id", "unknown")
         if isinstance(turn_id, str) and turn_id and turn_id != "unknown":
             state_user.set_turn(turn_id)
+            if state_user.validation_session is not None:
+                state_user.validation_session.set_turn(turn_id)
 
         if state_user.selected_project_path:
             await send_reply(update, f"Turn started: {turn_id}\nWorkspace: {state_user.selected_project_path}", user_id)
@@ -142,6 +158,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await send_reply(update, f"Turn started: {turn_id}", user_id)
         
     except Exception as e:
+        state_user.clear_validation_session()
         logger.exception("Error processing message")
         await send_reply(update, f"Error: {str(e)}", user_id)
 
@@ -242,6 +259,16 @@ async def command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             guardian_panel_text(state_user.guardian_panel_current, state_user.guardian_panel_draft),
             user_id,
             reply_markup=guardian_keyboard(state_user.guardian_panel_draft),
+        )
+        return
+
+    if result.kind == "reviewer_settings":
+        state_user.set_reviewer_panel(result.meta if isinstance(result.meta, dict) else {})
+        await send_reply(
+            update,
+            reviewer_panel_text(state_user.reviewer_panel_current, state_user.reviewer_panel_draft),
+            user_id,
+            reply_markup=reviewer_keyboard(state_user.reviewer_panel_draft),
         )
         return
 

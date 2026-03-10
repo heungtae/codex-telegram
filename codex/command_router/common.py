@@ -19,6 +19,8 @@ COMMAND_HELP: dict[str, str] = {
     "/features": "Manage beta features with checkbox UI. Usage: /features",
     "/gurdian": "Manage approval guardian settings with checkbox UI. Usage: /gurdian",
     "/guardian": "Alias of /gurdian. Usage: /guardian",
+    "/reviewer": "Manage result reviewer settings with checkbox UI. Usage: /reviewer",
+    "/verifier": "Alias of /reviewer. Usage: /verifier",
     "/modes": "List collaboration modes. Usage: /modes",
     "/skills": "List skills. Usage: /skills [cwd]",
     "/apps": "List apps. Usage: /apps",

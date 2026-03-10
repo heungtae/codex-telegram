@@ -1,6 +1,32 @@
 from dataclasses import dataclass, field
 from typing import Any
 
+
+@dataclass
+class ValidationSession:
+    thread_id: str
+    original_input: str
+    max_attempts: int
+    recent_turn_pairs: int
+    attempt_count: int = 1
+    current_turn_id: str | None = None
+    buffered_chunks: list[str] = field(default_factory=list)
+    last_feedback: str = ""
+
+    def set_turn(self, turn_id: str | None):
+        self.current_turn_id = turn_id
+
+    def reset_buffer(self):
+        self.buffered_chunks = []
+
+    def append_text(self, text: str):
+        if text:
+            self.buffered_chunks.append(text)
+
+    def current_candidate(self) -> str:
+        return "".join(self.buffered_chunks).strip()
+
+
 @dataclass
 class UserState:
     user_id: int
@@ -23,6 +49,9 @@ class UserState:
     feature_panel_draft: dict[str, bool] = field(default_factory=dict)
     guardian_panel_current: dict[str, Any] = field(default_factory=dict)
     guardian_panel_draft: dict[str, Any] = field(default_factory=dict)
+    reviewer_panel_current: dict[str, Any] = field(default_factory=dict)
+    reviewer_panel_draft: dict[str, Any] = field(default_factory=dict)
+    validation_session: ValidationSession | None = None
     
     def set_thread(self, thread_id: str | None):
         self.active_thread_id = thread_id
@@ -30,12 +59,24 @@ class UserState:
     def clear_thread(self):
         self.active_thread_id = None
         self.active_turn_id = None
+        self.validation_session = None
 
     def set_turn(self, turn_id: str | None):
         self.active_turn_id = turn_id
 
     def clear_turn(self):
         self.active_turn_id = None
+
+    def set_validation_session(self, thread_id: str, original_input: str, max_attempts: int, recent_turn_pairs: int):
+        self.validation_session = ValidationSession(
+            thread_id=thread_id,
+            original_input=original_input,
+            max_attempts=max_attempts,
+            recent_turn_pairs=recent_turn_pairs,
+        )
+
+    def clear_validation_session(self):
+        self.validation_session = None
 
     def set_last_listed_threads(self, thread_ids: list[str]):
         self.last_listed_thread_ids = thread_ids
@@ -57,8 +98,8 @@ class UserState:
             enabled = enabled_raw
         else:
             enabled = str(enabled_raw).strip().lower() in {"1", "true", "yes", "on"}
-        timeout_raw = current.get("timeout_seconds", 8)
-        timeout = timeout_raw if isinstance(timeout_raw, int) and timeout_raw > 0 else 8
+        timeout_raw = current.get("timeout_seconds", 20)
+        timeout = timeout_raw if isinstance(timeout_raw, int) and timeout_raw > 0 else 20
         normalized = {
             "enabled": enabled,
             "timeout_seconds": timeout,
@@ -67,6 +108,28 @@ class UserState:
         }
         self.guardian_panel_current = normalized
         self.guardian_panel_draft = dict(normalized)
+
+    def set_reviewer_panel(self, current: dict[str, Any]):
+        enabled_raw = current.get("enabled", False)
+        if isinstance(enabled_raw, bool):
+            enabled = enabled_raw
+        else:
+            enabled = str(enabled_raw).strip().lower() in {"1", "true", "yes", "on"}
+        max_attempts_raw = current.get("max_attempts", 3)
+        timeout_raw = current.get("timeout_seconds", 8)
+        recent_turn_pairs_raw = current.get("recent_turn_pairs", 3)
+        normalized = {
+            "enabled": enabled,
+            "max_attempts": max_attempts_raw if isinstance(max_attempts_raw, int) and max_attempts_raw > 0 else 3,
+            "timeout_seconds": timeout_raw if isinstance(timeout_raw, int) and timeout_raw > 0 else 8,
+            "recent_turn_pairs": (
+                recent_turn_pairs_raw
+                if isinstance(recent_turn_pairs_raw, int) and recent_turn_pairs_raw > 0
+                else 3
+            ),
+        }
+        self.reviewer_panel_current = normalized
+        self.reviewer_panel_draft = dict(normalized)
 
     def set_project(self, key: str, name: str, path: str):
         self.selected_project_key = key

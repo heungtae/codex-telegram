@@ -19,6 +19,8 @@ Telegram User
 : JSON-RPC transport and request/response handling for `codex app-server`.
 - `codex/approval_guardian.py`
 : Runs approval review in a dedicated Codex app-server session and returns approve/session/deny decisions.
+- `codex/result_verifier.py`
+: Runs post-generation result verification in a dedicated Codex app-server session and returns pass/fail decisions with rewrite guidance.
 - `codex/command_router/*`
 : Command dispatch and domain-specific command handlers (`threads`, `projects`, `system`, `review`).
 - `bot/handlers.py`
@@ -41,6 +43,7 @@ Key sections:
 - `[users]`: allowed Telegram user IDs
 - `[approval]`: `interactive` or `auto`
 - `[approval.guardian]`: guardian on/off, timeout, fallback policy, explainability, method filters
+- `[validation.reviewer]`: post-generation reviewer on/off, max attempts, timeout, recent context size
 - `[forwarding]`: event forwarding level/allowlist/denylist/rules
 - `[projects.*]` + `project`: project profiles and default profile
 
@@ -61,6 +64,10 @@ Settings callbacks:
 - `guardian_toggle:enabled`
 - `guardian_cycle:timeout|failure_policy|explainability`
 - `guardian_apply`, `guardian_refresh`
+- `cmd:reviewer_settings`
+- `reviewer_toggle:enabled`
+- `reviewer_cycle:max_attempts|timeout_seconds|recent_turn_pairs`
+- `reviewer_apply`, `reviewer_refresh`
 
 Thread UI callbacks:
 - `threads_page:{active|arch}:{offset}:{limit}`
@@ -138,6 +145,13 @@ There are two layers:
 - If `approval.guardian.enabled = true` and method matches filters, review runs first.
 - Review executes in a separate app-server client and returns `approve|session|deny`.
 - On guardian timeout/failure, fallback policy applies (`manual_fallback` keeps Telegram buttons).
+
+3. Reviewer validation layer
+- If `validation.reviewer.enabled = true`, user turns buffer assistant deltas instead of forwarding them immediately.
+- On candidate completion, reviewer validates the result against the original request and recent conversation context.
+- On pass, the buffered result is published as the final answer.
+- On fail, the bot starts a retry turn in the same thread with reviewer feedback until `max_attempts` is reached.
+- On timeout/failure, reviewer fails open and returns the current candidate.
 
 3. Telegram UI approval flow
 - `on_approval_request` sends message with `Approve / Session / Deny` keyboard.

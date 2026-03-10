@@ -143,6 +143,22 @@ class CommandRouterTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Guardian settings:", result.text)
         self.assertFalse(self.codex.calls)
 
+    async def test_reviewer_returns_reviewer_settings_kind(self):
+        with patch(
+            "codex.command_router.system.get_reviewer_settings",
+            return_value={
+                "enabled": True,
+                "max_attempts": 3,
+                "timeout_seconds": 8,
+                "recent_turn_pairs": 3,
+            },
+        ):
+            result = await self.router.route("/reviewer", [], 1)
+
+        self.assertEqual("reviewer_settings", result.kind)
+        self.assertIn("Reviewer settings:", result.text)
+        self.assertFalse(self.codex.calls)
+
     async def test_mcp_uses_alternate_status_fields(self):
         self.codex.mcp_server_status_data = [
             {

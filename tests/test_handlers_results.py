@@ -110,6 +110,30 @@ class HandlerResultTests(unittest.IsolatedAsyncioTestCase):
         kwargs = mock_send_reply.await_args.kwargs
         self.assertIn("reply_markup", kwargs)
 
+    async def test_command_handler_reviewer_kind_uses_reviewer_keyboard(self):
+        self.mock_router.route.return_value = CommandResult(
+            kind="reviewer_settings",
+            text="Reviewer settings:",
+            meta={
+                "enabled": False,
+                "max_attempts": 3,
+                "timeout_seconds": 8,
+                "recent_turn_pairs": 3,
+            },
+        )
+        update = SimpleNamespace(
+            effective_user=SimpleNamespace(id=1),
+            effective_message=SimpleNamespace(text="/reviewer"),
+        )
+
+        with patch("bot.handlers.wait_for_codex", new=AsyncMock()), \
+             patch("bot.handlers.send_reply", new=AsyncMock()) as mock_send_reply, \
+             patch("bot.handlers.get", side_effect=lambda key, default=None: default):
+            await handlers.command_handler(update, context=SimpleNamespace())
+
+        kwargs = mock_send_reply.await_args.kwargs
+        self.assertIn("reply_markup", kwargs)
+
     async def test_error_handler_conflict_does_not_stop_app(self):
         app = SimpleNamespace(stop_running=Mock())
         context = SimpleNamespace(

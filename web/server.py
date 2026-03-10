@@ -10,14 +10,17 @@ from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+from codex.command_router.common import first_text
 from models import state
 from models.user import user_manager
 from utils.config import (
     get,
     get_guardian_settings,
+    get_reviewer_settings,
     get_web_password,
     reload,
     save_guardian_settings,
+    save_reviewer_settings,
     save_project_profile,
 )
 from utils.local_command import resolve_command_cwd, run_bang_command
@@ -82,6 +85,153 @@ def _thread_title(thread: dict[str, Any]) -> str:
         if isinstance(value, str) and value.strip():
             return value.strip()
     return "Untitled"
+
+
+def _thread_turns(result: dict[str, Any], thread: dict[str, Any]) -> list[dict[str, Any]]:
+    def to_turn_list(value: Any) -> list[dict[str, Any]]:
+        if isinstance(value, list):
+            return [v for v in value if isinstance(v, dict)]
+        if isinstance(value, dict):
+            data = value.get("data")
+            if isinstance(data, list):
+                return [v for v in data if isinstance(v, dict)]
+        return []
+
+    turns = to_turn_list(result.get("turns"))
+    if turns:
+        return turns
+    return to_turn_list(thread.get("turns"))
+
+
+def _thread_turn_messages(turns: list[dict[str, Any]]) -> list[dict[str, str]]:
+    messages: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+
+    def add_message(role: str, text: str) -> None:
+        cleaned = str(text or "").strip()
+        if not cleaned:
+            return
+        key = (role, cleaned)
+        if key in seen:
+            return
+        seen.add(key)
+        messages.append({"role": role, "text": cleaned})
+
+    def infer_role(value: dict[str, Any], default_role: str) -> str:
+        for key in ("role", "author", "speaker", "source"):
+            raw = str(value.get(key) or "").strip().lower()
+            if raw in {"user", "assistant", "system"}:
+                return raw
+        item_type = str(value.get("type") or "").strip().lower()
+        normalized_item_type = item_type.replace("_", "").replace("-", "")
+        if normalized_item_type in {"usermessage", "user"}:
+            return "user"
+        if normalized_item_type in {"assistantmessage", "agentmessage", "assistant", "message"}:
+            return default_role
+        return default_role
+
+    def walk(value: Any, default_role: str) -> None:
+        if isinstance(value, str):
+            add_message(default_role, value)
+            return
+        if isinstance(value, list):
+            for item in value:
+                walk(item, default_role)
+            return
+        if not isinstance(value, dict):
+            return
+
+        role = infer_role(value, default_role)
+        direct = value.get("text")
+        if isinstance(direct, str) and direct.strip():
+            add_message(role, direct)
+
+        content = value.get("content")
+        if isinstance(content, str) and content.strip():
+            add_message(role, content)
+        elif isinstance(content, list):
+            for item in content:
+                if isinstance(item, dict):
+                    text = item.get("text")
+                    if isinstance(text, str) and text.strip():
+                        add_message(role, text)
+                    else:
+                        walk(item, role)
+                else:
+                    walk(item, role)
+
+        for key in ("input", "userInput", "prompt", "output", "items", "messages"):
+            nested = value.get(key)
+            if nested is None:
+                continue
+            next_role = "user" if key in {"input", "userInput", "prompt"} else role
+            if key in {"output", "items", "messages"} and role == "user":
+                next_role = "assistant"
+            walk(nested, next_role)
+
+    for turn in turns:
+        before_count = len(messages)
+        walk(turn.get("input"), "user")
+        walk(turn.get("userInput"), "user")
+        walk(turn.get("prompt"), "user")
+        walk(turn.get("output"), "assistant")
+        walk(turn.get("items"), "assistant")
+        walk(turn.get("messages"), "assistant")
+
+        # Fallback when turns only expose a single text-like field.
+        if len(messages) == before_count:
+            user_text = first_text(turn.get("input")) or first_text(turn.get("userInput")) or first_text(turn.get("prompt"))
+            assistant_text = (
+                first_text(turn.get("output"))
+                or first_text(turn.get("items"))
+                or first_text(turn.get("text"))
+                or first_text(turn.get("summary"))
+                or first_text(turn.get("preview"))
+            )
+            if user_text:
+                add_message("user", user_text)
+            if assistant_text:
+                add_message("assistant", assistant_text)
+    return messages
+
+
+def _thread_profile_key(thread: dict[str, Any], current_profile_key: str) -> str | None:
+    tid = thread.get("id")
+    if isinstance(tid, str):
+        mapped = user_manager.get_thread_project(tid)
+        if mapped:
+            return mapped
+
+    project_path_by_key: dict[str, str] = {}
+    projects_raw = get("projects", {})
+    if isinstance(projects_raw, dict):
+        for key, value in projects_raw.items():
+            if not isinstance(key, str) or not isinstance(value, dict):
+                continue
+            path = value.get("path")
+            if isinstance(path, str) and path.strip():
+                project_path_by_key[key] = os.path.realpath(path.strip())
+
+    candidates: list[str] = []
+    for key in ("cwd", "path", "workspace", "workspacePath", "projectPath"):
+        value = thread.get(key)
+        if isinstance(value, str) and value.strip():
+            candidates.append(value.strip())
+    context_value = thread.get("context")
+    if isinstance(context_value, dict):
+        for key in ("cwd", "path", "workspace", "workspacePath", "projectPath"):
+            value = context_value.get(key)
+            if isinstance(value, str) and value.strip():
+                candidates.append(value.strip())
+
+    for candidate in candidates:
+        real_candidate = os.path.realpath(candidate)
+        for key, real_path in project_path_by_key.items():
+            if real_candidate == real_path:
+                if isinstance(tid, str) and tid:
+                    user_manager.bind_thread_project(tid, key)
+                return key
+    return current_profile_key if isinstance(tid, str) and user_manager.get_thread_project(tid) == current_profile_key else None
 
 
 def _workspace_suggestions(workspace: str, prefix: str, limit: int) -> list[str]:
@@ -349,10 +499,21 @@ def create_web_app() -> FastAPI:
         rows = result.get("data", [])
         if not isinstance(rows, list):
             rows = []
+        state_user = user_manager.get(session.user_id)
+        current_profile_key = state_user.selected_project_key
+        if not current_profile_key:
+            default_key = get("project")
+            if isinstance(default_key, str) and default_key.strip():
+                current_profile_key = default_key.strip()
+        if current_profile_key:
+            rows = [
+                thread
+                for thread in rows
+                if isinstance(thread, dict) and _thread_profile_key(thread, current_profile_key) == current_profile_key
+            ]
         if safe_offset:
             rows = rows[safe_offset:]
         rows = rows[:safe_limit]
-        state_user = user_manager.get(session.user_id)
         items: list[dict[str, Any]] = []
         for thread in rows:
             if not isinstance(thread, dict):
@@ -469,6 +630,18 @@ def create_web_app() -> FastAPI:
         if state_user.active_turn_id:
             raise HTTPException(status_code=409, detail="a turn is already running")
 
+        reviewer_settings = get_reviewer_settings()
+        reviewer_enabled = bool(reviewer_settings.get("enabled", False))
+        if reviewer_enabled:
+            state_user.set_validation_session(
+                thread_id,
+                text,
+                int(reviewer_settings.get("max_attempts", 1)),
+                int(reviewer_settings.get("recent_turn_pairs", 3)),
+            )
+        else:
+            state_user.clear_validation_session()
+
         result = await state.codex_client.call(
             "turn/start",
             {
@@ -480,6 +653,8 @@ def create_web_app() -> FastAPI:
         turn_id = turn.get("id") if isinstance(turn, dict) else None
         if isinstance(turn_id, str) and turn_id:
             state_user.set_turn(turn_id)
+            if state_user.validation_session is not None:
+                state_user.validation_session.set_turn(turn_id)
 
         await event_hub.publish_event(
             session.user_id,
@@ -500,7 +675,22 @@ def create_web_app() -> FastAPI:
         session = await _session_from_request(request)
         if not thread_id.strip():
             raise HTTPException(status_code=400, detail="thread_id is required")
-        return await _route("/read", [thread_id.strip()], session.user_id)
+        await _wait_for_codex()
+        result = await state.codex_client.call("thread/read", {"threadId": thread_id.strip(), "includeTurns": True})
+        thread = result.get("thread", {}) if isinstance(result, dict) else {}
+        turns = _thread_turns(result if isinstance(result, dict) else {}, thread if isinstance(thread, dict) else {})
+        messages = _thread_turn_messages(turns)
+        if not messages:
+            summary = await _route("/read", [thread_id.strip()], session.user_id)
+            return {
+                **summary,
+                "messages": [{"role": "assistant", "text": summary.get("text", "")}],
+            }
+        return {
+            "ok": True,
+            "thread_id": thread_id.strip(),
+            "messages": messages,
+        }
 
     @app.get("/api/projects")
     async def list_projects(request: Request) -> dict[str, Any]:
@@ -554,9 +744,24 @@ def create_web_app() -> FastAPI:
         await _session_from_request(request)
         return save_guardian_settings(
             enabled=bool(payload.get("enabled", False)),
-            timeout_seconds=int(payload.get("timeout_seconds", 8)),
+            timeout_seconds=int(payload.get("timeout_seconds", 20)),
             failure_policy=str(payload.get("failure_policy", "manual_fallback")),
             explainability=str(payload.get("explainability", "full_chain")),
+        )
+
+    @app.get("/api/reviewer")
+    async def get_reviewer(request: Request) -> dict[str, Any]:
+        await _session_from_request(request)
+        return get_reviewer_settings()
+
+    @app.post("/api/reviewer")
+    async def set_reviewer(payload: dict[str, Any], request: Request) -> dict[str, Any]:
+        await _session_from_request(request)
+        return save_reviewer_settings(
+            enabled=bool(payload.get("enabled", False)),
+            max_attempts=int(payload.get("max_attempts", 1)),
+            timeout_seconds=int(payload.get("timeout_seconds", 8)),
+            recent_turn_pairs=int(payload.get("recent_turn_pairs", 3)),
         )
 
     @app.get("/api/models")
@@ -604,9 +809,11 @@ def create_web_app() -> FastAPI:
                 if not project_key and isinstance(effective.get("key"), str):
                     project_key = effective["key"]
         guardian = get_guardian_settings()
+        reviewer = get_reviewer_settings()
         agents = [
-            {"name": "default", "enabled": True},
-            {"name": "guardian", "enabled": bool(guardian.get("enabled", False))},
+            {"name": "default", "enabled": True, "toggleable": False, "configurable": False},
+            {"name": "guardian", "enabled": bool(guardian.get("enabled", False)), "toggleable": True, "configurable": True},
+            {"name": "reviewer", "enabled": bool(reviewer.get("enabled", False)), "toggleable": True, "configurable": True},
         ]
         return {
             "active_thread_id": state_user.active_thread_id,
