@@ -19,7 +19,7 @@ def _explainability_label(value: str) -> str:
     return {
         "decision_only": "decision only",
         "summary": "summary",
-        "full_chain": "full chain",
+        "full_chain": "summary + debug logs",
     }.get(value, value)
 
 

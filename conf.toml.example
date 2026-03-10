@@ -37,7 +37,7 @@ auto_response = "approve"  # approve | session | deny
 enabled = false
 timeout_seconds = 8
 failure_policy = "manual_fallback"  # manual_fallback | deny | approve | session
-explainability = "full_chain"  # decision_only | summary | full_chain
+explainability = "full_chain"  # decision_only | summary | full_chain(summary + debug logs)
 apply_to_methods = ["*"]
 
 [validation.reviewer]

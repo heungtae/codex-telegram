@@ -781,11 +781,6 @@ async def post_init(app: Application | None):
                 lines.append(f"Confidence: {decision.confidence}")
                 if decision.summary:
                     lines.append(f"Summary: {decision.summary}")
-            if guardian_explainability == "full_chain":
-                if decision.chain:
-                    lines.append(f"Chain: {decision.chain[:1600]}")
-                if decision.raw_text:
-                    lines.append(f"Raw: {decision.raw_text[:1200]}")
             return "\n".join(lines)
 
         guardian_request_message = (
