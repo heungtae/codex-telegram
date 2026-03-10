@@ -16,7 +16,7 @@ from telegram.ext import (
     filters,
 )
 
-from utils.config import get, get_guardian_settings, get_reviewer_settings, get_telegram_bot
+from utils.config import get, get_config_path, get_guardian_settings, get_reviewer_settings, get_telegram_bot
 from utils.logger import setup
 from utils.single_instance import (
     SingleInstanceLock,
@@ -801,7 +801,7 @@ async def post_init(app: Application | None):
                 state.approval_guardian = ApprovalGuardianService()
             guardian_decision: GuardianDecision | None = None
             guardian_error = ""
-            logger.info(
+            logger.debug(
                 "Guardian request thread_id=%s request_id=%s method=%s details=%s",
                 thread_id,
                 req_id,
@@ -820,7 +820,7 @@ async def post_init(app: Application | None):
                 guardian_error = f"Guardian failed: {exc}"
 
             if guardian_decision is not None:
-                logger.info(
+                logger.debug(
                     "Guardian result thread_id=%s request_id=%s method=%s decision=%s risk=%s confidence=%s summary=%s",
                     thread_id,
                     req_id,
@@ -836,16 +836,33 @@ async def post_init(app: Application | None):
                     None,
                     _guardian_message(guardian_decision),
                 )
-                accepted = state.codex_client.submit_approval_decision(req_id, guardian_decision.choice)
-                if accepted:
+                if guardian_decision.choice in ("approve", "session"):
+                    accepted = state.codex_client.submit_approval_decision(req_id, guardian_decision.choice)
+                    if accepted:
+                        if user_id > 0 and app is not None:
+                            await app.bot.send_message(chat_id=user_id, text=_guardian_message(guardian_decision))
+                        return
+                    logger.warning(
+                        "Guardian produced decision but request already expired method=%s id=%s",
+                        method,
+                        req_id,
+                    )
+                else:
+                    logger.debug(
+                        "Guardian returned deny; falling back to manual approval method=%s id=%s",
+                        method,
+                        req_id,
+                    )
                     if user_id > 0 and app is not None:
-                        await app.bot.send_message(chat_id=user_id, text=_guardian_message(guardian_decision))
-                    return
-                logger.warning(
-                    "Guardian produced decision but request already expired method=%s id=%s",
-                    method,
-                    req_id,
-                )
+                        await app.bot.send_message(
+                            chat_id=user_id,
+                            text=(
+                                "Guardian recommended deny.\n"
+                                f"Method: {method}\n"
+                                f"Request ID: {req_id}\n"
+                                "Manual approval is required."
+                            ),
+                        )
             else:
                 logger.warning("Guardian could not decide method=%s id=%s error=%s", method, req_id, guardian_error)
                 await _publish_system_message(
@@ -973,6 +990,7 @@ def main():
     global _web_server
     global _web_server_thread
     logger.info("Starting Codex Telegram Bot...")
+    logger.info("Using config file %s", get_config_path())
 
     web_enabled = _parse_bool(get("web.enabled", False), default=False)
     telegram_enabled = _parse_bool(get("telegram.enabled", True), default=True)

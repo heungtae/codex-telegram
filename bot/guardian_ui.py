@@ -1,7 +1,7 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 
-GUARDIAN_TIMEOUT_CHOICES = [3, 8, 20]
+GUARDIAN_TIMEOUT_CHOICES = [3, 8, 20, 60]
 GUARDIAN_FAILURE_POLICY_CHOICES = ["manual_fallback", "deny", "approve", "session"]
 GUARDIAN_EXPLAINABILITY_CHOICES = ["decision_only", "summary", "full_chain"]
 
@@ -25,8 +25,8 @@ def _explainability_label(value: str) -> str:
 
 def guardian_panel_text(current: dict, draft: dict) -> str:
     enabled = bool(draft.get("enabled", False))
-    timeout_raw = draft.get("timeout_seconds", 8)
-    timeout_seconds = timeout_raw if isinstance(timeout_raw, int) and timeout_raw > 0 else 8
+    timeout_raw = draft.get("timeout_seconds", 20)
+    timeout_seconds = timeout_raw if isinstance(timeout_raw, int) and timeout_raw > 0 else 20
     failure_policy = str(draft.get("failure_policy", "manual_fallback"))
     explainability = str(draft.get("explainability", "full_chain"))
 
@@ -51,8 +51,8 @@ def guardian_panel_text(current: dict, draft: dict) -> str:
 
 def guardian_keyboard(draft: dict) -> InlineKeyboardMarkup:
     enabled = bool(draft.get("enabled", False))
-    timeout_raw = draft.get("timeout_seconds", 8)
-    timeout_seconds = timeout_raw if isinstance(timeout_raw, int) and timeout_raw > 0 else 8
+    timeout_raw = draft.get("timeout_seconds", 20)
+    timeout_seconds = timeout_raw if isinstance(timeout_raw, int) and timeout_raw > 0 else 20
     failure_policy = str(draft.get("failure_policy", "manual_fallback"))
     explainability = str(draft.get("explainability", "full_chain"))
 

@@ -5,7 +5,7 @@ const AGENT_CONFIG_DEFS = {
     title: "Guardian settings",
     path: "/api/guardian",
     fields: [
-      { key: "timeout_seconds", label: "Timeout", type: "select", options: [3, 8, 20] },
+      { key: "timeout_seconds", label: "Timeout", type: "select", options: [3, 8, 20, 60] },
       {
         key: "failure_policy",
         label: "Failure policy",
@@ -25,7 +25,7 @@ const AGENT_CONFIG_DEFS = {
     path: "/api/reviewer",
     fields: [
       { key: "max_attempts", label: "Max attempts", type: "select", options: [1, 2, 3, 4, 5] },
-      { key: "timeout_seconds", label: "Timeout", type: "select", options: [3, 8, 20] },
+      { key: "timeout_seconds", label: "Timeout", type: "select", options: [3, 8, 20, 60] },
       { key: "recent_turn_pairs", label: "Recent turn pairs", type: "select", options: [1, 2, 3, 5] },
     ],
   },
@@ -142,7 +142,7 @@ function App() {
   const [sessionSummary, setSessionSummary] = useState(null);
   const [status, setStatus] = useState("idle");
   const [approvalItems, setApprovalItems] = useState([]);
-  const [approvalBusyId, setApprovalBusyId] = useState(0);
+  const [approvalBusyId, setApprovalBusyId] = useState(null);
   const [agentConfigs, setAgentConfigs] = useState({});
   const [activeAgentSettings, setActiveAgentSettings] = useState("");
   const [agentConfigLoading, setAgentConfigLoading] = useState("");
@@ -276,7 +276,7 @@ function App() {
   };
 
   const submitApproval = async (requestId, decision) => {
-    if (!requestId || !decision || approvalBusyId) {
+    if (typeof requestId !== "number" || !decision || approvalBusyId !== null) {
       return;
     }
     setApprovalBusyId(requestId);
@@ -287,7 +287,7 @@ function App() {
       });
       setApprovalItems((prev) => prev.filter((item) => item.id !== requestId));
     } finally {
-      setApprovalBusyId(0);
+      setApprovalBusyId(null);
     }
   };
 
@@ -803,42 +803,46 @@ function App() {
             </span>
           </div>
         </div>
-        {approvalItems.map((item) => (
-          <div key={item.id} className="approval">
-            <div className="approval-title">Approval required</div>
-            <div>Method: {item.method || "-"}</div>
-            <div>Request ID: {item.id}</div>
-            {item.reason ? <div>Reason: {item.reason}</div> : null}
-            {item.question ? <div>Question: {item.question}</div> : null}
-            <div className="approval-actions">
-              <button
-                className="secondary"
-                type="button"
-                disabled={approvalBusyId === item.id}
-                onClick={() => submitApproval(item.id, "approve")}
-              >
-                Approve
-              </button>
-              <button
-                className="secondary"
-                type="button"
-                disabled={approvalBusyId === item.id}
-                onClick={() => submitApproval(item.id, "session")}
-              >
-                Session
-              </button>
-              <button
-                className="danger"
-                type="button"
-                disabled={approvalBusyId === item.id}
-                onClick={() => submitApproval(item.id, "deny")}
-              >
-                Deny
-              </button>
-            </div>
-          </div>
-        ))}
         <div className="chat" ref={chatRef}>
+          {approvalItems.length ? (
+            <div className="approval-stack">
+              {approvalItems.map((item) => (
+                <div key={item.id} className="approval">
+                  <div className="approval-title">Approval required</div>
+                  <div>Method: {item.method || "-"}</div>
+                  <div>Request ID: {item.id}</div>
+                  {item.reason ? <div>Reason: {item.reason}</div> : null}
+                  {item.question ? <div>Question: {item.question}</div> : null}
+                  <div className="approval-actions">
+                    <button
+                      className="secondary"
+                      type="button"
+                      disabled={approvalBusyId === item.id}
+                      onClick={() => submitApproval(item.id, "approve")}
+                    >
+                      Approve
+                    </button>
+                    <button
+                      className="secondary"
+                      type="button"
+                      disabled={approvalBusyId === item.id}
+                      onClick={() => submitApproval(item.id, "session")}
+                    >
+                      Session
+                    </button>
+                    <button
+                      className="danger"
+                      type="button"
+                      disabled={approvalBusyId === item.id}
+                      onClick={() => submitApproval(item.id, "deny")}
+                    >
+                      Deny
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
           {messages.map((m, idx) => (
             <div key={idx} className={`msg-row ${m.role}`}>
               <div className={`msg ${m.role}`}>

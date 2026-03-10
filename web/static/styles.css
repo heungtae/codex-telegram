@@ -419,6 +419,17 @@ select {
   box-shadow: none;
 }
 
+.approval-stack {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding-bottom: 6px;
+}
+
 .msg-row {
   display: flex;
   width: 100%;
@@ -748,10 +759,10 @@ select {
 
 .approval {
   border: 1px solid #f7d9a4;
-  background: #fff9ef;
+  background: rgba(255, 249, 239, 0.96);
+  backdrop-filter: blur(8px);
   border-radius: 10px;
   padding: 10px;
-  margin-bottom: 10px;
   box-shadow: 0 6px 18px rgba(107, 76, 22, 0.08);
 }
 

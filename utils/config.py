@@ -1,10 +1,12 @@
 import os
 import re
 import tomllib
+import logging
 from pathlib import Path
 from typing import Any
 
 _config: dict[str, Any] | None = None
+logger = logging.getLogger("codex-telegram.config")
 
 DEFAULT_CONFIG = """project = "default"
 
@@ -103,6 +105,7 @@ def load(path: str = None) -> dict[str, Any]:
 
     _ensure_config_exists()
     config_path = _get_config_path()
+    logger.info("Loading config from %s", config_path)
     
     with open(config_path, "rb") as f:
         raw_config = tomllib.load(f)
@@ -158,11 +161,11 @@ def _escape_toml_string(value: str) -> str:
     return value.replace("\\", "\\\\").replace("\"", "\\\"")
 
 
-GUARDIAN_TIMEOUT_CHOICES = [3, 8, 20]
+GUARDIAN_TIMEOUT_CHOICES = [3, 8, 20, 60]
 GUARDIAN_FAILURE_POLICIES = {"manual_fallback", "deny", "approve", "session"}
 GUARDIAN_EXPLAINABILITY_LEVELS = {"decision_only", "summary", "full_chain"}
 REVIEWER_MAX_ATTEMPT_CHOICES = [1, 2, 3, 4, 5]
-REVIEWER_TIMEOUT_CHOICES = [3, 8, 20]
+REVIEWER_TIMEOUT_CHOICES = [3, 8, 20, 60]
 REVIEWER_RECENT_TURN_PAIR_CHOICES = [1, 2, 3, 5]
 
 

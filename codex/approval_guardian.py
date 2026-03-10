@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -28,6 +29,9 @@ class ApprovalGuardianService:
         self._active_turn_id: str | None = None
         self._active_buffer: list[str] = []
         self._done_event = asyncio.Event()
+        self._active_thread_id: str | None = None
+        self._delta_count = 0
+        self._last_delta_preview = ""
 
     async def start(self):
         if self._client is not None:
@@ -62,20 +66,38 @@ class ApprovalGuardianService:
 
     async def review(self, payload: dict[str, Any], timeout_seconds: int) -> GuardianDecision:
         async with self._lock:
+            started_at = time.monotonic()
             await self.start()
             if self._client is None:
                 raise RuntimeError("Guardian client is not initialized")
 
             prompt = self._build_prompt(payload)
+            prompt_preview = prompt[:400] + ("...(truncated)" if len(prompt) > 400 else "")
+            logger.debug(
+                "Guardian review start timeout=%ss method=%s request_id=%s prompt=%s",
+                timeout_seconds,
+                payload.get("method"),
+                payload.get("id"),
+                prompt_preview,
+            )
             thread_result = await self._client.call("thread/start", {})
+            thread_started_at = time.monotonic()
             thread_id = thread_result.get("thread", {}).get("id")
             if not isinstance(thread_id, str) or not thread_id:
                 raise RuntimeError("Guardian failed to start thread")
+            self._active_thread_id = thread_id
+            logger.debug(
+                "Guardian thread started thread_id=%s elapsed_ms=%s",
+                thread_id,
+                int((thread_started_at - started_at) * 1000),
+            )
 
             self._active_buffer = []
             self._active_turn_id = None
             self._done_event.clear()
             self._collecting = True
+            self._delta_count = 0
+            self._last_delta_preview = ""
             try:
                 turn_result = await self._client.call(
                     "turn/start",
@@ -84,27 +106,59 @@ class ApprovalGuardianService:
                         "input": [{"type": "text", "text": prompt}],
                     },
                 )
+                turn_started_at = time.monotonic()
                 turn_id = turn_result.get("turn", {}).get("id")
                 if isinstance(turn_id, str) and turn_id:
                     self._active_turn_id = turn_id
+                logger.debug(
+                    "Guardian turn started thread_id=%s turn_id=%s elapsed_ms=%s wait_timeout_s=%s",
+                    thread_id,
+                    self._active_turn_id,
+                    int((turn_started_at - started_at) * 1000),
+                    max(1, int(timeout_seconds)),
+                )
 
-                await asyncio.wait_for(self._done_event.wait(), timeout=max(1, int(timeout_seconds)))
+                try:
+                    await asyncio.wait_for(self._done_event.wait(), timeout=max(1, int(timeout_seconds)))
+                except asyncio.TimeoutError:
+                    logger.debug(
+                        "Guardian wait timeout thread_id=%s turn_id=%s waited_s=%s delta_count=%s last_delta=%s total_elapsed_ms=%s",
+                        thread_id,
+                        self._active_turn_id,
+                        max(1, int(timeout_seconds)),
+                        self._delta_count,
+                        self._last_delta_preview,
+                        int((time.monotonic() - started_at) * 1000),
+                    )
+                    raise
                 text = "".join(self._active_buffer).strip()
                 if not text:
+                    logger.debug(
+                        "Guardian response buffer empty; reading thread thread_id=%s turn_id=%s delta_count=%s",
+                        thread_id,
+                        self._active_turn_id,
+                        self._delta_count,
+                    )
                     text = await self._fallback_read_turn_text(thread_id)
                 if not text:
                     raise ValueError("Guardian produced an empty response")
                 decision = self._parse_decision(text)
-                logger.info(
-                    "Guardian decision choice=%s risk=%s confidence=%s",
+                logger.debug(
+                    "Guardian decision thread_id=%s turn_id=%s choice=%s risk=%s confidence=%s total_elapsed_ms=%s",
+                    thread_id,
+                    self._active_turn_id,
                     decision.choice,
                     decision.risk_level,
                     decision.confidence,
+                    int((time.monotonic() - started_at) * 1000),
                 )
                 return decision
             finally:
                 self._collecting = False
                 self._active_turn_id = None
+                self._active_thread_id = None
+                self._delta_count = 0
+                self._last_delta_preview = ""
                 self._done_event.clear()
 
     def _on_guardian_event(self, method: str, params: dict | None):
@@ -115,11 +169,33 @@ class ApprovalGuardianService:
             text = self._extract_text(payload)
             if text:
                 self._active_buffer.append(text)
+                self._delta_count += 1
+                self._last_delta_preview = text[:200] + ("...(truncated)" if len(text) > 200 else "")
+                logger.debug(
+                    "Guardian delta thread_id=%s turn_id=%s delta_count=%s text=%s",
+                    self._active_thread_id,
+                    self._active_turn_id,
+                    self._delta_count,
+                    self._last_delta_preview,
+                )
             return
         if method in ("turn/completed", "turn/failed", "turn/cancelled"):
             current_turn = self._extract_turn_id(payload)
             if self._active_turn_id and current_turn and current_turn != self._active_turn_id:
+                logger.debug(
+                    "Guardian ignoring terminal event method=%s active_turn_id=%s event_turn_id=%s",
+                    method,
+                    self._active_turn_id,
+                    current_turn,
+                )
                 return
+            logger.debug(
+                "Guardian terminal event method=%s thread_id=%s turn_id=%s delta_count=%s",
+                method,
+                self._active_thread_id,
+                current_turn or self._active_turn_id,
+                self._delta_count,
+            )
             self._done_event.set()
 
     def _extract_text(self, payload: dict[str, Any]) -> str | None:

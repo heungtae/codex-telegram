@@ -2,7 +2,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 
 REVIEWER_MAX_ATTEMPT_CHOICES = [1, 2, 3, 4, 5]
-REVIEWER_TIMEOUT_CHOICES = [3, 8, 20]
+REVIEWER_TIMEOUT_CHOICES = [3, 8, 20, 60]
 REVIEWER_RECENT_TURN_PAIR_CHOICES = [1, 2, 3, 5]
 
 
