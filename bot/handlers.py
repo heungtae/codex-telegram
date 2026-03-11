@@ -18,6 +18,7 @@ from models import state
 from utils.single_instance import find_local_conflict_candidates
 from utils.config import get_reviewer_settings
 from utils.local_command import run_bang_command
+from utils.workspace_review import capture_git_status_snapshot
 
 logger = logging.getLogger("codex-telegram.bot")
 _last_conflict_log_at = 0.0
@@ -122,6 +123,14 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=interrupt_keyboard(),
         )
         return
+    if state_user.validation_session is not None:
+        await send_reply(
+            update,
+            "Reviewer is still processing the previous result. Wait for it to finish before sending a new request.",
+            user_id,
+            reply_markup=interrupt_keyboard(),
+        )
+        return
     
     if not text:
         return
@@ -131,12 +140,16 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         reviewer_settings = get_reviewer_settings()
         reviewer_enabled = bool(reviewer_settings.get("enabled", False))
+        workspace_path = state_user.selected_project_path or ""
         if reviewer_enabled and state_user.active_thread_id:
+            workspace_status_before = await capture_git_status_snapshot(workspace_path)
             state_user.set_validation_session(
                 state_user.active_thread_id,
                 text,
                 int(reviewer_settings.get("max_attempts", 1)),
                 int(reviewer_settings.get("recent_turn_pairs", 3)),
+                workspace_path=workspace_path,
+                workspace_status_before=workspace_status_before,
             )
         else:
             state_user.clear_validation_session()

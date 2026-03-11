@@ -26,6 +26,24 @@ class ResultVerifierServiceTests(unittest.TestCase):
         self.assertIsNotNone(candidate)
         self.assertIn('"decision":"pass"', candidate)
 
+    def test_build_prompt_for_code_changes_includes_diff_context(self):
+        prompt = self.verifier._build_prompt(
+            {
+                "review_mode": "code_changes",
+                "user_request": "Reduce thread list to 10",
+                "candidate_output": "Updated the list limit.",
+                "recent_context": [{"role": "user", "text": "Make the thread list shorter."}],
+                "changed_files": ["web/static/app.jsx", "web/server.py"],
+                "git_status": " M web/static/app.jsx\n M web/server.py",
+                "diff_stat": "2 files changed, 2 insertions(+), 2 deletions(-)",
+                "diff_excerpt": "@@ -1 +1 @@",
+            }
+        )
+
+        self.assertIn("strict code-change reviewer", prompt)
+        self.assertIn("web/static/app.jsx", prompt)
+        self.assertIn("diff_excerpt", prompt)
+
 
 if __name__ == "__main__":
     unittest.main()

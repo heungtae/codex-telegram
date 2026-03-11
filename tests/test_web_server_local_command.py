@@ -80,6 +80,27 @@ class WebServerLocalCommandTests(unittest.TestCase):
             recent_turn_pairs=2,
         )
 
+    def test_chat_messages_rejects_when_reviewer_is_still_processing(self):
+        app = create_web_app()
+        endpoint = next(
+            route.endpoint
+            for route in app.routes
+            if getattr(route, "path", None) == "/api/chat/messages"
+        )
+        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+        state_user = user_manager.get(self.session.user_id)
+        state_user.active_thread_id = "thread-1"
+        state_user.set_validation_session("thread-1", "first", 1, 3)
+
+        with self.assertRaises(Exception) as ctx:
+            asyncio.run(endpoint({"text": "second"}, request))
+
+        self.assertEqual(409, getattr(ctx.exception, "status_code", None))
+        self.assertEqual(
+            "reviewer is still processing the previous result",
+            getattr(ctx.exception, "detail", None),
+        )
+
     def test_session_summary_exposes_agent_capabilities(self):
         app = create_web_app()
         endpoint = next(

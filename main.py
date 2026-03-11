@@ -24,6 +24,7 @@ from utils.single_instance import (
     terminate_pid,
     token_lock_key,
 )
+from utils.workspace_review import collect_workspace_change_review
 from codex import CodexClient, CommandRouter
 from codex.approval_guardian import ApprovalGuardianService, GuardianDecision
 from codex.result_verifier import ResultVerifierService, VerifierDecision
@@ -375,37 +376,36 @@ async def post_init(app: Application | None):
         except Exception:
             logger.exception("Failed to send validation result to Telegram user_id=%s", user_id)
 
-    async def _publish_validation_result(
+    async def _publish_turn_event(
+        user_id: int,
+        event_type: str,
+        thread_id: str | None,
+        turn_id: str | None,
+        text: str = "",
+        params: dict[str, Any] | None = None,
+    ):
+        await event_hub.publish_event(
+            user_id,
+            {
+                "type": event_type,
+                "thread_id": thread_id,
+                "turn_id": turn_id,
+                "text": text,
+                "params": params or {},
+            },
+        )
+
+    async def _publish_validation_note(
         user_id: int,
         thread_id: str | None,
         turn_id: str | None,
-        text: str,
-        note: str = "",
+        note: str,
     ):
-        final_text = text.strip()
-        if note.strip():
-            final_text = f"{final_text}\n\n{note.strip()}" if final_text else note.strip()
-        await event_hub.publish_event(
-            user_id,
-            {
-                "type": "turn_delta",
-                "thread_id": thread_id,
-                "turn_id": turn_id,
-                "text": final_text,
-                "params": {},
-            },
-        )
-        await event_hub.publish_event(
-            user_id,
-            {
-                "type": "turn_completed",
-                "thread_id": thread_id,
-                "turn_id": turn_id,
-                "text": "",
-                "params": {},
-            },
-        )
-        await _send_telegram_message(user_id, final_text, thread_id)
+        message = note.strip()
+        if not message:
+            return
+        await _publish_system_message(user_id, thread_id, turn_id, message)
+        await _send_telegram_message(user_id, message, thread_id)
 
     async def _publish_validation_failure(
         user_id: int,
@@ -477,6 +477,74 @@ async def post_init(app: Application | None):
             f"Missing requirements:\n{missing or '(none)'}\n"
         )
 
+    async def _request_reviewer_retry(
+        user_id: int,
+        thread_id: str,
+        turn_id: str | None,
+        state_user,
+        session,
+        recent_context: list[dict[str, str]],
+        candidate: str,
+        decision: VerifierDecision,
+    ) -> bool:
+        if session.attempt_count >= session.max_attempts:
+            state_user.clear_validation_session()
+            await _publish_validation_note(
+                user_id,
+                thread_id,
+                turn_id,
+                "Reviewer reached max attempts.\nKeeping the latest generated result.",
+            )
+            return False
+
+        session.attempt_count += 1
+        session.last_feedback = decision.feedback or decision.summary
+        session.reset_buffer()
+        await _publish_system_message(
+            user_id,
+            thread_id,
+            turn_id,
+            (
+                "Reviewer requested retry.\n"
+                f"Next attempt: {session.attempt_count}/{session.max_attempts}\n"
+                f"Reason: {_clip_text(decision.summary or decision.feedback or '(none)', 500)}"
+            ),
+        )
+        retry_prompt = _build_retry_prompt(
+            session.original_input,
+            recent_context,
+            candidate,
+            decision,
+            session.attempt_count,
+            session.max_attempts,
+        )
+        try:
+            retry_result = await state.codex_client.call(
+                "turn/start",
+                {
+                    "threadId": thread_id,
+                    "input": [{"type": "text", "text": retry_prompt}],
+                },
+            )
+        except Exception as exc:
+            state_user.clear_validation_session()
+            await _publish_validation_note(
+                user_id,
+                thread_id,
+                turn_id,
+                f"Reviewer requested a retry but restart failed.\nReason: {exc}",
+            )
+            return False
+
+        new_turn = retry_result.get("turn", {}) if isinstance(retry_result, dict) else {}
+        new_turn_id = new_turn.get("id") if isinstance(new_turn, dict) else None
+        if isinstance(new_turn_id, str) and new_turn_id:
+            session.set_turn(new_turn_id)
+            state_user.set_turn(new_turn_id)
+            return True
+        session.set_turn(None)
+        return True
+
     async def _handle_validation_completion(user_id: int, thread_id: str, turn_id: str | None):
         state_user = user_manager.get(user_id)
         session = state_user.validation_session
@@ -492,16 +560,18 @@ async def post_init(app: Application | None):
                 session.append_text(candidate)
 
         if not candidate:
-            state_user.clear_turn()
+            state_user.set_turn(None)
             state_user.clear_validation_session()
-            await _publish_validation_failure(
+            await _publish_validation_note(
                 user_id,
                 thread_id,
                 turn_id,
-                "Turn completed without a usable assistant result.",
+                "Reviewer skipped.\nReason: no generated assistant result to review.",
             )
             return
 
+        state_user.set_turn(None)
+        session.set_turn(None)
         reviewer_settings = get_reviewer_settings()
         timeout_seconds = int(reviewer_settings.get("timeout_seconds", 8))
         recent_context = await _read_recent_context(thread_id, session.recent_turn_pairs)
@@ -523,6 +593,12 @@ async def post_init(app: Application | None):
             reviewer_request_message,
         )
         await _publish_system_message(user_id, thread_id, turn_id, reviewer_request_message)
+        await _publish_system_message(
+            user_id,
+            thread_id,
+            turn_id,
+            f"Reviewer is checking generated result.\nAttempt: {session.attempt_count}/{session.max_attempts}",
+        )
 
         try:
             decision = await state.result_verifier.verify(
@@ -555,14 +631,12 @@ async def post_init(app: Application | None):
                 turn_id,
                 f"Reviewer unavailable.\nReason: {verifier_error}",
             )
-            state_user.clear_turn()
             state_user.clear_validation_session()
-            await _publish_validation_result(
+            await _publish_validation_note(
                 user_id,
                 thread_id,
                 turn_id,
-                candidate,
-                note=f"Reviewer unavailable; returning current result. ({verifier_error})",
+                f"Keeping the current generated result.\nReason: {verifier_error}",
             )
             return
 
@@ -582,62 +656,121 @@ async def post_init(app: Application | None):
         )
         await _publish_system_message(user_id, thread_id, turn_id, reviewer_result_message)
 
-        if decision.decision == "pass":
-            state_user.clear_turn()
-            state_user.clear_validation_session()
-            await _publish_validation_result(user_id, thread_id, turn_id, candidate)
-            return
-
-        if session.attempt_count >= session.max_attempts:
-            state_user.clear_turn()
-            state_user.clear_validation_session()
-            await _publish_validation_result(
+        if decision.decision != "pass":
+            await _request_reviewer_retry(
                 user_id,
                 thread_id,
                 turn_id,
+                state_user,
+                session,
+                recent_context,
                 candidate,
-                note="Reviewer reached max attempts; returning the last result.",
+                decision,
             )
             return
 
-        session.attempt_count += 1
-        session.last_feedback = decision.feedback or decision.summary
-        session.reset_buffer()
-        retry_prompt = _build_retry_prompt(
-            session.original_input,
-            recent_context,
-            candidate,
-            decision,
-            session.attempt_count,
-            session.max_attempts,
+        code_change_review = await collect_workspace_change_review(
+            session.workspace_path,
+            session.workspace_status_before,
         )
-        try:
-            retry_result = await state.codex_client.call(
-                "turn/start",
-                {
-                    "threadId": thread_id,
-                    "input": [{"type": "text", "text": retry_prompt}],
-                },
-            )
-        except Exception as exc:
-            state_user.clear_turn()
+        if code_change_review is None:
             state_user.clear_validation_session()
-            await _publish_validation_result(
+            return
+
+        code_reviewer_request_message = (
+            "Reviewer code-change request\n"
+            f"Attempt: {session.attempt_count}/{session.max_attempts}\n"
+            f"Changed files:\n{_clip_text(chr(10).join(code_change_review.changed_files) or '(none)', 800)}\n\n"
+            f"Git status delta:\n{_clip_text(code_change_review.git_status or '(none)', 900)}\n\n"
+            f"Diff stat:\n{_clip_text(code_change_review.diff_stat or '(none)', 900)}"
+        )
+        logger.info(
+            "Reviewer code-change request thread_id=%s turn_id=%s files=%s",
+            thread_id,
+            turn_id,
+            code_change_review.changed_files,
+        )
+        await _publish_system_message(user_id, thread_id, turn_id, code_reviewer_request_message)
+        await _publish_system_message(
+            user_id,
+            thread_id,
+            turn_id,
+            "Reviewer is checking workspace code changes.",
+        )
+
+        try:
+            code_decision = await state.result_verifier.verify(
+                {
+                    "review_mode": "code_changes",
+                    "user_request": session.original_input,
+                    "recent_context": recent_context,
+                    "candidate_output": candidate,
+                    "changed_files": code_change_review.changed_files,
+                    "git_status": code_change_review.git_status,
+                    "diff_stat": code_change_review.diff_stat,
+                    "diff_excerpt": code_change_review.diff_excerpt,
+                },
+                timeout_seconds=max(1, timeout_seconds),
+            )
+        except asyncio.TimeoutError:
+            code_decision = None
+            code_verifier_error = f"Reviewer code-change timeout after {timeout_seconds}s"
+        except Exception as exc:
+            code_decision = None
+            code_verifier_error = f"Reviewer code-change check failed: {exc}"
+        else:
+            code_verifier_error = ""
+
+        if code_decision is None:
+            logger.info(
+                "Reviewer code-change unavailable thread_id=%s turn_id=%s reason=%s",
+                thread_id,
+                turn_id,
+                code_verifier_error,
+            )
+            await _publish_system_message(
                 user_id,
                 thread_id,
                 turn_id,
-                candidate,
-                note=f"Reviewer requested a retry but restart failed: {exc}",
+                f"Reviewer code-change check unavailable.\nReason: {code_verifier_error}",
+            )
+            state_user.clear_validation_session()
+            await _publish_validation_note(
+                user_id,
+                thread_id,
+                turn_id,
+                f"Keeping the current generated result.\nReason: {code_verifier_error}",
             )
             return
 
-        new_turn = retry_result.get("turn", {}) if isinstance(retry_result, dict) else {}
-        new_turn_id = new_turn.get("id") if isinstance(new_turn, dict) else None
-        if isinstance(new_turn_id, str) and new_turn_id:
-            session.set_turn(new_turn_id)
-            state_user.set_turn(new_turn_id)
-        else:
-            session.set_turn(None)
+        code_reviewer_result_message = (
+            "Reviewer code-change result\n"
+            f"Decision: {code_decision.decision}\n"
+            f"Summary: {code_decision.summary or '(none)'}\n"
+            f"Feedback: {_clip_text(code_decision.feedback or '(none)', 900)}"
+        )
+        logger.info(
+            "Reviewer code-change result thread_id=%s turn_id=%s decision=%s summary=%s",
+            thread_id,
+            turn_id,
+            code_decision.decision,
+            code_decision.summary,
+        )
+        await _publish_system_message(user_id, thread_id, turn_id, code_reviewer_result_message)
+        if code_decision.decision != "pass":
+            await _request_reviewer_retry(
+                user_id,
+                thread_id,
+                turn_id,
+                state_user,
+                session,
+                recent_context,
+                candidate,
+                code_decision,
+            )
+            return
+
+        state_user.clear_validation_session()
 
     async def forward_event(method: str, params: dict | None):
         thread_id = _extract_thread_id(method, params)
@@ -669,20 +802,34 @@ async def post_init(app: Application | None):
                 text = _extract_text(params)
                 if text:
                     validation_session.append_text(text)
-                return
             if method == "turn/started":
-                return
+                pass
             if method == "turn/completed":
+                await _publish_turn_event(
+                    owner_id,
+                    "turn_completed",
+                    thread_id or validation_session.thread_id,
+                    turn_id,
+                    "",
+                    params or {},
+                )
                 await _handle_validation_completion(owner_id, thread_id or validation_session.thread_id, turn_id)
                 return
             if method in ("turn/failed", "turn/cancelled"):
-                state_user.clear_turn()
-                state_user.clear_validation_session()
-                await _publish_validation_failure(
+                await _publish_turn_event(
                     owner_id,
+                    "turn_failed",
                     thread_id or validation_session.thread_id,
                     turn_id,
                     f"Turn {method.split('/')[-1]}.",
+                    params or {},
+                )
+                state_user.clear_turn()
+                state_user.clear_validation_session()
+                await _send_telegram_message(
+                    owner_id,
+                    f"Turn {method.split('/')[-1]}.",
+                    thread_id or validation_session.thread_id,
                 )
                 return
 

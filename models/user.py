@@ -8,6 +8,8 @@ class ValidationSession:
     original_input: str
     max_attempts: int
     recent_turn_pairs: int
+    workspace_path: str = ""
+    workspace_status_before: str = ""
     attempt_count: int = 1
     current_turn_id: str | None = None
     buffered_chunks: list[str] = field(default_factory=list)
@@ -67,12 +69,22 @@ class UserState:
     def clear_turn(self):
         self.active_turn_id = None
 
-    def set_validation_session(self, thread_id: str, original_input: str, max_attempts: int, recent_turn_pairs: int):
+    def set_validation_session(
+        self,
+        thread_id: str,
+        original_input: str,
+        max_attempts: int,
+        recent_turn_pairs: int,
+        workspace_path: str = "",
+        workspace_status_before: str = "",
+    ):
         self.validation_session = ValidationSession(
             thread_id=thread_id,
             original_input=original_input,
             max_attempts=max_attempts,
             recent_turn_pairs=recent_turn_pairs,
+            workspace_path=workspace_path,
+            workspace_status_before=workspace_status_before,
         )
 
     def clear_validation_session(self):

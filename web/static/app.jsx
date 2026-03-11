@@ -249,7 +249,7 @@ function App() {
   };
 
   const loadThreads = async () => {
-    const summaries = await api("/api/threads/summaries?limit=30&offset=0");
+    const summaries = await api("/api/threads/summaries?limit=20&offset=0");
     const items = Array.isArray(summaries.items) ? summaries.items : [];
     setThreadItems(items);
     if (!activeThread && items.length > 0) {
@@ -362,6 +362,11 @@ function App() {
   const openAgentSettings = async (agentName) => {
     const def = AGENT_CONFIG_DEFS[agentName];
     if (!def) {
+      return;
+    }
+    if (activeAgentSettings === agentName) {
+      setActiveAgentSettings("");
+      setAgentConfigError("");
       return;
     }
     setActiveAgentSettings(agentName);
@@ -523,15 +528,20 @@ function App() {
         return copy;
       });
     });
+    es.addEventListener("turn_started", () => {
+      setStatus("running");
+    });
     es.addEventListener("turn_completed", () => {
       setStatus("idle");
       setMessages((prev) => prev.map((m) => ({ ...m, streaming: false })));
       loadThreads().catch(() => {});
       loadSessionSummary().catch(() => {});
     });
-    es.addEventListener("turn_failed", () => {
+    es.addEventListener("turn_failed", (ev) => {
+      const data = JSON.parse(ev.data);
+      const text = data.text || "Turn failed.";
       setStatus("idle");
-      setMessages((prev) => [...prev, { role: "system", text: "Turn failed." }]);
+      setMessages((prev) => [...prev, { role: "system", text, streaming: false }]);
       loadSessionSummary().catch(() => {});
     });
     es.addEventListener("approval_required", (ev) => {

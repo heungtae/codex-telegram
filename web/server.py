@@ -24,6 +24,7 @@ from utils.config import (
     save_project_profile,
 )
 from utils.local_command import resolve_command_cwd, run_bang_command
+from utils.workspace_review import capture_git_status_snapshot
 from web.runtime import event_hub, session_manager
 
 logger = logging.getLogger("codex-telegram.web")
@@ -531,7 +532,7 @@ def create_web_app() -> FastAPI:
         request: Request,
         archived: bool = False,
         offset: int = 0,
-        limit: int = 30,
+        limit: int = 20,
     ) -> dict[str, Any]:
         session = await _session_from_request(request)
         await _wait_for_codex()
@@ -684,15 +685,25 @@ def create_web_app() -> FastAPI:
 
         if state_user.active_turn_id:
             raise HTTPException(status_code=409, detail="a turn is already running")
+        if state_user.validation_session is not None:
+            raise HTTPException(status_code=409, detail="reviewer is still processing the previous result")
 
         reviewer_settings = get_reviewer_settings()
         reviewer_enabled = bool(reviewer_settings.get("enabled", False))
+        workspace_path = state_user.selected_project_path or ""
+        if not workspace_path and state.command_router is not None:
+            effective = state.command_router.projects.resolve_effective_project(session.user_id)
+            if isinstance(effective, dict) and isinstance(effective.get("path"), str):
+                workspace_path = effective["path"]
         if reviewer_enabled:
+            workspace_status_before = await capture_git_status_snapshot(workspace_path)
             state_user.set_validation_session(
                 thread_id,
                 text,
                 int(reviewer_settings.get("max_attempts", 1)),
                 int(reviewer_settings.get("recent_turn_pairs", 3)),
+                workspace_path=workspace_path,
+                workspace_status_before=workspace_status_before,
             )
         else:
             state_user.clear_validation_session()
