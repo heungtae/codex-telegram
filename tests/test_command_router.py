@@ -9,6 +9,7 @@ class FakeCodex:
     def __init__(self):
         self.calls: list[tuple[str, dict | None]] = []
         self.thread_list_data: list[dict] = []
+        self.thread_read_by_id: dict[str, dict] = {}
         self.feature_list_data: list[dict] = []
         self.mcp_server_status_data: list[dict] = []
         self.config_data: dict = {}
@@ -28,6 +29,11 @@ class FakeCodex:
             }
         if method == "thread/list":
             return {"data": self.thread_list_data}
+        if method == "thread/read":
+            thread_id = (params or {}).get("threadId")
+            if isinstance(thread_id, str):
+                return self.thread_read_by_id.get(thread_id, {})
+            return {}
         if method == "experimentalFeature/list":
             return {"data": self.feature_list_data}
         if method == "mcpServerStatus/list":
@@ -71,12 +77,18 @@ class CommandRouterTests(unittest.IsolatedAsyncioTestCase):
             {"id": "t-1", "createdAt": "2026-03-02T00:00:00Z", "title": "first"},
             {"id": "t-2", "createdAt": "2026-03-02T00:00:01Z", "title": "second"},
         ]
+        self.codex.thread_read_by_id = {
+            "t-1": {"thread": {"id": "t-1"}, "turns": [{"input": [{"type": "text", "text": "first request"}]}]},
+            "t-2": {"thread": {"id": "t-2"}, "turns": [{"input": [{"type": "text", "text": "second request"}]}]},
+        }
         user_manager.bind_thread_project("t-1", "default")
         result = await self.router.route("/threads", ["--by-profile"], 1)
         self.assertEqual("threads", result.kind)
         self.assertIn("Threads by profile:", result.text)
         self.assertIn("[profile: default", result.text)
         self.assertIn("[profile: unmapped]", result.text)
+        self.assertIn("first request", result.text)
+        self.assertIn("second request", result.text)
 
     async def test_threads_current_profile_filters_only_selected_profile_threads(self):
         self.codex.thread_list_data = [

@@ -87,6 +87,15 @@ def _thread_title(thread: dict[str, Any]) -> str:
     return "Untitled"
 
 
+def _clip_thread_label(text: str, limit: int = 72) -> str:
+    normalized = " ".join(str(text or "").split())
+    if not normalized:
+        return ""
+    if len(normalized) <= limit:
+        return normalized
+    return normalized[: limit - 3].rstrip() + "..."
+
+
 def _thread_turns(result: dict[str, Any], thread: dict[str, Any]) -> list[dict[str, Any]]:
     def to_turn_list(value: Any) -> list[dict[str, Any]]:
         if isinstance(value, list):
@@ -214,6 +223,21 @@ def _thread_turn_messages(turns: list[dict[str, Any]]) -> list[dict[str, str]]:
             if assistant_text:
                 add_message("assistant", assistant_text)
     return messages
+
+
+def _thread_user_request_excerpt(result: dict[str, Any], thread: dict[str, Any]) -> str:
+    turns = _thread_turns(result, thread)
+    messages = _thread_turn_messages(turns)
+    for message in messages:
+        if message.get("role") == "user":
+            text = message.get("text")
+            if isinstance(text, str) and text.strip():
+                return _clip_thread_label(text.strip())
+    for key in ("input", "userInput", "prompt"):
+        text = first_text(thread.get(key))
+        if text:
+            return _clip_thread_label(text)
+    return ""
 
 
 def _thread_profile_key(thread: dict[str, Any], current_profile_key: str) -> str | None:
@@ -542,10 +566,20 @@ def create_web_app() -> FastAPI:
             tid = thread.get("id")
             if not isinstance(tid, str) or not tid:
                 continue
+            title = ""
+            try:
+                detail = await state.codex_client.call("thread/read", {"threadId": tid, "includeTurns": True})
+            except Exception:
+                detail = {}
+            if isinstance(detail, dict):
+                detail_thread = detail.get("thread")
+                title = _thread_user_request_excerpt(detail, detail_thread if isinstance(detail_thread, dict) else thread)
+            if not title:
+                title = _clip_thread_label(_thread_title(thread))
             items.append(
                 {
                     "id": tid,
-                    "title": _thread_title(thread),
+                    "title": title,
                     "created_at": thread.get("createdAt") or thread.get("created_at") or "",
                     "active": tid == state_user.active_thread_id,
                 }

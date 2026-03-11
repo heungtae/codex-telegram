@@ -289,12 +289,20 @@ class WebServerLocalCommandTests(unittest.TestCase):
         user_manager.bind_thread_project("t-1", "default")
         user_manager.bind_thread_project("t-2", "other")
         state.codex_client.call = AsyncMock(
-            return_value={
-                "data": [
-                    {"id": "t-1", "title": "first", "createdAt": "2026-03-02T00:00:00Z"},
-                    {"id": "t-2", "title": "second", "createdAt": "2026-03-02T00:00:01Z"},
-                ]
-            }
+            side_effect=[
+                {
+                    "data": [
+                        {"id": "t-1", "title": "first", "createdAt": "2026-03-02T00:00:00Z"},
+                        {"id": "t-2", "title": "second", "createdAt": "2026-03-02T00:00:01Z"},
+                    ]
+                },
+                {
+                    "thread": {"id": "t-1"},
+                    "turns": [
+                        {"input": [{"type": "text", "text": "first user request"}]},
+                    ],
+                },
+            ]
         )
 
         body = asyncio.run(endpoint(request, archived=False, offset=0, limit=30))
@@ -303,7 +311,45 @@ class WebServerLocalCommandTests(unittest.TestCase):
             [
                 {
                     "id": "t-1",
-                    "title": "first",
+                    "title": "first user request",
+                    "created_at": "2026-03-02T00:00:00Z",
+                    "active": False,
+                }
+            ],
+            body["items"],
+        )
+
+    def test_thread_summaries_use_user_request_excerpt_as_title(self):
+        app = create_web_app()
+        endpoint = next(
+            route.endpoint
+            for route in app.routes
+            if getattr(route, "path", None) == "/api/threads/summaries"
+        )
+        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+        state.codex_client.call = AsyncMock(
+            side_effect=[
+                {
+                    "data": [
+                        {"id": "t-1", "title": "assistant summary", "createdAt": "2026-03-02T00:00:00Z"},
+                    ]
+                },
+                {
+                    "thread": {"id": "t-1"},
+                    "turns": [
+                        {"input": [{"type": "text", "text": "Please show only the user request in the thread list"}]},
+                    ],
+                },
+            ]
+        )
+
+        body = asyncio.run(endpoint(request, archived=False, offset=0, limit=30))
+
+        self.assertEqual(
+            [
+                {
+                    "id": "t-1",
+                    "title": "Please show only the user request in the thread list",
                     "created_at": "2026-03-02T00:00:00Z",
                     "active": False,
                 }

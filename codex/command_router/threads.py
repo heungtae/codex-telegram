@@ -11,6 +11,14 @@ class ThreadCommands:
     def __init__(self, ctx: RouterContext):
         self.ctx = ctx
 
+    def _clip_thread_label(self, text: str, limit: int = 120) -> str:
+        normalized = " ".join(str(text or "").split())
+        if not normalized:
+            return ""
+        if len(normalized) <= limit:
+            return normalized
+        return normalized[: limit - 3].rstrip() + "..."
+
     def _resolve_thread_arg(self, arg: str, user_id: int) -> tuple[str | None, CommandResult | None]:
         from models.user import user_manager
 
@@ -37,6 +45,33 @@ class ThreadCommands:
         if isinstance(value, str) and value.strip():
             return value.strip()
         return "Untitled"
+
+    def _thread_user_request_excerpt(self, result: dict[str, Any], thread: dict[str, Any]) -> str:
+        turns = self._extract_turns(result, thread)
+        for turn in turns:
+            text = (
+                first_text(turn.get("input"))
+                or first_text(turn.get("userInput"))
+                or first_text(turn.get("prompt"))
+            )
+            if text:
+                return self._clip_thread_label(text)
+            items = turn.get("items")
+            if isinstance(items, list):
+                for item in items:
+                    if not isinstance(item, dict):
+                        continue
+                    item_type = str(item.get("type") or "").strip().lower().replace("_", "").replace("-", "")
+                    if item_type not in {"usermessage", "user"}:
+                        continue
+                    item_text = first_text(item)
+                    if item_text:
+                        return self._clip_thread_label(item_text)
+        for key in ("input", "userInput", "prompt"):
+            text = first_text(thread.get(key))
+            if text:
+                return self._clip_thread_label(text)
+        return ""
 
     def _extract_turns(self, result: dict[str, Any], thread: dict[str, Any]) -> list[dict[str, Any]]:
         def to_turn_list(value: Any) -> list[dict[str, Any]]:
@@ -296,11 +331,23 @@ class ThreadCommands:
 
         rows: list[tuple[str | None, str]] = []
         for idx, t in enumerate(threads, 1):
-            name = self._thread_conversation(t)
             tid = t.get("id", "")
             created_at = t.get("createdAt") or t.get("created_at") or "-"
             if isinstance(tid, str) and tid:
                 listed_ids.append(tid)
+            conversation_name = ""
+            if isinstance(tid, str) and tid:
+                try:
+                    detail = await self.ctx.codex.call("thread/read", {"threadId": tid, "includeTurns": True})
+                except Exception:
+                    detail = {}
+                if isinstance(detail, dict):
+                    detail_thread = detail.get("thread")
+                    conversation_name = self._thread_user_request_excerpt(
+                        detail,
+                        detail_thread if isinstance(detail_thread, dict) else (t if isinstance(t, dict) else {}),
+                    )
+            name = conversation_name or self._clip_thread_label(self._thread_conversation(t))
             row_no = (offset or 0) + idx
             status = " [active]" if state.active_thread_id and tid == state.active_thread_id else ""
             display_id = tid if show_full_id else (f"{tid[:12]}..." if tid else "unknown")
