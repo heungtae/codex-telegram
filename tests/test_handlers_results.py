@@ -183,6 +183,26 @@ class HandlerResultTests(unittest.IsolatedAsyncioTestCase):
         self.mock_router.route.assert_not_called()
         self.assertEqual("Usage: !<linux command>", mock_send_reply.await_args.args[1])
 
+    async def test_message_handler_reviewer_pending_does_not_offer_interrupt(self):
+        user = user_manager.get(1)
+        user.active_thread_id = "thread-1"
+        user.set_validation_session("thread-1", "first", 1, 3)
+        update = SimpleNamespace(
+            effective_user=SimpleNamespace(id=1),
+            message=SimpleNamespace(text="second"),
+        )
+
+        with patch("bot.handlers.send_reply", new=AsyncMock()) as mock_send_reply, \
+             patch("bot.handlers.get", side_effect=lambda key, default=None: default), \
+             patch("bot.handlers.wait_for_codex", new=AsyncMock()):
+            await handlers.message_handler(update, context=SimpleNamespace())
+
+        self.assertEqual(
+            "Reviewer is still processing the previous result. Wait for it to finish before sending a new request.",
+            mock_send_reply.await_args.args[1],
+        )
+        self.assertNotIn("reply_markup", mock_send_reply.await_args.kwargs)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -18,6 +18,9 @@ class ValidationSession:
     def set_turn(self, turn_id: str | None):
         self.current_turn_id = turn_id
 
+    def update_workspace_status_before(self, status_text: str):
+        self.workspace_status_before = status_text or ""
+
     def reset_buffer(self):
         self.buffered_chunks = []
 

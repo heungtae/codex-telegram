@@ -265,6 +265,7 @@ function App() {
   const loadSessionSummary = async () => {
     const summary = await api("/api/session/summary");
     setSessionSummary(summary);
+    setStatus(summary?.active_turn_id || summary?.reviewer_pending ? "running" : "idle");
     if (summary && typeof summary.active_thread_id === "string" && summary.active_thread_id) {
       setActiveThread(summary.active_thread_id);
     }
@@ -426,13 +427,18 @@ function App() {
     }
     setMessages((prev) => [...prev, { role: "user", text }]);
     setStatus("running");
-    const result = await api("/api/chat/messages", {
-      method: "POST",
-      body: JSON.stringify({ text, thread_id: activeThread || undefined }),
-    });
-    if (result.local_command) {
-      setMessages((prev) => [...prev, { role: "assistant", text: result.output || "" }]);
-      setStatus("idle");
+    try {
+      const result = await api("/api/chat/messages", {
+        method: "POST",
+        body: JSON.stringify({ text, thread_id: activeThread || undefined }),
+      });
+      if (result.local_command) {
+        setMessages((prev) => [...prev, { role: "assistant", text: result.output || "" }]);
+        setStatus("idle");
+        loadSessionSummary().catch(() => {});
+      }
+    } catch (err) {
+      setMessages((prev) => [...prev, { role: "system", text: err.message || "Request failed.", streaming: false }]);
       loadSessionSummary().catch(() => {});
     }
   };
@@ -532,7 +538,6 @@ function App() {
       setStatus("running");
     });
     es.addEventListener("turn_completed", () => {
-      setStatus("idle");
       setMessages((prev) => prev.map((m) => ({ ...m, streaming: false })));
       loadThreads().catch(() => {});
       loadSessionSummary().catch(() => {});
@@ -562,6 +567,12 @@ function App() {
         return;
       }
       setMessages((prev) => [...prev, { role: "system", text, streaming: false }]);
+      loadSessionSummary().catch(() => {});
+    });
+    es.addEventListener("reviewer_state", (ev) => {
+      const data = JSON.parse(ev.data);
+      setStatus(data?.active ? "running" : "idle");
+      loadSessionSummary().catch(() => {});
     });
     es.onerror = () => {
       setStatus("disconnected");
@@ -668,6 +679,7 @@ function App() {
   const settingsBusy =
     (!!activeAgentSettings && agentConfigLoading === activeAgentSettings) ||
     (!!activeAgentSettings && agentConfigSaving === activeAgentSettings);
+  const interactionBusy = status === "running" || !!sessionSummary?.reviewer_pending;
 
   return (
     <div className="app">
@@ -785,7 +797,7 @@ function App() {
                 key={item.id}
                 className="thread-item"
                 onClick={() => viewThread(item.id)}
-                disabled={status === "running"}
+                disabled={interactionBusy}
               >
                 <div className="thread-title">{item.title || "Untitled"}</div>
                 <div className="thread-sub">{item.id}</div>
@@ -810,8 +822,8 @@ function App() {
             <span>{me.username}</span>
           </div>
           <div>
-            <span className={`status-pill ${status === "running" ? "running" : "idle"}`}>
-              {status === "running" ? "Running" : "Ready"}
+            <span className={`status-pill ${interactionBusy ? "running" : "idle"}`}>
+              {interactionBusy ? "Running" : "Ready"}
             </span>
           </div>
         </div>
@@ -890,8 +902,12 @@ function App() {
                 ref={inputRef}
                 rows={1}
                 value={input}
+                disabled={interactionBusy}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
+                  if (interactionBusy) {
+                    return;
+                  }
                   if (e.isComposing) {
                     return;
                   }
@@ -950,7 +966,7 @@ function App() {
                 <SendIcon />
               </button>
             )}
-            <button className="composer-action composer-new-chat" onClick={startThread} aria-label="New chat" title="New chat">
+            <button className="composer-action composer-new-chat" onClick={startThread} aria-label="New chat" title="New chat" disabled={interactionBusy}>
               <NewChatIcon />
             </button>
           </div>

@@ -101,6 +101,26 @@ class WebServerLocalCommandTests(unittest.TestCase):
             getattr(ctx.exception, "detail", None),
         )
 
+    def test_chat_messages_clears_reviewer_session_when_turn_start_fails(self):
+        app = create_web_app()
+        endpoint = next(
+            route.endpoint
+            for route in app.routes
+            if getattr(route, "path", None) == "/api/chat/messages"
+        )
+        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+        state_user = user_manager.get(self.session.user_id)
+        state_user.active_thread_id = "thread-1"
+        state.codex_client.call = AsyncMock(side_effect=RuntimeError("turn start failed"))
+
+        with patch("web.server.get_reviewer_settings", return_value={"enabled": True, "max_attempts": 3, "recent_turn_pairs": 3}), patch(
+            "web.server.capture_git_status_snapshot",
+            new=AsyncMock(return_value=""),
+        ), self.assertRaises(RuntimeError):
+            asyncio.run(endpoint({"text": "second"}, request))
+
+        self.assertIsNone(state_user.validation_session)
+
     def test_session_summary_exposes_agent_capabilities(self):
         app = create_web_app()
         endpoint = next(
@@ -112,6 +132,7 @@ class WebServerLocalCommandTests(unittest.TestCase):
         state_user = user_manager.get(self.session.user_id)
         state_user.selected_project_path = "/tmp/web-workspace"
         state_user.selected_project_key = "default"
+        state_user.clear_validation_session()
 
         with patch("web.server.get_guardian_settings", return_value={"enabled": True}), patch(
             "web.server.get_reviewer_settings", return_value={"enabled": False}
@@ -119,6 +140,7 @@ class WebServerLocalCommandTests(unittest.TestCase):
             body = asyncio.run(endpoint(request))
 
         self.assertEqual("/tmp/web-workspace", body["workspace"])
+        self.assertFalse(body["reviewer_pending"])
         self.assertEqual(
             [
                 {"name": "default", "enabled": True, "toggleable": False, "configurable": False},
@@ -127,6 +149,24 @@ class WebServerLocalCommandTests(unittest.TestCase):
             ],
             body["agents"],
         )
+
+    def test_session_summary_marks_reviewer_pending(self):
+        app = create_web_app()
+        endpoint = next(
+            route.endpoint
+            for route in app.routes
+            if getattr(route, "path", None) == "/api/session/summary"
+        )
+        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+        state_user = user_manager.get(self.session.user_id)
+        state_user.set_validation_session("thread-1", "hello", 1, 3)
+
+        with patch("web.server.get_guardian_settings", return_value={"enabled": False}), patch(
+            "web.server.get_reviewer_settings", return_value={"enabled": True}
+        ):
+            body = asyncio.run(endpoint(request))
+
+        self.assertTrue(body["reviewer_pending"])
 
     def test_thread_read_returns_chat_messages(self):
         app = create_web_app()

@@ -24,7 +24,7 @@ from utils.single_instance import (
     terminate_pid,
     token_lock_key,
 )
-from utils.workspace_review import collect_workspace_change_review
+from utils.workspace_review import capture_git_status_snapshot, collect_workspace_change_review
 from codex import CodexClient, CommandRouter
 from codex.approval_guardian import ApprovalGuardianService, GuardianDecision
 from codex.result_verifier import ResultVerifierService, VerifierDecision
@@ -43,6 +43,32 @@ from web.runtime import event_hub
 logger = setup("codex-telegram")
 _web_server = None
 _web_server_thread = None
+_validation_tasks: set[asyncio.Task[Any]] = set()
+
+
+def _track_validation_task(task: asyncio.Task[Any], description: str) -> asyncio.Task[Any]:
+    _validation_tasks.add(task)
+
+    def _on_done(done_task: asyncio.Task[Any]) -> None:
+        _validation_tasks.discard(done_task)
+        try:
+            done_task.result()
+        except asyncio.CancelledError:
+            logger.debug("Cancelled background task description=%s", description)
+        except Exception:
+            logger.exception("Background task failed description=%s", description)
+
+    task.add_done_callback(_on_done)
+    return task
+
+
+async def _cancel_validation_tasks() -> None:
+    tasks = list(_validation_tasks)
+    if not tasks:
+        return
+    for task in tasks:
+        task.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
 
 
 class WebServerThread:
@@ -291,78 +317,6 @@ async def post_init(app: Application | None):
             return 20
         return 10
 
-    def _first_text(value: Any) -> str | None:
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-        if isinstance(value, dict):
-            for key in ("text", "message", "delta", "summary", "preview", "content"):
-                found = _first_text(value.get(key))
-                if found:
-                    return found
-            return None
-        if isinstance(value, list):
-            for item in value:
-                found = _first_text(item)
-                if found:
-                    return found
-        return None
-
-    def _guess_role(turn: dict[str, Any]) -> str:
-        candidates = [
-            turn.get("role"),
-            turn.get("author"),
-            turn.get("source"),
-            turn.get("type"),
-            (turn.get("status") or {}).get("type") if isinstance(turn.get("status"), dict) else None,
-        ]
-        for candidate in candidates:
-            raw = str(candidate or "").strip().lower()
-            if raw in {"user", "human"}:
-                return "user"
-            if raw in {"assistant", "model", "agent"}:
-                return "assistant"
-        return "assistant"
-
-    async def _read_recent_context(thread_id: str, recent_turn_pairs: int) -> list[dict[str, str]]:
-        if state.codex_client is None:
-            return []
-        try:
-            result = await state.codex_client.call("thread/read", {"threadId": thread_id, "includeTurns": True})
-        except Exception:
-            return []
-
-        turns_raw = result.get("turns")
-        thread = result.get("thread", {})
-        turns: list[dict[str, Any]] = [t for t in turns_raw if isinstance(t, dict)] if isinstance(turns_raw, list) else []
-        thread_turns = thread.get("turns")
-        if isinstance(thread_turns, list):
-            turns.extend([t for t in thread_turns if isinstance(t, dict)])
-
-        extracted: list[dict[str, str]] = []
-        for turn in turns:
-            text = _first_text(turn)
-            if not text:
-                items = turn.get("items")
-                if isinstance(items, list):
-                    for item in items:
-                        if isinstance(item, dict):
-                            text = _first_text(item)
-                            if text:
-                                break
-            if not text:
-                continue
-            extracted.append({"role": _guess_role(turn), "text": text})
-        limit = max(1, recent_turn_pairs) * 2
-        return extracted[-limit:]
-
-    async def _read_latest_turn_text(thread_id: str) -> str:
-        context = await _read_recent_context(thread_id, 1)
-        for entry in reversed(context):
-            text = entry.get("text", "").strip()
-            if text:
-                return text
-        return ""
-
     async def _send_telegram_message(user_id: int, text: str, thread_id: str | None):
         if user_id <= 0 or app is None or not text.strip():
             return
@@ -452,28 +406,48 @@ async def post_init(app: Application | None):
             },
         )
 
+    async def _publish_reviewer_state(
+        user_id: int | None,
+        thread_id: str | None,
+        turn_id: str | None,
+        active: bool,
+    ):
+        if user_id is None:
+            return
+        await event_hub.publish_event(
+            user_id,
+            {
+                "type": "reviewer_state",
+                "thread_id": thread_id,
+                "turn_id": turn_id,
+                "active": active,
+            },
+        )
+
+    async def _refresh_validation_workspace_snapshot(session) -> None:
+        if session is None:
+            return
+        session.update_workspace_status_before(
+            await capture_git_status_snapshot(session.workspace_path)
+        )
+
     def _build_retry_prompt(
         original_input: str,
-        recent_context: list[dict[str, str]],
-        candidate_output: str,
         decision: VerifierDecision,
         attempt_number: int,
         max_attempts: int,
     ) -> str:
-        context_lines = [f"- {row.get('role', 'unknown')}: {row.get('text', '')}" for row in recent_context if row.get("text")]
-        context_text = "\n".join(context_lines) if context_lines else "(none)"
         missing = ""
         if decision.missing_requirements:
             missing = "\n".join(f"- {item}" for item in decision.missing_requirements)
         return (
-            "Revise your previous answer to satisfy the user's request.\n"
+            "Revise your implementation to satisfy the user's request.\n"
+            "Focus on the actual workspace changes.\n"
             "Do not mention the reviewer, validation, or internal retry process.\n"
             f"Attempt: {attempt_number}/{max_attempts}\n\n"
             f"Original user request:\n{original_input}\n\n"
-            f"Recent conversation context:\n{context_text}\n\n"
-            f"Previous answer to revise:\n{candidate_output}\n\n"
-            f"Reviewer summary:\n{decision.summary or '(none)'}\n\n"
-            f"Required fixes:\n{decision.feedback or '(none)'}\n\n"
+            f"Code review summary:\n{decision.summary or '(none)'}\n\n"
+            f"Required code changes:\n{decision.feedback or '(none)'}\n\n"
             f"Missing requirements:\n{missing or '(none)'}\n"
         )
 
@@ -483,11 +457,10 @@ async def post_init(app: Application | None):
         turn_id: str | None,
         state_user,
         session,
-        recent_context: list[dict[str, str]],
-        candidate: str,
         decision: VerifierDecision,
     ) -> bool:
         if session.attempt_count >= session.max_attempts:
+            await _publish_reviewer_state(user_id, thread_id, turn_id, False)
             state_user.clear_validation_session()
             await _publish_validation_note(
                 user_id,
@@ -512,13 +485,12 @@ async def post_init(app: Application | None):
         )
         retry_prompt = _build_retry_prompt(
             session.original_input,
-            recent_context,
-            candidate,
             decision,
             session.attempt_count,
             session.max_attempts,
         )
         try:
+            await _refresh_validation_workspace_snapshot(session)
             retry_result = await state.codex_client.call(
                 "turn/start",
                 {
@@ -527,6 +499,7 @@ async def post_init(app: Application | None):
                 },
             )
         except Exception as exc:
+            await _publish_reviewer_state(user_id, thread_id, turn_id, False)
             state_user.clear_validation_session()
             await _publish_validation_note(
                 user_id,
@@ -551,129 +524,20 @@ async def post_init(app: Application | None):
         if session is None or session.thread_id != thread_id:
             state_user.clear_turn()
             return
-
-        candidate = session.current_candidate()
-        if not candidate:
-            candidate = await _read_latest_turn_text(thread_id)
-            if candidate:
-                session.reset_buffer()
-                session.append_text(candidate)
-
-        if not candidate:
-            state_user.set_turn(None)
-            state_user.clear_validation_session()
-            await _publish_validation_note(
-                user_id,
-                thread_id,
-                turn_id,
-                "Reviewer skipped.\nReason: no generated assistant result to review.",
-            )
-            return
-
+        await _publish_reviewer_state(user_id, thread_id, turn_id, True)
         state_user.set_turn(None)
         session.set_turn(None)
         reviewer_settings = get_reviewer_settings()
         timeout_seconds = int(reviewer_settings.get("timeout_seconds", 8))
-        recent_context = await _read_recent_context(thread_id, session.recent_turn_pairs)
         if state.result_verifier is None:
             state.result_verifier = ResultVerifierService()
-
-        reviewer_request_message = (
-            "Reviewer request\n"
-            f"Attempt: {session.attempt_count}/{session.max_attempts}\n"
-            f"User request:\n{_clip_text(session.original_input, 600)}\n\n"
-            f"Candidate output:\n{_clip_text(candidate, 900)}"
-        )
-        logger.info(
-            "Reviewer request thread_id=%s turn_id=%s attempt=%s/%s payload=%s",
-            thread_id,
-            turn_id,
-            session.attempt_count,
-            session.max_attempts,
-            reviewer_request_message,
-        )
-        await _publish_system_message(user_id, thread_id, turn_id, reviewer_request_message)
-        await _publish_system_message(
-            user_id,
-            thread_id,
-            turn_id,
-            f"Reviewer is checking generated result.\nAttempt: {session.attempt_count}/{session.max_attempts}",
-        )
-
-        try:
-            decision = await state.result_verifier.verify(
-                {
-                    "user_request": session.original_input,
-                    "recent_context": recent_context,
-                    "candidate_output": candidate,
-                },
-                timeout_seconds=max(1, timeout_seconds),
-            )
-        except asyncio.TimeoutError:
-            decision = None
-            verifier_error = f"Reviewer timeout after {timeout_seconds}s"
-        except Exception as exc:
-            decision = None
-            verifier_error = f"Reviewer failed: {exc}"
-        else:
-            verifier_error = ""
-
-        if decision is None:
-            logger.info(
-                "Reviewer unavailable thread_id=%s turn_id=%s reason=%s",
-                thread_id,
-                turn_id,
-                verifier_error,
-            )
-            await _publish_system_message(
-                user_id,
-                thread_id,
-                turn_id,
-                f"Reviewer unavailable.\nReason: {verifier_error}",
-            )
-            state_user.clear_validation_session()
-            await _publish_validation_note(
-                user_id,
-                thread_id,
-                turn_id,
-                f"Keeping the current generated result.\nReason: {verifier_error}",
-            )
-            return
-
-        reviewer_result_message = (
-            "Reviewer result\n"
-            f"Decision: {decision.decision}\n"
-            f"Summary: {decision.summary or '(none)'}\n"
-            f"Feedback: {_clip_text(decision.feedback or '(none)', 900)}"
-        )
-        logger.info(
-            "Reviewer result thread_id=%s turn_id=%s decision=%s summary=%s feedback=%s",
-            thread_id,
-            turn_id,
-            decision.decision,
-            decision.summary,
-            _clip_text(decision.feedback, 400),
-        )
-        await _publish_system_message(user_id, thread_id, turn_id, reviewer_result_message)
-
-        if decision.decision != "pass":
-            await _request_reviewer_retry(
-                user_id,
-                thread_id,
-                turn_id,
-                state_user,
-                session,
-                recent_context,
-                candidate,
-                decision,
-            )
-            return
 
         code_change_review = await collect_workspace_change_review(
             session.workspace_path,
             session.workspace_status_before,
         )
         if code_change_review is None:
+            await _publish_reviewer_state(user_id, thread_id, turn_id, False)
             state_user.clear_validation_session()
             return
 
@@ -703,8 +567,6 @@ async def post_init(app: Application | None):
                 {
                     "review_mode": "code_changes",
                     "user_request": session.original_input,
-                    "recent_context": recent_context,
-                    "candidate_output": candidate,
                     "changed_files": code_change_review.changed_files,
                     "git_status": code_change_review.git_status,
                     "diff_stat": code_change_review.diff_stat,
@@ -734,6 +596,7 @@ async def post_init(app: Application | None):
                 turn_id,
                 f"Reviewer code-change check unavailable.\nReason: {code_verifier_error}",
             )
+            await _publish_reviewer_state(user_id, thread_id, turn_id, False)
             state_user.clear_validation_session()
             await _publish_validation_note(
                 user_id,
@@ -764,12 +627,11 @@ async def post_init(app: Application | None):
                 turn_id,
                 state_user,
                 session,
-                recent_context,
-                candidate,
                 code_decision,
             )
             return
 
+        await _publish_reviewer_state(user_id, thread_id, turn_id, False)
         state_user.clear_validation_session()
 
     async def forward_event(method: str, params: dict | None):
@@ -813,7 +675,24 @@ async def post_init(app: Application | None):
                     "",
                     params or {},
                 )
-                await _handle_validation_completion(owner_id, thread_id or validation_session.thread_id, turn_id)
+                if validation_session.current_turn_id and turn_id and validation_session.current_turn_id != turn_id:
+                    return
+                validation_thread_id = thread_id or validation_session.thread_id
+                validation_turn_id = turn_id
+                logger.info(
+                    "Scheduling reviewer validation thread_id=%s turn_id=%s attempt=%s/%s",
+                    validation_thread_id,
+                    validation_turn_id,
+                    validation_session.attempt_count,
+                    validation_session.max_attempts,
+                )
+                _track_validation_task(
+                    asyncio.create_task(
+                        _handle_validation_completion(owner_id, validation_thread_id, validation_turn_id),
+                        name=f"reviewer-validation:{validation_thread_id}:{validation_turn_id or 'unknown'}",
+                    ),
+                    f"reviewer-validation:{validation_thread_id}:{validation_turn_id or 'unknown'}",
+                )
                 return
             if method in ("turn/failed", "turn/cancelled"):
                 await _publish_turn_event(
@@ -1108,14 +987,18 @@ async def post_init(app: Application | None):
 
 
 async def post_shutdown(app: Application | None):
+    await _cancel_validation_tasks()
     if state.codex_client:
         await state.codex_client.stop()
+        state.codex_client = None
     if state.approval_guardian:
         await state.approval_guardian.stop()
         state.approval_guardian = None
     if state.result_verifier:
         await state.result_verifier.stop()
         state.result_verifier = None
+    state.command_router = None
+    state.codex_ready.clear()
 
 
 async def debug_update_handler(update: object, context: Any):

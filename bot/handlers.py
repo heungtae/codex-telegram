@@ -128,7 +128,6 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             update,
             "Reviewer is still processing the previous result. Wait for it to finish before sending a new request.",
             user_id,
-            reply_markup=interrupt_keyboard(),
         )
         return
     

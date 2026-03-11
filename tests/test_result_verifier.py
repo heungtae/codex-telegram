@@ -31,8 +31,6 @@ class ResultVerifierServiceTests(unittest.TestCase):
             {
                 "review_mode": "code_changes",
                 "user_request": "Reduce thread list to 10",
-                "candidate_output": "Updated the list limit.",
-                "recent_context": [{"role": "user", "text": "Make the thread list shorter."}],
                 "changed_files": ["web/static/app.jsx", "web/server.py"],
                 "git_status": " M web/static/app.jsx\n M web/server.py",
                 "diff_stat": "2 files changed, 2 insertions(+), 2 deletions(-)",
@@ -43,6 +41,8 @@ class ResultVerifierServiceTests(unittest.TestCase):
         self.assertIn("strict code-change reviewer", prompt)
         self.assertIn("web/static/app.jsx", prompt)
         self.assertIn("diff_excerpt", prompt)
+        self.assertNotIn("candidate_output", prompt)
+        self.assertNotIn("recent_context", prompt)
 
 
 if __name__ == "__main__":

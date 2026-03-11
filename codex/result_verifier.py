@@ -180,18 +180,6 @@ class ResultVerifierService:
     def _build_prompt(self, payload: dict[str, Any]) -> str:
         review_mode = str(payload.get("review_mode") or "result").strip().lower()
         user_request = str(payload.get("user_request") or "").strip()
-        candidate_output = str(payload.get("candidate_output") or "").strip()
-        context_entries = payload.get("recent_context")
-        context_lines: list[str] = []
-        if isinstance(context_entries, list):
-            for entry in context_entries:
-                if not isinstance(entry, dict):
-                    continue
-                role = str(entry.get("role") or "unknown").strip()
-                text = str(entry.get("text") or "").strip()
-                if text:
-                    context_lines.append(f"- {role}: {text}")
-        context_text = "\n".join(context_lines) if context_lines else "(none)"
         if review_mode == "code_changes":
             changed_files_raw = payload.get("changed_files")
             changed_files = []
@@ -203,15 +191,13 @@ class ResultVerifierService:
             diff_excerpt = str(payload.get("diff_excerpt") or "").strip() or "(none)"
             return (
                 "You are a strict code-change reviewer.\n"
-                "Determine whether the actual workspace changes satisfy the user's request and match the candidate output.\n"
-                "Focus on correctness, missing edits, obvious regressions, and whether the claimed change is reflected in the diff.\n"
+                "Determine whether the actual workspace changes satisfy the user's request.\n"
+                "Focus on correctness, missing edits, obvious regressions, and whether the required code changes are reflected in the diff.\n"
                 "Return ONLY valid JSON with keys:\n"
                 "decision, summary, feedback, missing_requirements.\n"
                 "decision must be pass or fail.\n"
                 "feedback must be concrete rewrite guidance for the assistant.\n\n"
                 f"user_request:\n{user_request}\n\n"
-                f"recent_context:\n{context_text}\n\n"
-                f"candidate_output:\n{candidate_output}\n\n"
                 f"changed_files:\n{changed_files_text}\n\n"
                 f"git_status_delta:\n{git_status}\n\n"
                 f"diff_stat:\n{diff_stat}\n\n"

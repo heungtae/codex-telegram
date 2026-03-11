@@ -708,13 +708,17 @@ def create_web_app() -> FastAPI:
         else:
             state_user.clear_validation_session()
 
-        result = await state.codex_client.call(
-            "turn/start",
-            {
-                "threadId": thread_id,
-                "input": [{"type": "text", "text": text}],
-            },
-        )
+        try:
+            result = await state.codex_client.call(
+                "turn/start",
+                {
+                    "threadId": thread_id,
+                    "input": [{"type": "text", "text": text}],
+                },
+            )
+        except Exception:
+            state_user.clear_validation_session()
+            raise
         turn = result.get("turn", {}) if isinstance(result, dict) else {}
         turn_id = turn.get("id") if isinstance(turn, dict) else None
         if isinstance(turn_id, str) and turn_id:
@@ -884,6 +888,7 @@ def create_web_app() -> FastAPI:
         return {
             "active_thread_id": state_user.active_thread_id,
             "active_turn_id": state_user.active_turn_id,
+            "reviewer_pending": state_user.validation_session is not None,
             "workspace": workspace,
             "project_key": project_key,
             "agents": agents,
