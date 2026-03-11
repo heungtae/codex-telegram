@@ -105,17 +105,21 @@ def _thread_turns(result: dict[str, Any], thread: dict[str, Any]) -> list[dict[s
 
 def _thread_turn_messages(turns: list[dict[str, Any]]) -> list[dict[str, str]]:
     messages: list[dict[str, str]] = []
-    seen: set[tuple[str, str]] = set()
+    seen: set[tuple[str, str, str]] = set()
 
-    def add_message(role: str, text: str) -> None:
+    def add_message(role: str, text: str, variant: str | None = None) -> None:
         cleaned = str(text or "").strip()
         if not cleaned:
             return
-        key = (role, cleaned)
+        normalized_variant = variant if isinstance(variant, str) and variant else ""
+        key = (role, normalized_variant, cleaned)
         if key in seen:
             return
         seen.add(key)
-        messages.append({"role": role, "text": cleaned})
+        message = {"role": role, "text": cleaned}
+        if normalized_variant:
+            message["variant"] = normalized_variant
+        messages.append(message)
 
     def infer_role(value: dict[str, Any], default_role: str) -> str:
         for key in ("role", "author", "speaker", "source"):
@@ -130,35 +134,51 @@ def _thread_turn_messages(turns: list[dict[str, Any]]) -> list[dict[str, str]]:
             return default_role
         return default_role
 
-    def walk(value: Any, default_role: str) -> None:
+    def infer_variant(value: dict[str, Any], role: str, default_variant: str | None) -> str | None:
+        if role != "assistant":
+            return None
+        for key in ("role", "author", "speaker", "source", "name", "agentName", "agent"):
+            raw = value.get(key)
+            if not isinstance(raw, str):
+                continue
+            normalized = raw.strip().lower().replace("_", "").replace("-", "").replace(" ", "")
+            if not normalized:
+                continue
+            if normalized in {"assistant", "agent", "message", "agentmessage", "assistantmessage", "model", "default"}:
+                continue
+            return "subagent"
+        return default_variant
+
+    def walk(value: Any, default_role: str, default_variant: str | None = None) -> None:
         if isinstance(value, str):
-            add_message(default_role, value)
+            add_message(default_role, value, default_variant)
             return
         if isinstance(value, list):
             for item in value:
-                walk(item, default_role)
+                walk(item, default_role, default_variant)
             return
         if not isinstance(value, dict):
             return
 
         role = infer_role(value, default_role)
+        variant = infer_variant(value, role, default_variant)
         direct = value.get("text")
         if isinstance(direct, str) and direct.strip():
-            add_message(role, direct)
+            add_message(role, direct, variant)
 
         content = value.get("content")
         if isinstance(content, str) and content.strip():
-            add_message(role, content)
+            add_message(role, content, variant)
         elif isinstance(content, list):
             for item in content:
                 if isinstance(item, dict):
                     text = item.get("text")
                     if isinstance(text, str) and text.strip():
-                        add_message(role, text)
+                        add_message(role, text, variant)
                     else:
-                        walk(item, role)
+                        walk(item, role, variant)
                 else:
-                    walk(item, role)
+                    walk(item, role, variant)
 
         for key in ("input", "userInput", "prompt", "output", "items", "messages"):
             nested = value.get(key)
@@ -167,7 +187,8 @@ def _thread_turn_messages(turns: list[dict[str, Any]]) -> list[dict[str, str]]:
             next_role = "user" if key in {"input", "userInput", "prompt"} else role
             if key in {"output", "items", "messages"} and role == "user":
                 next_role = "assistant"
-            walk(nested, next_role)
+            next_variant = variant if next_role == "assistant" else None
+            walk(nested, next_role, next_variant)
 
     for turn in turns:
         before_count = len(messages)

@@ -493,6 +493,16 @@ select {
   background: linear-gradient(225deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.92) 55%, transparent 56%);
 }
 
+.msg.assistant.subagent {
+  background: rgba(236, 239, 244, 0.96);
+  border-color: rgba(189, 198, 210, 0.95);
+  color: #243142;
+}
+
+.msg.assistant.subagent::before {
+  background: linear-gradient(225deg, rgba(236, 239, 244, 0.96) 0%, rgba(236, 239, 244, 0.96) 55%, transparent 56%);
+}
+
 .msg.system {
   max-width: min(72%, 560px);
   text-align: center;

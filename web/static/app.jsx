@@ -458,6 +458,7 @@ function App() {
           .map((item) => ({
             role: item.role === "user" ? "user" : item.role === "assistant" ? "assistant" : "system",
             text: item.text,
+            variant: item.variant === "subagent" ? "subagent" : "",
             streaming: false,
           }))
       );
@@ -510,14 +511,15 @@ function App() {
       if (!text) {
         return;
       }
+      const variant = data.variant === "subagent" ? "subagent" : "";
       setMessages((prev) => {
         const copy = [...prev];
         const last = copy[copy.length - 1];
-        if (last && last.role === "assistant" && last.streaming) {
+        if (last && last.role === "assistant" && last.streaming && (last.variant || "") === variant) {
           last.text += text;
           return copy;
         }
-        copy.push({ role: "assistant", text, streaming: true });
+        copy.push({ role: "assistant", text, variant, streaming: true });
         return copy;
       });
     });
@@ -845,7 +847,7 @@ function App() {
           ) : null}
           {messages.map((m, idx) => (
             <div key={idx} className={`msg-row ${m.role}`}>
-              <div className={`msg ${m.role}`}>
+              <div className={`msg ${m.role}${m.variant ? ` ${m.variant}` : ""}`}>
                 <div className="msg-body">{m.text}</div>
               </div>
             </div>

@@ -150,6 +150,28 @@ async def post_init(app: Application | None):
                     return value
         return None
 
+    def _extract_message_variant(params: dict | None) -> str | None:
+        p = params or {}
+        candidates: list[str] = []
+        for key in ("role", "author", "speaker", "source", "name", "agentName", "agent"):
+            value = p.get(key)
+            if isinstance(value, str):
+                candidates.append(value)
+        item = p.get("item")
+        if isinstance(item, dict):
+            for key in ("role", "author", "speaker", "source", "name", "agentName", "agent", "type"):
+                value = item.get(key)
+                if isinstance(value, str):
+                    candidates.append(value)
+        for raw in candidates:
+            normalized = raw.strip().lower().replace("_", "").replace("-", "").replace(" ", "")
+            if not normalized:
+                continue
+            if normalized in {"assistant", "agent", "message", "agentmessage", "assistantmessage", "model", "default"}:
+                continue
+            return "subagent"
+        return None
+
     def _get_path_value(payload: dict[str, Any], path: str) -> Any:
         current: Any = payload
         for part in path.split("."):
@@ -682,6 +704,7 @@ async def post_init(app: Application | None):
                     "thread_id": thread_id,
                     "turn_id": turn_id,
                     "text": _extract_text(params) or "",
+                    "variant": _extract_message_variant(params),
                     "params": params or {},
                 },
             )

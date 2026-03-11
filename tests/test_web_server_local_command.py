@@ -244,6 +244,38 @@ class WebServerLocalCommandTests(unittest.TestCase):
             body["messages"],
         )
 
+    def test_thread_read_marks_non_default_assistant_messages_as_subagent(self):
+        app = create_web_app()
+        endpoint = next(
+            route.endpoint
+            for route in app.routes
+            if getattr(route, "path", None) == "/api/threads/read"
+        )
+        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+        state.codex_client.call = AsyncMock(
+            return_value={
+                "thread": {"id": "thread-subagent"},
+                "turns": [
+                    {
+                        "items": [
+                            {"type": "userMessage", "content": [{"type": "text", "text": "question"}]},
+                            {"type": "agentMessage", "author": "worker", "text": "subagent answer"},
+                        ]
+                    }
+                ],
+            }
+        )
+
+        body = asyncio.run(endpoint(request, "thread-subagent"))
+
+        self.assertEqual(
+            [
+                {"role": "user", "text": "question"},
+                {"role": "assistant", "text": "subagent answer", "variant": "subagent"},
+            ],
+            body["messages"],
+        )
+
     def test_thread_summaries_filters_to_current_project(self):
         app = create_web_app()
         endpoint = next(
