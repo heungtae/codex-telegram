@@ -31,6 +31,38 @@ const AGENT_CONFIG_DEFS = {
   },
 };
 
+const THEME_STORAGE_KEY = "codex-web-theme";
+const DEFAULT_THEME = "dark";
+
+function normalizeTheme(theme) {
+  return theme === "light" ? "light" : "dark";
+}
+
+function readDocumentTheme() {
+  if (typeof document === "undefined") {
+    return DEFAULT_THEME;
+  }
+  return normalizeTheme(document.documentElement.dataset.theme);
+}
+
+function applyDocumentTheme(theme) {
+  if (typeof document === "undefined") {
+    return;
+  }
+  const nextTheme = normalizeTheme(theme);
+  document.documentElement.dataset.theme = nextTheme;
+  document.documentElement.style.colorScheme = nextTheme;
+}
+
+function persistTheme(theme) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.setItem(THEME_STORAGE_KEY, normalizeTheme(theme));
+  } catch (_err) {}
+}
+
 async function api(path, options = {}) {
   const res = await fetch(path, {
     credentials: "include",
@@ -44,7 +76,22 @@ async function api(path, options = {}) {
   return body;
 }
 
-function Login({ onLoggedIn }) {
+function ThemeIcon({ theme }) {
+  if (theme === "light") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M11 2h2v3h-2zM11 19h2v3h-2zM2 11h3v2H2zM19 11h3v2h-3zM5.64 4.22l2.12 2.12-1.42 1.41-2.12-2.12zM16.24 14.83l2.12 2.12-1.42 1.41-2.12-2.12zM4.22 18.36l2.12-2.12 1.41 1.42-2.12 2.12zM16.83 7.76l2.12-2.12 1.41 1.42-2.12 2.12zM12 7a5 5 0 1 0 5 5 5 5 0 0 0-5-5z" />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M14.04 2.3a8.74 8.74 0 0 0-1.69 5.19 8.9 8.9 0 0 0 8.89 8.89 8.74 8.74 0 0 0 .46-.01A9 9 0 1 1 14.04 2.3Z" />
+    </svg>
+  );
+}
+
+function Login({ onLoggedIn, theme, onToggleTheme }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -66,8 +113,22 @@ function Login({ onLoggedIn }) {
   return (
     <div className="login">
       <form className="login-card" onSubmit={submit}>
-        <h2>Codex Telegram</h2>
-        <p>Sign in with your allowlisted account.</p>
+        <div className="login-card-head">
+          <div className="login-copy">
+            <h2>Codex Telegram</h2>
+            <p>Sign in with your allowlisted account.</p>
+          </div>
+          <button
+            className="theme-toggle"
+            type="button"
+            onClick={onToggleTheme}
+            aria-label="Toggle theme"
+            title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+          >
+            <ThemeIcon theme={theme} />
+            <span>{theme === "dark" ? "Dark" : "Light"}</span>
+          </button>
+        </div>
         <input
           placeholder="Username"
           value={username}
@@ -82,7 +143,7 @@ function Login({ onLoggedIn }) {
         <div className="login-actions">
           <button className="primary" type="submit">Sign in</button>
         </div>
-        {error ? <p style={{ color: "#b42318" }}>{error}</p> : null}
+        {error ? <p className="login-error">{error}</p> : null}
       </form>
     </div>
   );
@@ -151,6 +212,7 @@ function App() {
   const chatRef = useRef(null);
   const inputRef = useRef(null);
   const paletteRef = useRef(null);
+  const [theme, setTheme] = useState(() => readDocumentTheme());
   const [paletteSelectedIndex, setPaletteSelectedIndex] = useState(0);
   const [sidebarWidth, setSidebarWidth] = useState(340);
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
@@ -505,6 +567,11 @@ function App() {
   useEffect(() => {
     loadSession();
   }, []);
+  useEffect(() => {
+    const nextTheme = normalizeTheme(theme);
+    applyDocumentTheme(nextTheme);
+    persistTheme(nextTheme);
+  }, [theme]);
 
   useEffect(() => {
     if (!me) {
@@ -670,8 +737,12 @@ function App() {
     });
   };
 
+  const toggleTheme = () => {
+    setTheme((current) => (current === "dark" ? "light" : "dark"));
+  };
+
   if (!me) {
-    return <Login onLoggedIn={loadSession} />;
+    return <Login onLoggedIn={loadSession} theme={theme} onToggleTheme={toggleTheme} />;
   }
 
   const activeAgentDef = activeAgentSettings ? AGENT_CONFIG_DEFS[activeAgentSettings] : null;
@@ -821,7 +892,17 @@ function App() {
             </svg>
             <span>{me.username}</span>
           </div>
-          <div>
+          <div className="topbar-actions">
+            <button
+              className="theme-toggle"
+              type="button"
+              onClick={toggleTheme}
+              aria-label="Toggle theme"
+              title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+            >
+              <ThemeIcon theme={theme} />
+              <span>{theme === "dark" ? "Dark" : "Light"}</span>
+            </button>
             <span className={`status-pill ${interactionBusy ? "running" : "idle"}`}>
               {interactionBusy ? "Running" : "Ready"}
             </span>

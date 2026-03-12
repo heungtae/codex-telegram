@@ -13,10 +13,32 @@
   --shadow-sm: 0 6px 18px rgba(16, 24, 40, 0.06);
   --shadow-md: 0 14px 28px rgba(16, 24, 40, 0.1);
   --radius-lg: 16px;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --bg: #08111d;
+  --bg-soft: #101a28;
+  --panel: #111b29;
+  --panel-soft: #162132;
+  --border: #243548;
+  --text: #edf4ff;
+  --muted: #90a3ba;
+  --brand: #2ec4b6;
+  --brand-strong: #18a596;
+  --accent: #7bb4ff;
+  --danger: #ff8b80;
+  --shadow-sm: 0 10px 24px rgba(3, 8, 18, 0.36);
+  --shadow-md: 0 18px 36px rgba(3, 8, 18, 0.44);
+  color-scheme: dark;
 }
 
 * {
   box-sizing: border-box;
+}
+
+html {
+  background: var(--bg);
 }
 
 body {
@@ -36,6 +58,7 @@ input,
 textarea,
 select {
   font-family: inherit;
+  color: inherit;
 }
 
 .app {
@@ -404,6 +427,38 @@ select {
   box-shadow: var(--shadow-sm);
 }
 
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  background: #f1f6ff;
+  color: var(--text);
+  border-radius: 999px;
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: transform 0.12s ease, background 0.16s ease, border-color 0.16s ease;
+}
+
+.theme-toggle svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+  flex: 0 0 auto;
+}
+
+.theme-toggle:hover {
+  background: #eaf2ff;
+  border-color: #bacceb;
+  transform: translateY(-1px);
+}
+
 .chat {
   flex: 1;
   overflow: auto;
@@ -553,7 +608,12 @@ select {
   border-radius: 12px;
   padding: 10px 12px;
   background: #fbfdff;
+  color: var(--text);
   transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.composer textarea::placeholder {
+  color: var(--muted);
 }
 
 .composer textarea:focus {
@@ -754,17 +814,48 @@ select {
   box-shadow: var(--shadow-md);
 }
 
+.login-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.login-card-head .theme-toggle {
+  align-self: flex-start;
+}
+
+.login-copy h2 {
+  margin: 0 0 8px;
+}
+
+.login-copy p {
+  margin: 0;
+  color: var(--muted);
+}
+
 .login-card input {
   width: 100%;
   margin-bottom: 10px;
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 10px;
+  background: #fbfdff;
+  color: var(--text);
+}
+
+.login-card input::placeholder {
+  color: var(--muted);
 }
 
 .login-actions {
   display: flex;
   justify-content: flex-end;
+}
+
+.login-error {
+  color: var(--danger);
 }
 
 .approval {
@@ -788,6 +879,174 @@ select {
   margin-top: 8px;
 }
 
+:root[data-theme="dark"] body {
+  background:
+    radial-gradient(circle at 15% 5%, rgba(30, 125, 113, 0.22) 0, transparent 35%),
+    radial-gradient(circle at 85% 0%, rgba(54, 104, 180, 0.24) 0, transparent 38%),
+    var(--bg);
+}
+
+:root[data-theme="dark"] .sidebar {
+  border-right-color: rgba(8, 14, 24, 0.84);
+  background: linear-gradient(180deg, rgba(11, 20, 32, 0.98) 0%, rgba(13, 22, 35, 0.96) 40%, rgba(9, 16, 28, 0.98) 100%);
+  box-shadow: inset -1px 0 0 rgba(39, 55, 75, 0.72);
+}
+
+:root[data-theme="dark"] .sidebar-resizer:hover,
+:root[data-theme="dark"] .sidebar-resizer.active {
+  background: linear-gradient(180deg, rgba(37, 51, 70, 0.92) 0%, rgba(27, 39, 57, 0.96) 100%);
+  border-right-color: #3b516b;
+}
+
+:root[data-theme="dark"] .brand {
+  color: #f3f8ff;
+}
+
+:root[data-theme="dark"] .panel,
+:root[data-theme="dark"] .login-card {
+  background: linear-gradient(180deg, rgba(18, 28, 42, 0.96) 0%, rgba(10, 18, 30, 0.96) 100%);
+}
+
+:root[data-theme="dark"] .thread-item:hover {
+  border-color: #36506b;
+  background: #172538;
+  box-shadow: 0 8px 18px rgba(3, 8, 18, 0.34);
+}
+
+:root[data-theme="dark"] .agent-item.on,
+:root[data-theme="dark"] .agent-status-chip.on {
+  background: rgba(20, 99, 92, 0.34);
+  border-color: rgba(57, 199, 187, 0.34);
+  color: #c5fff6;
+}
+
+:root[data-theme="dark"] .agent-item.off,
+:root[data-theme="dark"] .agent-status-chip.off {
+  background: rgba(9, 16, 26, 0.74);
+  color: var(--muted);
+}
+
+:root[data-theme="dark"] .agent-settings-btn,
+:root[data-theme="dark"] .agent-settings-action,
+:root[data-theme="dark"] .composer-new-chat,
+:root[data-theme="dark"] .secondary,
+:root[data-theme="dark"] .theme-toggle {
+  background: #172538;
+  border-color: #2b3f54;
+}
+
+:root[data-theme="dark"] .agent-settings-btn:hover:not(:disabled),
+:root[data-theme="dark"] .agent-settings-action:hover:not(:disabled),
+:root[data-theme="dark"] .composer-new-chat:hover,
+:root[data-theme="dark"] .secondary:hover,
+:root[data-theme="dark"] .theme-toggle:hover {
+  background: #1c3048;
+  border-color: #496581;
+}
+
+:root[data-theme="dark"] .agent-settings-card {
+  border-top-color: #223548;
+}
+
+:root[data-theme="dark"] .agent-field select,
+:root[data-theme="dark"] .composer textarea,
+:root[data-theme="dark"] .login-card input,
+:root[data-theme="dark"] .slash-panel {
+  background: #0e1724;
+  border-color: #243548;
+  color: var(--text);
+}
+
+:root[data-theme="dark"] .topbar,
+:root[data-theme="dark"] .composer {
+  background: rgba(10, 17, 28, 0.82);
+}
+
+:root[data-theme="dark"] .chat {
+  background:
+    radial-gradient(circle at 18% 0%, rgba(18, 105, 95, 0.22) 0, transparent 32%),
+    radial-gradient(circle at 86% 10%, rgba(44, 94, 166, 0.24) 0, transparent 34%),
+    linear-gradient(180deg, rgba(13, 22, 34, 0.68) 0%, rgba(8, 13, 22, 0.44) 100%);
+}
+
+:root[data-theme="dark"] .msg {
+  box-shadow: 0 12px 24px rgba(2, 8, 18, 0.32);
+}
+
+:root[data-theme="dark"] .msg.user {
+  background: linear-gradient(180deg, #139786 0%, #0e7469 100%);
+  color: #effffb;
+}
+
+:root[data-theme="dark"] .msg.user::before {
+  background: linear-gradient(135deg, #0e7469 0%, #0e7469 55%, transparent 56%);
+}
+
+:root[data-theme="dark"] .msg.assistant {
+  background: rgba(16, 25, 37, 0.94);
+  border-color: rgba(44, 63, 87, 0.9);
+}
+
+:root[data-theme="dark"] .msg.assistant::before {
+  background: linear-gradient(225deg, rgba(16, 25, 37, 0.94) 0%, rgba(16, 25, 37, 0.94) 55%, transparent 56%);
+}
+
+:root[data-theme="dark"] .msg.assistant.subagent {
+  background: rgba(23, 31, 46, 0.96);
+  border-color: rgba(67, 80, 103, 0.94);
+  color: #dbe7f7;
+}
+
+:root[data-theme="dark"] .msg.assistant.subagent::before {
+  background: linear-gradient(225deg, rgba(23, 31, 46, 0.96) 0%, rgba(23, 31, 46, 0.96) 55%, transparent 56%);
+}
+
+:root[data-theme="dark"] .msg.system {
+  background: rgba(14, 22, 35, 0.92);
+  border-color: rgba(44, 63, 87, 0.9);
+}
+
+:root[data-theme="dark"] .composer textarea:focus {
+  border-color: #5d81b2;
+  box-shadow: 0 0 0 3px rgba(123, 180, 255, 0.18);
+}
+
+:root[data-theme="dark"] .composer-stop,
+:root[data-theme="dark"] .danger {
+  border-color: rgba(255, 139, 128, 0.35);
+  background: rgba(115, 37, 40, 0.22);
+  color: var(--danger);
+}
+
+:root[data-theme="dark"] .composer-stop:hover,
+:root[data-theme="dark"] .danger:hover {
+  background: rgba(139, 44, 48, 0.32);
+  border-color: rgba(255, 139, 128, 0.5);
+}
+
+:root[data-theme="dark"] .slash-item:hover,
+:root[data-theme="dark"] .slash-item.active {
+  background: rgba(28, 120, 108, 0.18);
+  border-color: rgba(54, 199, 187, 0.28);
+}
+
+:root[data-theme="dark"] .user-pill,
+:root[data-theme="dark"] .status-pill.idle {
+  background: rgba(12, 20, 32, 0.86);
+}
+
+:root[data-theme="dark"] .status-pill.running {
+  color: #bff6ef;
+  background: rgba(23, 115, 102, 0.26);
+  border-color: rgba(57, 199, 187, 0.34);
+}
+
+:root[data-theme="dark"] .approval {
+  border-color: rgba(228, 174, 69, 0.4);
+  background: rgba(56, 40, 14, 0.88);
+  box-shadow: 0 10px 24px rgba(14, 9, 2, 0.28);
+}
+
 @media (max-width: 900px) {
   .app {
     flex-direction: column;
@@ -805,6 +1064,20 @@ select {
 
   .chat {
     padding: 20px 10px 14px;
+  }
+
+  .topbar {
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .topbar-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .login-card-head {
+    flex-direction: column;
   }
 
   .msg {

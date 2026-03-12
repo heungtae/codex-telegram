@@ -43,6 +43,23 @@ class WebServerLocalCommandTests(unittest.TestCase):
         mock_run.assert_awaited_once_with("!ls", "/tmp/web-workspace")
         state.codex_client.call.assert_not_called()
 
+    def test_index_includes_theme_bootstrap_and_versioned_assets(self):
+        app = create_web_app()
+        endpoint = next(
+            route.endpoint
+            for route in app.routes
+            if getattr(route, "path", None) == "/"
+        )
+
+        response = asyncio.run(endpoint())
+        body = response.body.decode("utf-8")
+
+        self.assertIn('const storageKey = "codex-web-theme";', body)
+        self.assertIn("window.localStorage.getItem(storageKey)", body)
+        self.assertIn('document.documentElement.dataset.theme = theme;', body)
+        self.assertRegex(body, r'/assets/styles\.css\?v=\d+')
+        self.assertRegex(body, r'/assets/app\.jsx\?v=\d+')
+
     def test_reviewer_settings_api_round_trip(self):
         app = create_web_app()
         get_endpoint = next(
