@@ -17,20 +17,11 @@ from bot.guardian_ui import (
     guardian_keyboard,
     guardian_panel_text,
 )
-from bot.reviewer_ui import (
-    REVIEWER_MAX_ATTEMPT_CHOICES,
-    REVIEWER_RECENT_TURN_PAIR_CHOICES,
-    REVIEWER_TIMEOUT_CHOICES,
-    reviewer_keyboard,
-    reviewer_panel_text,
-)
 from models import state
 from codex.commands import CommandResult
 from utils.config import (
     get_guardian_settings,
-    get_reviewer_settings,
     save_guardian_settings,
-    save_reviewer_settings,
 )
 
 logger = logging.getLogger("codex-telegram.bot")
@@ -228,25 +219,6 @@ async def send_guardian_settings_panel(
     await edit_with_log(query, context, text, user_id, reply_markup=keyboard)
 
 
-async def send_reviewer_settings_panel(
-    context: ContextTypes.DEFAULT_TYPE,
-    user_id: int,
-    chat_id: int,
-    query=None,
-):
-    from models.user import user_manager
-
-    state_user = user_manager.get(user_id)
-    current = get_reviewer_settings()
-    state_user.set_reviewer_panel(current)
-    text = reviewer_panel_text(state_user.reviewer_panel_current, state_user.reviewer_panel_draft)
-    keyboard = reviewer_keyboard(state_user.reviewer_panel_draft)
-    if query is None:
-        await context.bot.send_message(chat_id=chat_id, text=text, reply_markup=keyboard)
-        return
-    await edit_with_log(query, context, text, user_id, reply_markup=keyboard)
-
-
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if query is None:
@@ -313,9 +285,6 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             elif command == "guardian_settings":
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
                 await send_guardian_settings_panel(context, user_id, chat_id)
-            elif command == "reviewer_settings":
-                logger.info("Executing callback action user_id=%s data=%s", user_id, data)
-                await send_reviewer_settings_panel(context, user_id, chat_id)
             elif command == "interrupt":
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
                 result = await run_callback_command("/interrupt", user_id)
@@ -639,92 +608,6 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(
                 chat_id=chat_id,
                 text="Guardian settings saved and applied immediately.",
-            )
-        elif data.startswith("reviewer_toggle:"):
-            from models.user import user_manager
-
-            key = data[len("reviewer_toggle:"):].strip()
-            state_user = user_manager.get(user_id)
-            if not state_user.reviewer_panel_draft:
-                state_user.set_reviewer_panel(get_reviewer_settings())
-            if key != "enabled":
-                await edit_with_log(query, context, "Invalid reviewer toggle.", user_id)
-            else:
-                current = bool(state_user.reviewer_panel_draft.get("enabled", False))
-                state_user.reviewer_panel_draft["enabled"] = not current
-                await edit_with_log(
-                    query,
-                    context,
-                    reviewer_panel_text(state_user.reviewer_panel_current, state_user.reviewer_panel_draft),
-                    user_id,
-                    reply_markup=reviewer_keyboard(state_user.reviewer_panel_draft),
-                )
-        elif data.startswith("reviewer_cycle:"):
-            from models.user import user_manager
-
-            key = data[len("reviewer_cycle:"):].strip()
-            state_user = user_manager.get(user_id)
-            if not state_user.reviewer_panel_draft:
-                state_user.set_reviewer_panel(get_reviewer_settings())
-
-            if key == "max_attempts":
-                current = state_user.reviewer_panel_draft.get("max_attempts", REVIEWER_MAX_ATTEMPT_CHOICES[0])
-                state_user.reviewer_panel_draft["max_attempts"] = _next_choice(REVIEWER_MAX_ATTEMPT_CHOICES, current)
-            elif key == "timeout_seconds":
-                current = state_user.reviewer_panel_draft.get("timeout_seconds", REVIEWER_TIMEOUT_CHOICES[0])
-                state_user.reviewer_panel_draft["timeout_seconds"] = _next_choice(REVIEWER_TIMEOUT_CHOICES, current)
-            elif key == "recent_turn_pairs":
-                current = state_user.reviewer_panel_draft.get(
-                    "recent_turn_pairs",
-                    REVIEWER_RECENT_TURN_PAIR_CHOICES[0],
-                )
-                state_user.reviewer_panel_draft["recent_turn_pairs"] = _next_choice(
-                    REVIEWER_RECENT_TURN_PAIR_CHOICES,
-                    current,
-                )
-            else:
-                await edit_with_log(query, context, "Invalid reviewer setting key.", user_id)
-                return
-
-            await edit_with_log(
-                query,
-                context,
-                reviewer_panel_text(state_user.reviewer_panel_current, state_user.reviewer_panel_draft),
-                user_id,
-                reply_markup=reviewer_keyboard(state_user.reviewer_panel_draft),
-            )
-        elif data == "reviewer_refresh":
-            await send_reviewer_settings_panel(context, user_id, chat_id, query=query)
-        elif data == "reviewer_apply":
-            from models.user import user_manager
-
-            state_user = user_manager.get(user_id)
-            if not state_user.reviewer_panel_draft:
-                state_user.set_reviewer_panel(get_reviewer_settings())
-            max_attempts_raw = state_user.reviewer_panel_draft.get("max_attempts", 1)
-            timeout_raw = state_user.reviewer_panel_draft.get("timeout_seconds", 8)
-            recent_raw = state_user.reviewer_panel_draft.get("recent_turn_pairs", 3)
-            max_attempts = max_attempts_raw if isinstance(max_attempts_raw, int) and max_attempts_raw > 0 else 1
-            timeout_seconds = timeout_raw if isinstance(timeout_raw, int) and timeout_raw > 0 else 8
-            recent_turn_pairs = recent_raw if isinstance(recent_raw, int) and recent_raw > 0 else 3
-
-            applied = save_reviewer_settings(
-                enabled=bool(state_user.reviewer_panel_draft.get("enabled", False)),
-                max_attempts=max_attempts,
-                timeout_seconds=timeout_seconds,
-                recent_turn_pairs=recent_turn_pairs,
-            )
-            state_user.set_reviewer_panel(applied)
-            await edit_with_log(
-                query,
-                context,
-                reviewer_panel_text(state_user.reviewer_panel_current, state_user.reviewer_panel_draft),
-                user_id,
-                reply_markup=reviewer_keyboard(state_user.reviewer_panel_draft),
-            )
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text="Reviewer settings saved and applied immediately.",
             )
         else:
             logger.info("Executing callback action user_id=%s data=%s (unsupported)", user_id, data)

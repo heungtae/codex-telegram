@@ -16,7 +16,7 @@ from telegram.ext import (
     filters,
 )
 
-from utils.config import get, get_config_path, get_guardian_settings, get_reviewer_settings, get_telegram_bot
+from utils.config import get, get_config_path, get_guardian_settings, get_telegram_bot
 from utils.logger import setup
 from utils.single_instance import (
     SingleInstanceLock,
@@ -24,10 +24,8 @@ from utils.single_instance import (
     terminate_pid,
     token_lock_key,
 )
-from utils.workspace_review import capture_git_status_snapshot, collect_workspace_change_review
 from codex import CodexClient, CommandRouter
 from codex.approval_guardian import ApprovalGuardianService, GuardianDecision
-from codex.result_verifier import ResultVerifierService, VerifierDecision
 from bot import (
     start_handler,
     message_handler,
@@ -43,32 +41,6 @@ from web.runtime import event_hub
 logger = setup("codex-telegram")
 _web_server = None
 _web_server_thread = None
-_validation_tasks: set[asyncio.Task[Any]] = set()
-
-
-def _track_validation_task(task: asyncio.Task[Any], description: str) -> asyncio.Task[Any]:
-    _validation_tasks.add(task)
-
-    def _on_done(done_task: asyncio.Task[Any]) -> None:
-        _validation_tasks.discard(done_task)
-        try:
-            done_task.result()
-        except asyncio.CancelledError:
-            logger.debug("Cancelled background task description=%s", description)
-        except Exception:
-            logger.exception("Background task failed description=%s", description)
-
-    task.add_done_callback(_on_done)
-    return task
-
-
-async def _cancel_validation_tasks() -> None:
-    tasks = list(_validation_tasks)
-    if not tasks:
-        return
-    for task in tasks:
-        task.cancel()
-    await asyncio.gather(*tasks, return_exceptions=True)
 
 
 class WebServerThread:
@@ -108,7 +80,6 @@ async def post_init(app: Application | None):
     state.codex_client = await setup_codex()
     state.command_router = CommandRouter(state.codex_client)
     state.approval_guardian = ApprovalGuardianService()
-    state.result_verifier = ResultVerifierService()
     configured_level = str(get("forwarding.app_server_event_level", "INFO")).upper()
     configured_allowlist = get("forwarding.app_server_event_allowlist", [])
     configured_denylist = get("forwarding.app_server_event_denylist", [])
@@ -349,42 +320,6 @@ async def post_init(app: Application | None):
             },
         )
 
-    async def _publish_validation_note(
-        user_id: int,
-        thread_id: str | None,
-        turn_id: str | None,
-        note: str,
-    ):
-        message = note.strip()
-        if not message:
-            return
-        await _publish_system_message(user_id, thread_id, turn_id, message)
-        await _send_telegram_message(user_id, message, thread_id)
-
-    async def _publish_validation_failure(
-        user_id: int,
-        thread_id: str | None,
-        turn_id: str | None,
-        message: str,
-    ):
-        await event_hub.publish_event(
-            user_id,
-            {
-                "type": "turn_failed",
-                "thread_id": thread_id,
-                "turn_id": turn_id,
-                "text": message,
-                "params": {},
-            },
-        )
-        await _send_telegram_message(user_id, message, thread_id)
-
-    def _clip_text(value: str, limit: int = 800) -> str:
-        text = str(value or "").strip()
-        if len(text) <= limit:
-            return text
-        return text[: max(1, limit - len("\n...(truncated)"))] + "\n...(truncated)"
-
     async def _publish_system_message(
         user_id: int | None,
         thread_id: str | None,
@@ -406,234 +341,6 @@ async def post_init(app: Application | None):
             },
         )
 
-    async def _publish_reviewer_state(
-        user_id: int | None,
-        thread_id: str | None,
-        turn_id: str | None,
-        active: bool,
-    ):
-        if user_id is None:
-            return
-        await event_hub.publish_event(
-            user_id,
-            {
-                "type": "reviewer_state",
-                "thread_id": thread_id,
-                "turn_id": turn_id,
-                "active": active,
-            },
-        )
-
-    async def _refresh_validation_workspace_snapshot(session) -> None:
-        if session is None:
-            return
-        session.update_workspace_status_before(
-            await capture_git_status_snapshot(session.workspace_path)
-        )
-
-    def _build_retry_prompt(
-        original_input: str,
-        decision: VerifierDecision,
-        attempt_number: int,
-        max_attempts: int,
-    ) -> str:
-        missing = ""
-        if decision.missing_requirements:
-            missing = "\n".join(f"- {item}" for item in decision.missing_requirements)
-        return (
-            "Revise your implementation to satisfy the user's request.\n"
-            "Focus on the actual workspace changes.\n"
-            "Do not mention the reviewer, validation, or internal retry process.\n"
-            f"Attempt: {attempt_number}/{max_attempts}\n\n"
-            f"Original user request:\n{original_input}\n\n"
-            f"Code review summary:\n{decision.summary or '(none)'}\n\n"
-            f"Required code changes:\n{decision.feedback or '(none)'}\n\n"
-            f"Missing requirements:\n{missing or '(none)'}\n"
-        )
-
-    async def _request_reviewer_retry(
-        user_id: int,
-        thread_id: str,
-        turn_id: str | None,
-        state_user,
-        session,
-        decision: VerifierDecision,
-    ) -> bool:
-        if session.attempt_count >= session.max_attempts:
-            await _publish_reviewer_state(user_id, thread_id, turn_id, False)
-            state_user.clear_validation_session()
-            await _publish_validation_note(
-                user_id,
-                thread_id,
-                turn_id,
-                "Reviewer reached max attempts.\nKeeping the latest generated result.",
-            )
-            return False
-
-        session.attempt_count += 1
-        session.last_feedback = decision.feedback or decision.summary
-        session.reset_buffer()
-        await _publish_system_message(
-            user_id,
-            thread_id,
-            turn_id,
-            (
-                "Reviewer requested retry.\n"
-                f"Next attempt: {session.attempt_count}/{session.max_attempts}\n"
-                f"Reason: {_clip_text(decision.summary or decision.feedback or '(none)', 500)}"
-            ),
-        )
-        retry_prompt = _build_retry_prompt(
-            session.original_input,
-            decision,
-            session.attempt_count,
-            session.max_attempts,
-        )
-        try:
-            await _refresh_validation_workspace_snapshot(session)
-            retry_result = await state.codex_client.call(
-                "turn/start",
-                {
-                    "threadId": thread_id,
-                    "input": [{"type": "text", "text": retry_prompt}],
-                },
-            )
-        except Exception as exc:
-            await _publish_reviewer_state(user_id, thread_id, turn_id, False)
-            state_user.clear_validation_session()
-            await _publish_validation_note(
-                user_id,
-                thread_id,
-                turn_id,
-                f"Reviewer requested a retry but restart failed.\nReason: {exc}",
-            )
-            return False
-
-        new_turn = retry_result.get("turn", {}) if isinstance(retry_result, dict) else {}
-        new_turn_id = new_turn.get("id") if isinstance(new_turn, dict) else None
-        if isinstance(new_turn_id, str) and new_turn_id:
-            session.set_turn(new_turn_id)
-            state_user.set_turn(new_turn_id)
-            return True
-        session.set_turn(None)
-        return True
-
-    async def _handle_validation_completion(user_id: int, thread_id: str, turn_id: str | None):
-        state_user = user_manager.get(user_id)
-        session = state_user.validation_session
-        if session is None or session.thread_id != thread_id:
-            state_user.clear_turn()
-            return
-        await _publish_reviewer_state(user_id, thread_id, turn_id, True)
-        state_user.set_turn(None)
-        session.set_turn(None)
-        reviewer_settings = get_reviewer_settings()
-        timeout_seconds = int(reviewer_settings.get("timeout_seconds", 8))
-        if state.result_verifier is None:
-            state.result_verifier = ResultVerifierService()
-
-        code_change_review = await collect_workspace_change_review(
-            session.workspace_path,
-            session.workspace_status_before,
-        )
-        if code_change_review is None:
-            await _publish_reviewer_state(user_id, thread_id, turn_id, False)
-            state_user.clear_validation_session()
-            return
-
-        code_reviewer_request_message = (
-            "Reviewer code-change request\n"
-            f"Attempt: {session.attempt_count}/{session.max_attempts}\n"
-            f"Changed files:\n{_clip_text(chr(10).join(code_change_review.changed_files) or '(none)', 800)}\n\n"
-            f"Git status delta:\n{_clip_text(code_change_review.git_status or '(none)', 900)}\n\n"
-            f"Diff stat:\n{_clip_text(code_change_review.diff_stat or '(none)', 900)}"
-        )
-        logger.info(
-            "Reviewer code-change request thread_id=%s turn_id=%s files=%s",
-            thread_id,
-            turn_id,
-            code_change_review.changed_files,
-        )
-        await _publish_system_message(user_id, thread_id, turn_id, code_reviewer_request_message)
-        await _publish_system_message(
-            user_id,
-            thread_id,
-            turn_id,
-            "Reviewer is checking workspace code changes.",
-        )
-
-        try:
-            code_decision = await state.result_verifier.verify(
-                {
-                    "review_mode": "code_changes",
-                    "user_request": session.original_input,
-                    "changed_files": code_change_review.changed_files,
-                    "git_status": code_change_review.git_status,
-                    "diff_stat": code_change_review.diff_stat,
-                    "diff_excerpt": code_change_review.diff_excerpt,
-                },
-                timeout_seconds=max(1, timeout_seconds),
-            )
-        except asyncio.TimeoutError:
-            code_decision = None
-            code_verifier_error = f"Reviewer code-change timeout after {timeout_seconds}s"
-        except Exception as exc:
-            code_decision = None
-            code_verifier_error = f"Reviewer code-change check failed: {exc}"
-        else:
-            code_verifier_error = ""
-
-        if code_decision is None:
-            logger.info(
-                "Reviewer code-change unavailable thread_id=%s turn_id=%s reason=%s",
-                thread_id,
-                turn_id,
-                code_verifier_error,
-            )
-            await _publish_system_message(
-                user_id,
-                thread_id,
-                turn_id,
-                f"Reviewer code-change check unavailable.\nReason: {code_verifier_error}",
-            )
-            await _publish_reviewer_state(user_id, thread_id, turn_id, False)
-            state_user.clear_validation_session()
-            await _publish_validation_note(
-                user_id,
-                thread_id,
-                turn_id,
-                f"Keeping the current generated result.\nReason: {code_verifier_error}",
-            )
-            return
-
-        code_reviewer_result_message = (
-            "Reviewer code-change result\n"
-            f"Decision: {code_decision.decision}\n"
-            f"Summary: {code_decision.summary or '(none)'}\n"
-            f"Feedback: {_clip_text(code_decision.feedback or '(none)', 900)}"
-        )
-        logger.info(
-            "Reviewer code-change result thread_id=%s turn_id=%s decision=%s summary=%s",
-            thread_id,
-            turn_id,
-            code_decision.decision,
-            code_decision.summary,
-        )
-        await _publish_system_message(user_id, thread_id, turn_id, code_reviewer_result_message)
-        if code_decision.decision != "pass":
-            await _request_reviewer_retry(
-                user_id,
-                thread_id,
-                turn_id,
-                state_user,
-                session,
-                code_decision,
-            )
-            return
-
-        await _publish_reviewer_state(user_id, thread_id, turn_id, False)
-        state_user.clear_validation_session()
-
     async def forward_event(method: str, params: dict | None):
         thread_id = _extract_thread_id(method, params)
         turn_id = _extract_turn_id(method, params)
@@ -641,76 +348,13 @@ async def post_init(app: Application | None):
         owner_id = user_manager.find_user_id_by_turn(turn_id)
         if owner_id is None:
             owner_id = user_id_by_thread
-        state_user = user_manager.get(owner_id) if owner_id is not None else None
-        validation_session = (
-            state_user.validation_session
-            if state_user is not None
-            and state_user.validation_session is not None
-            and state_user.validation_session.thread_id == thread_id
-            else None
-        )
 
         # Keep runtime turn state in sync even when event forwarding is filtered out.
         if method == "turn/started" and turn_id and owner_id is not None:
             user_manager.get(owner_id).set_turn(turn_id)
-            if validation_session is not None:
-                validation_session.set_turn(turn_id)
         elif method in ("turn/completed", "turn/failed", "turn/cancelled"):
-            if owner_id is not None and validation_session is None:
+            if owner_id is not None:
                 user_manager.get(owner_id).clear_turn()
-
-        if validation_session is not None and owner_id is not None:
-            if method == "item/agentMessage/delta":
-                text = _extract_text(params)
-                if text:
-                    validation_session.append_text(text)
-            if method == "turn/started":
-                pass
-            if method == "turn/completed":
-                await _publish_turn_event(
-                    owner_id,
-                    "turn_completed",
-                    thread_id or validation_session.thread_id,
-                    turn_id,
-                    "",
-                    params or {},
-                )
-                if validation_session.current_turn_id and turn_id and validation_session.current_turn_id != turn_id:
-                    return
-                validation_thread_id = thread_id or validation_session.thread_id
-                validation_turn_id = turn_id
-                logger.info(
-                    "Scheduling reviewer validation thread_id=%s turn_id=%s attempt=%s/%s",
-                    validation_thread_id,
-                    validation_turn_id,
-                    validation_session.attempt_count,
-                    validation_session.max_attempts,
-                )
-                _track_validation_task(
-                    asyncio.create_task(
-                        _handle_validation_completion(owner_id, validation_thread_id, validation_turn_id),
-                        name=f"reviewer-validation:{validation_thread_id}:{validation_turn_id or 'unknown'}",
-                    ),
-                    f"reviewer-validation:{validation_thread_id}:{validation_turn_id or 'unknown'}",
-                )
-                return
-            if method in ("turn/failed", "turn/cancelled"):
-                await _publish_turn_event(
-                    owner_id,
-                    "turn_failed",
-                    thread_id or validation_session.thread_id,
-                    turn_id,
-                    f"Turn {method.split('/')[-1]}.",
-                    params or {},
-                )
-                state_user.clear_turn()
-                state_user.clear_validation_session()
-                await _send_telegram_message(
-                    owner_id,
-                    f"Turn {method.split('/')[-1]}.",
-                    thread_id or validation_session.thread_id,
-                )
-                return
 
         if user_id_by_thread is not None:
             event_type = "app_event"
@@ -987,16 +631,12 @@ async def post_init(app: Application | None):
 
 
 async def post_shutdown(app: Application | None):
-    await _cancel_validation_tasks()
     if state.codex_client:
         await state.codex_client.stop()
         state.codex_client = None
     if state.approval_guardian:
         await state.approval_guardian.stop()
         state.approval_guardian = None
-    if state.result_verifier:
-        await state.result_verifier.stop()
-        state.result_verifier = None
     state.command_router = None
     state.codex_ready.clear()
 
@@ -1133,7 +773,7 @@ def main():
     app.add_handler(TypeHandler(Update, debug_update_handler), group=-1)
     app.add_handler(CommandHandler("start", start_handler))
     app.add_handler(CommandHandler("help", start_handler))
-    app.add_handler(CommandHandler(["commands", "start", "projects", "project", "resume", "threads", "read", "archive", "unarchive", "compact", "rollback", "interrupt", "review", "exec", "models", "features", "gurdian", "guardian", "reviewer", "verifier", "modes", "skills", "apps", "mcp", "config"], command_handler))
+    app.add_handler(CommandHandler(["commands", "start", "projects", "project", "resume", "threads", "read", "archive", "unarchive", "compact", "rollback", "interrupt", "review", "exec", "models", "features", "gurdian", "guardian", "modes", "skills", "apps", "mcp", "config"], command_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
     app.add_handler(CallbackQueryHandler(callback_handler))
     app.add_error_handler(error_handler)

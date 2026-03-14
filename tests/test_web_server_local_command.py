@@ -60,65 +60,7 @@ class WebServerLocalCommandTests(unittest.TestCase):
         self.assertRegex(body, r'/assets/styles\.css\?v=\d+')
         self.assertRegex(body, r'/assets/app\.jsx\?v=\d+')
 
-    def test_reviewer_settings_api_round_trip(self):
-        app = create_web_app()
-        get_endpoint = next(
-            route.endpoint
-            for route in app.routes
-            if getattr(route, "path", None) == "/api/reviewer" and "GET" in getattr(route, "methods", set())
-        )
-        post_endpoint = next(
-            route.endpoint
-            for route in app.routes
-            if getattr(route, "path", None) == "/api/reviewer" and "POST" in getattr(route, "methods", set())
-        )
-        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
-
-        with patch("web.server.get_reviewer_settings", return_value={"enabled": False, "max_attempts": 3, "timeout_seconds": 8, "recent_turn_pairs": 3}):
-            body = asyncio.run(get_endpoint(request))
-
-        self.assertFalse(body["enabled"])
-        self.assertEqual(3, body["max_attempts"])
-
-        with patch("web.server.save_reviewer_settings", return_value={"enabled": True, "max_attempts": 5, "timeout_seconds": 20, "recent_turn_pairs": 2}) as mock_save:
-            saved = asyncio.run(
-                post_endpoint(
-                    {"enabled": True, "max_attempts": 5, "timeout_seconds": 20, "recent_turn_pairs": 2},
-                    request,
-                )
-            )
-
-        self.assertTrue(saved["enabled"])
-        self.assertEqual(5, saved["max_attempts"])
-        mock_save.assert_called_once_with(
-            enabled=True,
-            max_attempts=5,
-            timeout_seconds=20,
-            recent_turn_pairs=2,
-        )
-
-    def test_chat_messages_rejects_when_reviewer_is_still_processing(self):
-        app = create_web_app()
-        endpoint = next(
-            route.endpoint
-            for route in app.routes
-            if getattr(route, "path", None) == "/api/chat/messages"
-        )
-        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
-        state_user = user_manager.get(self.session.user_id)
-        state_user.active_thread_id = "thread-1"
-        state_user.set_validation_session("thread-1", "first", 1, 3)
-
-        with self.assertRaises(Exception) as ctx:
-            asyncio.run(endpoint({"text": "second"}, request))
-
-        self.assertEqual(409, getattr(ctx.exception, "status_code", None))
-        self.assertEqual(
-            "reviewer is still processing the previous result",
-            getattr(ctx.exception, "detail", None),
-        )
-
-    def test_chat_messages_clears_reviewer_session_when_turn_start_fails(self):
+    def test_chat_messages_propagates_turn_start_failures(self):
         app = create_web_app()
         endpoint = next(
             route.endpoint
@@ -130,13 +72,10 @@ class WebServerLocalCommandTests(unittest.TestCase):
         state_user.active_thread_id = "thread-1"
         state.codex_client.call = AsyncMock(side_effect=RuntimeError("turn start failed"))
 
-        with patch("web.server.get_reviewer_settings", return_value={"enabled": True, "max_attempts": 3, "recent_turn_pairs": 3}), patch(
-            "web.server.capture_git_status_snapshot",
-            new=AsyncMock(return_value=""),
-        ), self.assertRaises(RuntimeError):
+        with self.assertRaises(RuntimeError):
             asyncio.run(endpoint({"text": "second"}, request))
 
-        self.assertIsNone(state_user.validation_session)
+        self.assertEqual("thread-1", state_user.active_thread_id)
 
     def test_session_summary_exposes_agent_capabilities(self):
         app = create_web_app()
@@ -149,41 +88,18 @@ class WebServerLocalCommandTests(unittest.TestCase):
         state_user = user_manager.get(self.session.user_id)
         state_user.selected_project_path = "/tmp/web-workspace"
         state_user.selected_project_key = "default"
-        state_user.clear_validation_session()
 
-        with patch("web.server.get_guardian_settings", return_value={"enabled": True}), patch(
-            "web.server.get_reviewer_settings", return_value={"enabled": False}
-        ):
+        with patch("web.server.get_guardian_settings", return_value={"enabled": True}):
             body = asyncio.run(endpoint(request))
 
         self.assertEqual("/tmp/web-workspace", body["workspace"])
-        self.assertFalse(body["reviewer_pending"])
         self.assertEqual(
             [
                 {"name": "default", "enabled": True, "toggleable": False, "configurable": False},
                 {"name": "guardian", "enabled": True, "toggleable": True, "configurable": True},
-                {"name": "reviewer", "enabled": False, "toggleable": True, "configurable": True},
             ],
             body["agents"],
         )
-
-    def test_session_summary_marks_reviewer_pending(self):
-        app = create_web_app()
-        endpoint = next(
-            route.endpoint
-            for route in app.routes
-            if getattr(route, "path", None) == "/api/session/summary"
-        )
-        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
-        state_user = user_manager.get(self.session.user_id)
-        state_user.set_validation_session("thread-1", "hello", 1, 3)
-
-        with patch("web.server.get_guardian_settings", return_value={"enabled": False}), patch(
-            "web.server.get_reviewer_settings", return_value={"enabled": True}
-        ):
-            body = asyncio.run(endpoint(request))
-
-        self.assertTrue(body["reviewer_pending"])
 
     def test_thread_read_returns_chat_messages(self):
         app = create_web_app()

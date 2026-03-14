@@ -22,7 +22,7 @@ class GuardianConfigTests(unittest.TestCase):
     def test_guardian_defaults_to_disabled(self):
         settings = config.get_guardian_settings()
         self.assertFalse(settings["enabled"])
-        self.assertEqual(8, settings["timeout_seconds"])
+        self.assertEqual(20, settings["timeout_seconds"])
         self.assertEqual("manual_fallback", settings["failure_policy"])
         self.assertEqual("full_chain", settings["explainability"])
 

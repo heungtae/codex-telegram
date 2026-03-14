@@ -485,6 +485,5 @@ class ThreadCommands:
             {"threadId": state.active_thread_id, "turnId": state.active_turn_id},
         )
         state.clear_turn()
-        state.clear_validation_session()
 
         return text_result("Turn interrupted.")

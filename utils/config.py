@@ -50,12 +50,6 @@ failure_policy = "manual_fallback"
 explainability = "full_chain"
 apply_to_methods = ["*"]
 
-[validation.reviewer]
-enabled = false
-max_attempts = 1
-timeout_seconds = 8
-recent_turn_pairs = 3
-
 [logging]
 level = "INFO"
 
@@ -148,6 +142,23 @@ def get_web_password() -> str:
         if from_env.strip():
             return from_env
 
+    try:
+        raw = _get_config_path().read_text(encoding="utf-8")
+        parsed = tomllib.loads(raw) if raw.strip() else {}
+    except (OSError, tomllib.TOMLDecodeError):
+        parsed = {}
+
+    web_section = parsed.get("web") if isinstance(parsed, dict) else {}
+    raw_password_env = web_section.get("password_env", "") if isinstance(web_section, dict) else ""
+    raw_password_env = str(raw_password_env or "").strip()
+    if raw_password_env:
+        from_env = os.getenv(raw_password_env, "")
+        if from_env.strip():
+            return from_env
+
+    if password_env and not re.fullmatch(r"[A-Z_][A-Z0-9_]*", password_env):
+        return password_env
+
     configured = str(get("web.password", "") or "").strip()
     if configured.startswith("env:"):
         env_key = configured[4:].strip()
@@ -164,9 +175,6 @@ def _escape_toml_string(value: str) -> str:
 GUARDIAN_TIMEOUT_CHOICES = [3, 8, 20, 60]
 GUARDIAN_FAILURE_POLICIES = {"manual_fallback", "deny", "approve", "session"}
 GUARDIAN_EXPLAINABILITY_LEVELS = {"decision_only", "summary", "full_chain"}
-REVIEWER_MAX_ATTEMPT_CHOICES = [1, 2, 3, 4, 5]
-REVIEWER_TIMEOUT_CHOICES = [3, 8, 20, 60]
-REVIEWER_RECENT_TURN_PAIR_CHOICES = [1, 2, 3, 5]
 
 
 def _normalize_guardian_enabled(value: Any, default: bool = False) -> bool:
@@ -231,20 +239,6 @@ def get_guardian_settings() -> dict[str, Any]:
     }
 
 
-def _normalize_reviewer_enabled(value: Any, default: bool = False) -> bool:
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, int):
-        return value != 0
-    if isinstance(value, str):
-        raw = value.strip().lower()
-        if raw in {"1", "true", "yes", "on"}:
-            return True
-        if raw in {"0", "false", "no", "off"}:
-            return False
-    return default
-
-
 def _normalize_positive_int(value: Any, default: int) -> int:
     if isinstance(value, bool):
         return default
@@ -254,29 +248,6 @@ def _normalize_positive_int(value: Any, default: int) -> int:
         parsed = int(value.strip())
         return parsed if parsed > 0 else default
     return default
-
-
-def _normalize_reviewer_max_attempts(value: Any, default: int = 1) -> int:
-    return _normalize_positive_int(value, default)
-
-
-def _normalize_reviewer_timeout(value: Any, default: int = 8) -> int:
-    return _normalize_positive_int(value, default)
-
-
-def _normalize_reviewer_recent_turn_pairs(value: Any, default: int = 3) -> int:
-    return _normalize_positive_int(value, default)
-
-
-def get_reviewer_settings() -> dict[str, Any]:
-    reviewer_raw = get("validation.reviewer", {})
-    reviewer = reviewer_raw if isinstance(reviewer_raw, dict) else {}
-    return {
-        "enabled": _normalize_reviewer_enabled(reviewer.get("enabled"), default=False),
-        "max_attempts": _normalize_reviewer_max_attempts(reviewer.get("max_attempts"), default=1),
-        "timeout_seconds": _normalize_reviewer_timeout(reviewer.get("timeout_seconds"), default=8),
-        "recent_turn_pairs": _normalize_reviewer_recent_turn_pairs(reviewer.get("recent_turn_pairs"), default=3),
-    }
 
 
 def _toml_value(value: Any) -> str:
@@ -389,36 +360,6 @@ def save_guardian_settings(
     config_path.write_text(updated, encoding="utf-8")
     reload()
     return get_guardian_settings()
-
-
-def save_reviewer_settings(
-    *,
-    enabled: bool,
-    max_attempts: int,
-    timeout_seconds: int,
-    recent_turn_pairs: int,
-) -> dict[str, Any]:
-    normalized_max_attempts = _normalize_reviewer_max_attempts(max_attempts, default=1)
-    normalized_timeout = _normalize_reviewer_timeout(timeout_seconds, default=8)
-    normalized_recent_turn_pairs = _normalize_reviewer_recent_turn_pairs(recent_turn_pairs, default=3)
-
-    _ensure_config_exists()
-    config_path = _get_config_path()
-    raw = config_path.read_text(encoding="utf-8")
-    updated = _strip_section_blocks(raw, {"validation.reviewer"})
-    if updated and not updated.endswith("\n"):
-        updated += "\n"
-    updated += (
-        "\n[validation.reviewer]\n"
-        f"enabled = {_toml_value(bool(enabled))}\n"
-        f"max_attempts = {_toml_value(normalized_max_attempts)}\n"
-        f"timeout_seconds = {_toml_value(normalized_timeout)}\n"
-        f"recent_turn_pairs = {_toml_value(normalized_recent_turn_pairs)}\n"
-    )
-
-    config_path.write_text(updated, encoding="utf-8")
-    reload()
-    return get_reviewer_settings()
 
 
 def save_project_profile(key: str, name: str, path: str) -> None:

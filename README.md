@@ -87,12 +87,6 @@ failure_policy = "manual_fallback" # manual_fallback | deny | approve | session
 explainability = "full_chain" # decision_only | summary | full_chain(summary + debug logs)
 apply_to_methods = ["*"]
 
-[validation.reviewer]
-enabled = false
-max_attempts = 3
-timeout_seconds = 8
-recent_turn_pairs = 3
-
 [logging]
 level = "INFO"
 
@@ -169,7 +163,6 @@ After starting a chat with the bot, run the following for a quick check:
 | `/models` | model/list | List available models |
 | `/features` | experimentalFeature/list + command/exec | Show beta features and apply enable/disable via checkbox UI |
 | `/gurdian` (`/guardian`) | local config | Show guardian settings panel and apply changes via checkbox UI |
-| `/reviewer` (`/verifier`) | local config | Show result reviewer settings panel and apply changes via checkbox UI |
 | `/modes` | collaborationMode/list | List collaboration modes |
 | `/skills` | skills/list | List skills |
 | `/apps` | app/list | List apps |
@@ -179,7 +172,7 @@ After starting a chat with the bot, run the following for a quick check:
 Tip: Use `<command> --help` for detailed usage.
 
 UI note:
-- `Settings` includes `Features`, `Apps`, `Project Select`, `Guardian`, `Reviewer`, `Models`, `Modes`, `MCP`, and `App Config`.
+- `Settings` includes `Features`, `Apps`, `Project Select`, `Guardian`, `Models`, `Modes`, `MCP`, and `App Config`.
 
 ## Security Notes
 
@@ -191,9 +184,6 @@ UI note:
 - `approval.guardian.enabled` defaults to `false`; enable it when you need policy-based safety checks before approval decisions.
 - Guardian setting changes in Telegram `Settings -> Guardian` are applied immediately.
 - Guardian checks run in a dedicated Codex app-server session isolated from user conversation threads.
-- `validation.reviewer.enabled` defaults to `false`; enable it when you want generated answers to be verified and retried before the final result is shown.
-- Reviewer setting changes in Telegram `Settings -> Reviewer` are applied immediately.
-- Reviewer checks run in a dedicated Codex app-server session and can retry generation up to `validation.reviewer.max_attempts`.
 - Run exactly one polling instance per bot token to avoid update and lock conflicts.
 - `telegram.bot.conflict_action` controls lock-conflict startup behavior. For unattended production, `exit` is the safest default.
 - Treat logs as sensitive operational data because they may include prompts, commands, and execution context; restrict access and retention.

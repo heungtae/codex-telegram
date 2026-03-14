@@ -54,9 +54,6 @@ def settings_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton("🛡 Guardian", callback_data="cmd:guardian_settings"),
         ],
         [
-            InlineKeyboardButton("✅ Reviewer", callback_data="cmd:reviewer_settings"),
-        ],
-        [
             InlineKeyboardButton("🤖 Models", callback_data="cmd:models"),
             InlineKeyboardButton("🧭 Modes", callback_data="cmd:modes"),
         ],

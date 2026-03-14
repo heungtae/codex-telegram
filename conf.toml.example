@@ -40,12 +40,6 @@ failure_policy = "manual_fallback"  # manual_fallback | deny | approve | session
 explainability = "full_chain"  # decision_only | summary | full_chain(summary + debug logs)
 apply_to_methods = ["*"]
 
-[validation.reviewer]
-enabled = false
-max_attempts = 1
-timeout_seconds = 8
-recent_turn_pairs = 3
-
 [logging]
 level = "INFO"
 

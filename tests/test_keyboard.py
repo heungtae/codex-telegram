@@ -36,6 +36,7 @@ class KeyboardTests(unittest.TestCase):
             "cmd:menu",
         ):
             self.assertIn(expected, callbacks)
+        self.assertNotIn("cmd:reviewer_settings", callbacks)
 
 
 if __name__ == "__main__":

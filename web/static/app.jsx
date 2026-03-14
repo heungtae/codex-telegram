@@ -20,15 +20,6 @@ const AGENT_CONFIG_DEFS = {
       },
     ],
   },
-  reviewer: {
-    title: "Reviewer settings",
-    path: "/api/reviewer",
-    fields: [
-      { key: "max_attempts", label: "Max attempts", type: "select", options: [1, 2, 3, 4, 5] },
-      { key: "timeout_seconds", label: "Timeout", type: "select", options: [3, 8, 20, 60] },
-      { key: "recent_turn_pairs", label: "Recent turn pairs", type: "select", options: [1, 2, 3, 5] },
-    ],
-  },
 };
 
 const THEME_STORAGE_KEY = "codex-web-theme";
@@ -327,7 +318,7 @@ function App() {
   const loadSessionSummary = async () => {
     const summary = await api("/api/session/summary");
     setSessionSummary(summary);
-    setStatus(summary?.active_turn_id || summary?.reviewer_pending ? "running" : "idle");
+    setStatus(summary?.active_turn_id ? "running" : "idle");
     if (summary && typeof summary.active_thread_id === "string" && summary.active_thread_id) {
       setActiveThread(summary.active_thread_id);
     }
@@ -636,11 +627,6 @@ function App() {
       setMessages((prev) => [...prev, { role: "system", text, streaming: false }]);
       loadSessionSummary().catch(() => {});
     });
-    es.addEventListener("reviewer_state", (ev) => {
-      const data = JSON.parse(ev.data);
-      setStatus(data?.active ? "running" : "idle");
-      loadSessionSummary().catch(() => {});
-    });
     es.onerror = () => {
       setStatus("disconnected");
     };
@@ -750,7 +736,7 @@ function App() {
   const settingsBusy =
     (!!activeAgentSettings && agentConfigLoading === activeAgentSettings) ||
     (!!activeAgentSettings && agentConfigSaving === activeAgentSettings);
-  const interactionBusy = status === "running" || !!sessionSummary?.reviewer_pending;
+  const interactionBusy = status === "running";
 
   return (
     <div className="app">

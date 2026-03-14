@@ -110,27 +110,5 @@ class CallbackResultTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Guardian settings", kwargs["text"])
         self.assertIn("reply_markup", kwargs)
 
-    async def test_send_reviewer_settings_panel_uses_reviewer_keyboard(self):
-        with patch(
-            "bot.callbacks.get_reviewer_settings",
-            return_value={
-                "enabled": False,
-                "max_attempts": 3,
-                "timeout_seconds": 8,
-                "recent_turn_pairs": 3,
-            },
-        ):
-            await callbacks.send_reviewer_settings_panel(
-                context=self.context,
-                user_id=1,
-                chat_id=100,
-                query=None,
-            )
-
-        kwargs = self.context.bot.send_message.await_args.kwargs
-        self.assertIn("Reviewer settings", kwargs["text"])
-        self.assertIn("reply_markup", kwargs)
-
-
 if __name__ == "__main__":
     unittest.main()

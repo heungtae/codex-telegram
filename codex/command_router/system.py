@@ -4,7 +4,7 @@ import json
 from .common import commands_overview
 from .context import RouterContext
 from .contracts import CommandResult, text_result, usage_result
-from utils.config import get_guardian_settings, get_reviewer_settings
+from utils.config import get_guardian_settings
 
 
 class SystemCommands:
@@ -138,19 +138,6 @@ class SystemCommands:
             "Use checkboxes below, then press Apply.",
         ]
         return CommandResult(kind="guardian_settings", text="\n".join(lines), meta=settings)
-
-    async def reviewer_settings(self) -> CommandResult:
-        settings = get_reviewer_settings()
-        lines = [
-            "Reviewer settings:",
-            f"- enabled: {bool(settings.get('enabled', False))}",
-            f"- max_attempts: {int(settings.get('max_attempts', 1))}",
-            f"- timeout_seconds: {int(settings.get('timeout_seconds', 8))}",
-            f"- recent_turn_pairs: {int(settings.get('recent_turn_pairs', 3))}",
-            "",
-            "Use checkboxes below, then press Apply.",
-        ]
-        return CommandResult(kind="reviewer_settings", text="\n".join(lines), meta=settings)
 
     async def skills_list(self, args: list[str]) -> CommandResult:
         params: dict[str, Any] = {}

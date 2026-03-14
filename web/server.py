@@ -16,15 +16,12 @@ from models.user import user_manager
 from utils.config import (
     get,
     get_guardian_settings,
-    get_reviewer_settings,
     get_web_password,
     reload,
     save_guardian_settings,
-    save_reviewer_settings,
     save_project_profile,
 )
 from utils.local_command import resolve_command_cwd, run_bang_command
-from utils.workspace_review import capture_git_status_snapshot
 from web.runtime import event_hub, session_manager
 
 logger = logging.getLogger("codex-telegram.web")
@@ -685,28 +682,6 @@ def create_web_app() -> FastAPI:
 
         if state_user.active_turn_id:
             raise HTTPException(status_code=409, detail="a turn is already running")
-        if state_user.validation_session is not None:
-            raise HTTPException(status_code=409, detail="reviewer is still processing the previous result")
-
-        reviewer_settings = get_reviewer_settings()
-        reviewer_enabled = bool(reviewer_settings.get("enabled", False))
-        workspace_path = state_user.selected_project_path or ""
-        if not workspace_path and state.command_router is not None:
-            effective = state.command_router.projects.resolve_effective_project(session.user_id)
-            if isinstance(effective, dict) and isinstance(effective.get("path"), str):
-                workspace_path = effective["path"]
-        if reviewer_enabled:
-            workspace_status_before = await capture_git_status_snapshot(workspace_path)
-            state_user.set_validation_session(
-                thread_id,
-                text,
-                int(reviewer_settings.get("max_attempts", 1)),
-                int(reviewer_settings.get("recent_turn_pairs", 3)),
-                workspace_path=workspace_path,
-                workspace_status_before=workspace_status_before,
-            )
-        else:
-            state_user.clear_validation_session()
 
         try:
             result = await state.codex_client.call(
@@ -717,14 +692,11 @@ def create_web_app() -> FastAPI:
                 },
             )
         except Exception:
-            state_user.clear_validation_session()
             raise
         turn = result.get("turn", {}) if isinstance(result, dict) else {}
         turn_id = turn.get("id") if isinstance(turn, dict) else None
         if isinstance(turn_id, str) and turn_id:
             state_user.set_turn(turn_id)
-            if state_user.validation_session is not None:
-                state_user.validation_session.set_turn(turn_id)
 
         await event_hub.publish_event(
             session.user_id,
@@ -819,21 +791,6 @@ def create_web_app() -> FastAPI:
             explainability=str(payload.get("explainability", "full_chain")),
         )
 
-    @app.get("/api/reviewer")
-    async def get_reviewer(request: Request) -> dict[str, Any]:
-        await _session_from_request(request)
-        return get_reviewer_settings()
-
-    @app.post("/api/reviewer")
-    async def set_reviewer(payload: dict[str, Any], request: Request) -> dict[str, Any]:
-        await _session_from_request(request)
-        return save_reviewer_settings(
-            enabled=bool(payload.get("enabled", False)),
-            max_attempts=int(payload.get("max_attempts", 1)),
-            timeout_seconds=int(payload.get("timeout_seconds", 8)),
-            recent_turn_pairs=int(payload.get("recent_turn_pairs", 3)),
-        )
-
     @app.get("/api/models")
     async def models(request: Request) -> dict[str, Any]:
         session = await _session_from_request(request)
@@ -879,16 +836,13 @@ def create_web_app() -> FastAPI:
                 if not project_key and isinstance(effective.get("key"), str):
                     project_key = effective["key"]
         guardian = get_guardian_settings()
-        reviewer = get_reviewer_settings()
         agents = [
             {"name": "default", "enabled": True, "toggleable": False, "configurable": False},
             {"name": "guardian", "enabled": bool(guardian.get("enabled", False)), "toggleable": True, "configurable": True},
-            {"name": "reviewer", "enabled": bool(reviewer.get("enabled", False)), "toggleable": True, "configurable": True},
         ]
         return {
             "active_thread_id": state_user.active_thread_id,
             "active_turn_id": state_user.active_turn_id,
-            "reviewer_pending": state_user.validation_session is not None,
             "workspace": workspace,
             "project_key": project_key,
             "agents": agents,
