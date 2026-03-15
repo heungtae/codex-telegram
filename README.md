@@ -163,8 +163,8 @@ name = "git access"
 enabled = true
 action = "approve"
 priority = 150
-match_method = ["item/tool/*"]
-match_question_any = ["git", "repository", "commit", "branch", "push", "pull"]
+match_method = ["item/tool/*", "item/commandExecution/requestApproval"]
+command_any = ["git", "repository", "commit", "branch", "push", "pull", "stage all current changes"]
 
 [[approval.guardian.rules]]
 name = "workspace file access"
@@ -186,9 +186,9 @@ match_question_any = ["network", "internet", "http", "https", "download", "fetch
 level = "INFO"
 
 [forwarding]
-app_server_event_level = "INFO"
-app_server_event_allowlist = []
-app_server_event_denylist = []
+app_server_event_level = "DEBUG"
+app_server_event_allowlist = ["item/completed"]
+app_server_event_denylist = ["item/agentMessage/delta"]
 
 [[forwarding.rules]]
  method = "item/completed"
