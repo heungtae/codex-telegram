@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "Bridge for controlling the Codex App Server from Telegram and Web UI"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { file = "LICENSE" }
+license = "Apache-2.0"
 authors = [
   { name = "heungtae" }
 ]
@@ -21,7 +21,6 @@ classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",
   "Intended Audience :: Developers",
-  "License :: OSI Approved :: Apache Software License",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Topic :: Communications :: Chat",
