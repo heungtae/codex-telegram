@@ -23,6 +23,16 @@ class WebRuntimeTests(unittest.IsolatedAsyncioTestCase):
         finally:
             await hub.unsubscribe(-1, queue)
 
+    async def test_add_approval_replaces_existing_pending_item(self):
+        hub = WebEventHub()
+
+        await hub.add_approval(1, 10, {"id": 10, "type": "approval_required"})
+        await hub.add_approval(1, 11, {"id": 11, "type": "approval_required"})
+
+        pending = await hub.list_approvals(1)
+
+        self.assertEqual([{"id": 11, "type": "approval_required"}], pending)
+
 
 if __name__ == "__main__":
     unittest.main()

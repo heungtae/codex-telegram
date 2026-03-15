@@ -218,6 +218,7 @@ function App() {
   const [agentConfigError, setAgentConfigError] = useState("");
   const chatRef = useRef(null);
   const inputRef = useRef(null);
+  const pendingComposerFocusRef = useRef(false);
   const paletteRef = useRef(null);
   const [theme, setTheme] = useState(() => readDocumentTheme());
   const [paletteSelectedIndex, setPaletteSelectedIndex] = useState(0);
@@ -342,7 +343,8 @@ function App() {
   const loadApprovals = async () => {
     const result = await api("/api/approvals");
     const items = Array.isArray(result.items) ? result.items : [];
-    setApprovalItems(items.filter((item) => item && typeof item.id === "number"));
+    const filtered = items.filter((item) => item && typeof item.id === "number");
+    setApprovalItems(filtered.length ? [filtered[filtered.length - 1]] : []);
   };
 
   const submitApproval = async (requestId, decision) => {
@@ -366,6 +368,7 @@ function App() {
     const nextThreadId = result?.meta?.thread_id;
     setMessages([]);
     setStatus("idle");
+    pendingComposerFocusRef.current = true;
     if (typeof nextThreadId === "string" && nextThreadId) {
       setActiveThread(nextThreadId);
     } else {
@@ -537,6 +540,7 @@ function App() {
       return;
     }
     const text = input.trim();
+    pendingComposerFocusRef.current = true;
     setInput("");
     if (text.startsWith("/")) {
       await runCommand(text);
@@ -555,9 +559,24 @@ function App() {
         loadSessionSummary().catch(() => {});
       }
     } catch (err) {
+      setStatus("idle");
       setMessages((prev) => [...prev, { role: "system", text: err.message || "Request failed.", streaming: false }]);
       loadSessionSummary().catch(() => {});
     }
+  };
+
+  const focusComposer = (cursor = null) => {
+    queueMicrotask(() => {
+      const el = inputRef.current;
+      if (!el || el.disabled) {
+        return;
+      }
+      el.focus();
+      if (typeof cursor === "number") {
+        el.selectionStart = cursor;
+        el.selectionEnd = cursor;
+      }
+    });
   };
 
   const autoResizeInput = () => {
@@ -660,6 +679,7 @@ function App() {
       setStatus("running");
     });
     es.addEventListener("turn_completed", () => {
+      setStatus("idle");
       setMessages((prev) => prev.map((m) => ({ ...m, streaming: false })));
       loadThreads().catch(() => {});
       loadSessionSummary().catch(() => {});
@@ -676,11 +696,8 @@ function App() {
       if (!data || typeof data.id !== "number") {
         return;
       }
-      setApprovalItems((prev) => {
-        const next = prev.filter((item) => item.id !== data.id);
-        next.push(data);
-        return next.sort((a, b) => a.id - b.id);
-      });
+      setApprovalBusyId(null);
+      setApprovalItems([data]);
     });
     es.addEventListener("system_message", (ev) => {
       const data = JSON.parse(ev.data);
@@ -704,6 +721,14 @@ function App() {
     }
     chatRef.current.scrollTop = chatRef.current.scrollHeight;
   }, [messages]);
+
+  useEffect(() => {
+    if (status === "running" || !pendingComposerFocusRef.current) {
+      return;
+    }
+    pendingComposerFocusRef.current = false;
+    focusComposer(input.length);
+  }, [input.length, status]);
 
   useEffect(() => {
     autoResizeInput();
@@ -783,13 +808,7 @@ function App() {
       cursor = activeToken.start + item.length + 1;
     }
     setInput(next);
-    queueMicrotask(() => {
-      if (inputRef.current) {
-        inputRef.current.focus();
-        inputRef.current.selectionStart = cursor;
-        inputRef.current.selectionEnd = cursor;
-      }
-    });
+    focusComposer(cursor);
   };
 
   const toggleTheme = () => {

@@ -68,9 +68,9 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
         with patch("main.setup_codex", new=AsyncMock(return_value=client)), \
              patch("main.CommandRouter", return_value=router), \
              patch("main.ApprovalGuardianService", return_value=guardian), \
+             patch("main.asyncio.to_thread", new=AsyncMock(return_value={"reason": "git commit", "question": ""})), \
              patch("main.get", side_effect=lambda key, default=None: default), \
              patch("main.get_guardian_settings", return_value=guardian_settings), \
-             patch("main.build_approval_policy_context", return_value={"reason": "git commit", "question": ""}), \
              patch("main.match_approval_policy", return_value=policy_match):
             await app_main.post_init(None)
             user_manager.bind_thread_owner(1, "thread-1")
@@ -109,6 +109,49 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(7, approvals[0]["id"])
         self.assertEqual("item/commandExecution/requestApproval", approvals[0]["method"])
         client.submit_approval_decision.assert_not_called()
+
+    async def test_new_manual_approval_supersedes_previous_pending_request(self):
+        client = _DummyCodexClient(submit_result=True)
+        router = SimpleNamespace(projects=SimpleNamespace(resolve_effective_project=Mock(return_value=None)))
+        guardian = SimpleNamespace(stop=AsyncMock())
+        guardian_settings = {
+            "enabled": False,
+            "apply_to_methods": ["*"],
+            "failure_policy": "manual_fallback",
+            "explainability": "decision_only",
+            "timeout_seconds": 5,
+            "rules": [],
+        }
+
+        with patch("main.setup_codex", new=AsyncMock(return_value=client)), \
+             patch("main.CommandRouter", return_value=router), \
+             patch("main.ApprovalGuardianService", return_value=guardian), \
+             patch("main.asyncio.to_thread", new=AsyncMock(return_value={"reason": "git commit", "question": ""})), \
+             patch("main.get", side_effect=lambda key, default=None: default), \
+             patch("main.get_guardian_settings", return_value=guardian_settings):
+            await app_main.post_init(None)
+            user_manager.bind_thread_owner(1, "thread-1")
+            await event_hub.add_approval(
+                1,
+                6,
+                {
+                    "id": 6,
+                    "type": "approval_required",
+                    "method": "item/commandExecution/requestApproval",
+                },
+            )
+            await client._approval_handler(
+                {
+                    "id": 7,
+                    "method": "item/commandExecution/requestApproval",
+                    "threadId": "thread-1",
+                }
+            )
+
+        approvals = await event_hub.list_approvals(1)
+
+        self.assertEqual([7], [item["id"] for item in approvals])
+        client.submit_approval_decision.assert_any_call(6, "deny")
 
 
 if __name__ == "__main__":

@@ -682,7 +682,19 @@ async def post_init(app: Application | None):
             "question": question_text,
             "policy_rule": matched_policy_rule or None,
         }
-        await event_hub.add_approval(user_id, req_id, approval_payload)
+        previous_approvals = await event_hub.replace_approval(user_id, req_id, approval_payload)
+        for previous in previous_approvals:
+            previous_id = previous.get("id")
+            if not isinstance(previous_id, int) or previous_id == req_id:
+                continue
+            closed = state.codex_client.submit_approval_decision(previous_id, "deny")
+            logger.info(
+                "Superseding approval request user_id=%s previous_request_id=%s new_request_id=%s closed=%s",
+                user_id,
+                previous_id,
+                req_id,
+                closed,
+            )
         await event_hub.publish_event(user_id, approval_payload)
         if user_id > 0 and app is not None:
             await app.bot.send_message(

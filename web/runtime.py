@@ -95,9 +95,14 @@ class WebEventHub:
             except asyncio.QueueFull:
                 continue
 
-    async def add_approval(self, user_id: int, request_id: int, payload: dict[str, Any]) -> None:
+    async def replace_approval(self, user_id: int, request_id: int, payload: dict[str, Any]) -> list[dict[str, Any]]:
         async with self._lock:
-            self._pending_approvals.setdefault(user_id, {})[request_id] = payload
+            previous = [dict(value) for value in self._pending_approvals.get(user_id, {}).values()]
+            self._pending_approvals[user_id] = {request_id: payload}
+            return previous
+
+    async def add_approval(self, user_id: int, request_id: int, payload: dict[str, Any]) -> None:
+        await self.replace_approval(user_id, request_id, payload)
 
     async def pop_approval(self, user_id: int, request_id: int) -> dict[str, Any] | None:
         async with self._lock:
