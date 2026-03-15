@@ -784,12 +784,17 @@ def create_web_app() -> FastAPI:
     @app.post("/api/guardian")
     async def set_guardian(payload: dict[str, Any], request: Request) -> dict[str, Any]:
         await _session_from_request(request)
-        return save_guardian_settings(
-            enabled=bool(payload.get("enabled", False)),
-            timeout_seconds=int(payload.get("timeout_seconds", 20)),
-            failure_policy=str(payload.get("failure_policy", "manual_fallback")),
-            explainability=str(payload.get("explainability", "full_chain")),
-        )
+        try:
+            return save_guardian_settings(
+                enabled=bool(payload.get("enabled", False)),
+                timeout_seconds=int(payload.get("timeout_seconds", 20)),
+                failure_policy=str(payload.get("failure_policy", "manual_fallback")),
+                explainability=str(payload.get("explainability", "decision_only")),
+                rules=payload.get("rules"),
+                rules_toml=payload.get("rules_toml"),
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.get("/api/models")
     async def models(request: Request) -> dict[str, Any]:

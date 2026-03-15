@@ -86,7 +86,7 @@ class HandlerResultTests(unittest.IsolatedAsyncioTestCase):
         kwargs = mock_send_reply.await_args.kwargs
         self.assertIn("reply_markup", kwargs)
 
-    async def test_command_handler_gurdian_kind_uses_guardian_keyboard(self):
+    async def test_command_handler_gurdian_kind_returns_read_only_notice(self):
         self.mock_router.route.return_value = CommandResult(
             kind="guardian_settings",
             text="Guardian settings:",
@@ -94,7 +94,7 @@ class HandlerResultTests(unittest.IsolatedAsyncioTestCase):
                 "enabled": False,
                 "timeout_seconds": 8,
                 "failure_policy": "manual_fallback",
-                "explainability": "full_chain",
+                "explainability": "decision_only",
             },
         )
         update = SimpleNamespace(
@@ -107,8 +107,11 @@ class HandlerResultTests(unittest.IsolatedAsyncioTestCase):
              patch("bot.handlers.get", side_effect=lambda key, default=None: default):
             await handlers.command_handler(update, context=SimpleNamespace())
 
+        args = mock_send_reply.await_args.args
         kwargs = mock_send_reply.await_args.kwargs
-        self.assertIn("reply_markup", kwargs)
+        self.assertIn("Guardian settings:", args[1])
+        self.assertIn("Web UI only", args[1])
+        self.assertNotIn("reply_markup", kwargs)
 
     async def test_error_handler_conflict_does_not_stop_app(self):
         app = SimpleNamespace(stop_running=Mock())

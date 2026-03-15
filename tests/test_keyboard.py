@@ -28,7 +28,6 @@ class KeyboardTests(unittest.TestCase):
             "cmd:features",
             "cmd:apps",
             "cmd:projects",
-            "cmd:guardian_settings",
             "cmd:models",
             "cmd:modes",
             "cmd:mcp",
@@ -36,6 +35,7 @@ class KeyboardTests(unittest.TestCase):
             "cmd:menu",
         ):
             self.assertIn(expected, callbacks)
+        self.assertNotIn("cmd:guardian_settings", callbacks)
         self.assertNotIn("cmd:reviewer_settings", callbacks)
 
 

@@ -16,6 +16,7 @@ from telegram.ext import (
     filters,
 )
 
+from utils.approval_policy import build_approval_policy_context, match_approval_policy
 from utils.config import get, get_config_path, get_guardian_settings, get_telegram_bot
 from utils.logger import setup
 from utils.single_instance import (
@@ -439,28 +440,29 @@ async def post_init(app: Application | None):
             )
             return
 
-        params = payload.get("params")
-        reason = ""
-        question_text = ""
-        if isinstance(params, dict):
-            raw_reason = params.get("reason")
-            if isinstance(raw_reason, str) and raw_reason.strip():
-                reason = raw_reason.strip()
-            questions = params.get("questions")
-            if isinstance(questions, list) and questions:
-                first = questions[0]
-                if isinstance(first, dict):
-                    raw_question = first.get("question")
-                    if isinstance(raw_question, str) and raw_question.strip():
-                        question_text = raw_question.strip()
+        workspace_path: str | None = None
+        state_user = user_manager.get(user_id)
+        if isinstance(state_user.selected_project_path, str) and state_user.selected_project_path:
+            workspace_path = state_user.selected_project_path
+        elif state.command_router is not None:
+            effective = state.command_router.projects.resolve_effective_project(user_id)
+            if isinstance(effective, dict):
+                raw_workspace = effective.get("path")
+                if isinstance(raw_workspace, str) and raw_workspace:
+                    workspace_path = raw_workspace
+
+        policy_context = await asyncio.to_thread(build_approval_policy_context, payload, workspace_path)
+        reason = str(policy_context.get("reason") or "")
+        question_text = str(policy_context.get("question") or "")
 
         guardian_settings = get_guardian_settings()
         guardian_enabled = bool(guardian_settings.get("enabled", False))
         guardian_methods = guardian_settings.get("apply_to_methods", ["*"])
         guardian_patterns = guardian_methods if isinstance(guardian_methods, list) else ["*"]
         guardian_failure_policy = str(guardian_settings.get("failure_policy", "manual_fallback")).strip().lower()
-        guardian_explainability = str(guardian_settings.get("explainability", "full_chain")).strip().lower()
+        guardian_explainability = str(guardian_settings.get("explainability", "decision_only")).strip().lower()
         guardian_timeout_seconds = int(guardian_settings.get("timeout_seconds", 20))
+        guardian_rules = guardian_settings.get("rules", [])
 
         def _guardian_message(decision: GuardianDecision) -> str:
             lines = [
@@ -469,12 +471,23 @@ async def post_init(app: Application | None):
                 f"Request ID: {req_id}",
                 f"Decision: {decision.choice}",
             ]
-            if guardian_explainability in ("summary", "full_chain"):
+            if guardian_explainability == "summary":
                 lines.append(f"Risk: {decision.risk_level}")
                 lines.append(f"Confidence: {decision.confidence}")
                 if decision.summary:
                     lines.append(f"Summary: {decision.summary}")
             return "\n".join(lines)
+
+        def _guardian_policy_message(rule_name: str, action: str) -> str:
+            return "\n".join(
+                [
+                    "Guardian policy decision sent.",
+                    f"Method: {method}",
+                    f"Request ID: {req_id}",
+                    f"Rule: {rule_name}",
+                    f"Decision: {action}",
+                ]
+            )
 
         guardian_request_message = (
             "Guardian request\n"
@@ -484,117 +497,170 @@ async def post_init(app: Application | None):
             f"Question: {question_text or '(none)'}"
         )
 
-        if guardian_enabled and _method_matches(method, [p for p in guardian_patterns if isinstance(p, str)]):
-            if state.approval_guardian is None:
-                state.approval_guardian = ApprovalGuardianService()
-            guardian_decision: GuardianDecision | None = None
-            guardian_error = ""
-            logger.debug(
-                "Guardian request thread_id=%s request_id=%s method=%s details=%s",
-                thread_id,
-                req_id,
-                method,
-                guardian_request_message,
-            )
-            await _publish_system_message(user_id, thread_id if isinstance(thread_id, str) else None, None, guardian_request_message)
-            try:
-                guardian_decision = await state.approval_guardian.review(
-                    payload,
-                    timeout_seconds=max(1, guardian_timeout_seconds),
-                )
-            except asyncio.TimeoutError:
-                guardian_error = f"Guardian timeout after {guardian_timeout_seconds}s"
-            except Exception as exc:
-                guardian_error = f"Guardian failed: {exc}"
+        skip_guardian_review = False
+        matched_policy_rule = ""
 
-            if guardian_decision is not None:
-                logger.debug(
-                    "Guardian result thread_id=%s request_id=%s method=%s decision=%s risk=%s confidence=%s summary=%s",
+        if guardian_enabled and _method_matches(method, [p for p in guardian_patterns if isinstance(p, str)]):
+            policy_match = match_approval_policy(
+                policy_context,
+                guardian_rules if isinstance(guardian_rules, list) else [],
+            )
+            if policy_match is not None:
+                matched_policy_rule = policy_match.rule_name
+                logger.info(
+                    "Guardian policy matched thread_id=%s request_id=%s method=%s rule=%s action=%s matched_fields=%s",
                     thread_id,
                     req_id,
                     method,
-                    guardian_decision.choice,
-                    guardian_decision.risk_level,
-                    guardian_decision.confidence,
-                    guardian_decision.summary,
+                    policy_match.rule_name,
+                    policy_match.action,
+                    ",".join(policy_match.matched_fields),
                 )
                 await _publish_system_message(
                     user_id,
                     thread_id if isinstance(thread_id, str) else None,
                     None,
-                    _guardian_message(guardian_decision),
+                    _guardian_policy_message(policy_match.rule_name, policy_match.action),
                 )
-                if guardian_decision.choice in ("approve", "session"):
-                    accepted = state.codex_client.submit_approval_decision(req_id, guardian_decision.choice)
-                    if accepted:
-                        if user_id > 0 and app is not None:
-                            await app.bot.send_message(chat_id=user_id, text=_guardian_message(guardian_decision))
-                        return
-                    logger.warning(
-                        "Guardian produced decision but request already expired method=%s id=%s",
-                        method,
-                        req_id,
-                    )
-                else:
-                    logger.debug(
-                        "Guardian returned deny; falling back to manual approval method=%s id=%s",
-                        method,
-                        req_id,
-                    )
+                if policy_match.action == "manual_fallback":
+                    skip_guardian_review = True
                     if user_id > 0 and app is not None:
                         await app.bot.send_message(
                             chat_id=user_id,
                             text=(
-                                "Guardian recommended deny.\n"
-                                f"Method: {method}\n"
-                                f"Request ID: {req_id}\n"
-                                "Manual approval is required."
+                                _guardian_policy_message(policy_match.rule_name, policy_match.action)
+                                + "\nManual approval is required."
                             ),
                         )
-            else:
-                logger.warning("Guardian could not decide method=%s id=%s error=%s", method, req_id, guardian_error)
-                await _publish_system_message(
-                    user_id,
-                    thread_id if isinstance(thread_id, str) else None,
-                    None,
-                    "Guardian unavailable.\n"
-                    f"Method: {method}\n"
-                    f"Request ID: {req_id}\n"
-                    f"Reason: {guardian_error or 'unknown'}",
-                )
-                if guardian_failure_policy in ("approve", "session", "deny"):
-                    accepted = state.codex_client.submit_approval_decision(req_id, guardian_failure_policy)
+                else:
+                    accepted = state.codex_client.submit_approval_decision(req_id, policy_match.action)
                     if accepted:
                         if user_id > 0 and app is not None:
                             await app.bot.send_message(
                                 chat_id=user_id,
-                                text=(
-                                    "Guardian fallback decision sent.\n"
-                                    f"Method: {method}\n"
-                                    f"Request ID: {req_id}\n"
-                                    f"Decision: {guardian_failure_policy}\n"
-                                    f"Reason: {guardian_error or 'fallback policy'}"
-                                ),
+                                text=_guardian_policy_message(policy_match.rule_name, policy_match.action),
                             )
                         return
-
-                if user_id > 0 and app is not None:
-                    await app.bot.send_message(
-                        chat_id=user_id,
-                        text=(
-                            "Guardian review did not complete.\n"
-                            f"Method: {method}\n"
-                            f"Request ID: {req_id}\n"
-                            f"Reason: {guardian_error or 'unknown'}\n"
-                            "Falling back to manual approval."
-                        ),
+                    logger.warning(
+                        "Guardian policy matched but request already expired method=%s id=%s rule=%s",
+                        method,
+                        req_id,
+                        policy_match.rule_name,
                     )
+                    return
 
+            if not skip_guardian_review and state.approval_guardian is None:
+                state.approval_guardian = ApprovalGuardianService()
+            guardian_decision: GuardianDecision | None = None
+            guardian_error = ""
+            if not skip_guardian_review:
+                logger.debug(
+                    "Guardian request thread_id=%s request_id=%s method=%s details=%s",
+                    thread_id,
+                    req_id,
+                    method,
+                    guardian_request_message,
+                )
+                await _publish_system_message(user_id, thread_id if isinstance(thread_id, str) else None, None, guardian_request_message)
+                try:
+                    guardian_decision = await state.approval_guardian.review(
+                        payload,
+                        timeout_seconds=max(1, guardian_timeout_seconds),
+                    )
+                except asyncio.TimeoutError:
+                    guardian_error = f"Guardian timeout after {guardian_timeout_seconds}s"
+                except Exception as exc:
+                    guardian_error = f"Guardian failed: {exc}"
+
+                if guardian_decision is not None:
+                    logger.debug(
+                        "Guardian result thread_id=%s request_id=%s method=%s decision=%s risk=%s confidence=%s summary=%s",
+                        thread_id,
+                        req_id,
+                        method,
+                        guardian_decision.choice,
+                        guardian_decision.risk_level,
+                        guardian_decision.confidence,
+                        guardian_decision.summary,
+                    )
+                    await _publish_system_message(
+                        user_id,
+                        thread_id if isinstance(thread_id, str) else None,
+                        None,
+                        _guardian_message(guardian_decision),
+                    )
+                    if guardian_decision.choice in ("approve", "session"):
+                        accepted = state.codex_client.submit_approval_decision(req_id, guardian_decision.choice)
+                        if accepted:
+                            if user_id > 0 and app is not None:
+                                await app.bot.send_message(chat_id=user_id, text=_guardian_message(guardian_decision))
+                            return
+                        logger.warning(
+                            "Guardian produced decision but request already expired method=%s id=%s",
+                            method,
+                            req_id,
+                        )
+                    else:
+                        logger.debug(
+                            "Guardian returned deny; falling back to manual approval method=%s id=%s",
+                            method,
+                            req_id,
+                        )
+                        if user_id > 0 and app is not None:
+                            await app.bot.send_message(
+                                chat_id=user_id,
+                                text=(
+                                    "Guardian recommended deny.\n"
+                                    f"Method: {method}\n"
+                                    f"Request ID: {req_id}\n"
+                                    "Manual approval is required."
+                                ),
+                            )
+                else:
+                    logger.warning("Guardian could not decide method=%s id=%s error=%s", method, req_id, guardian_error)
+                    await _publish_system_message(
+                        user_id,
+                        thread_id if isinstance(thread_id, str) else None,
+                        None,
+                        "Guardian unavailable.\n"
+                        f"Method: {method}\n"
+                        f"Request ID: {req_id}\n"
+                        f"Reason: {guardian_error or 'unknown'}",
+                    )
+                    if guardian_failure_policy in ("approve", "session", "deny"):
+                        accepted = state.codex_client.submit_approval_decision(req_id, guardian_failure_policy)
+                        if accepted:
+                            if user_id > 0 and app is not None:
+                                await app.bot.send_message(
+                                    chat_id=user_id,
+                                    text=(
+                                        "Guardian fallback decision sent.\n"
+                                        f"Method: {method}\n"
+                                        f"Request ID: {req_id}\n"
+                                        f"Decision: {guardian_failure_policy}\n"
+                                        f"Reason: {guardian_error or 'fallback policy'}"
+                                    ),
+                                )
+                            return
+
+                    if user_id > 0 and app is not None:
+                        await app.bot.send_message(
+                            chat_id=user_id,
+                            text=(
+                                "Guardian review did not complete.\n"
+                                f"Method: {method}\n"
+                                f"Request ID: {req_id}\n"
+                                f"Reason: {guardian_error or 'unknown'}\n"
+                                "Falling back to manual approval."
+                            ),
+                        )
+
+        policy_line = f"\nPolicy: {matched_policy_rule}" if matched_policy_rule else ""
         reason_line = f"\nReason: {reason}" if reason else ""
         question_line = f"\nQuestion: {question_text}" if question_text else ""
         message = (
             "Approval required.\n"
-            f"Method: {method}\n"
+            f"Method: {method}{policy_line}\n"
             f"Request ID: {req_id}{reason_line}{question_line}\n"
             "Choose: Approve / Session / Deny"
         )
@@ -613,6 +679,7 @@ async def post_init(app: Application | None):
             "thread_id": thread_id if isinstance(thread_id, str) else None,
             "reason": reason,
             "question": question_text,
+            "policy_rule": matched_policy_rule or None,
         }
         await event_hub.add_approval(user_id, req_id, approval_payload)
         await event_hub.publish_event(user_id, approval_payload)

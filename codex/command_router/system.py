@@ -128,15 +128,41 @@ class SystemCommands:
 
     async def guardian_settings(self) -> CommandResult:
         settings = get_guardian_settings()
+        rule_summary = settings.get("rule_summary", {})
+        total_rules = int(rule_summary.get("total", 0)) if isinstance(rule_summary, dict) else 0
+        enabled_rules = int(rule_summary.get("enabled", 0)) if isinstance(rule_summary, dict) else 0
+        action_counts = rule_summary.get("action_counts", {}) if isinstance(rule_summary, dict) else {}
         lines = [
             "Guardian settings:",
             f"- enabled: {bool(settings.get('enabled', False))}",
             f"- timeout_seconds: {int(settings.get('timeout_seconds', 8))}",
             f"- failure_policy: {settings.get('failure_policy', 'manual_fallback')}",
-            f"- explainability: {settings.get('explainability', 'full_chain')}",
+            f"- explainability: {settings.get('explainability', 'decision_only')}",
+            f"- rules: {enabled_rules}/{total_rules} enabled",
             "",
-            "Use checkboxes below, then press Apply.",
         ]
+        if isinstance(action_counts, dict) and action_counts:
+            lines.insert(
+                6,
+                "- actions: "
+                + ", ".join(
+                    f"{key}={int(action_counts.get(key, 0))}"
+                    for key in ("approve", "session", "deny", "manual_fallback")
+                ),
+            )
+        top_rules = rule_summary.get("top", []) if isinstance(rule_summary, dict) else []
+        if isinstance(top_rules, list) and top_rules:
+            lines.append("- top rules:")
+            for rule in top_rules[:3]:
+                if not isinstance(rule, dict):
+                    continue
+                lines.append(
+                    "  "
+                    + f"• {rule.get('name', 'unnamed-rule')} -> {rule.get('action', 'deny')}"
+                    + f" (priority={rule.get('priority', 0)})"
+                )
+            lines.append("")
+        lines.append("Edit Guardian settings and rules in Web UI.")
         return CommandResult(kind="guardian_settings", text="\n".join(lines), meta=settings)
 
     async def skills_list(self, args: list[str]) -> CommandResult:

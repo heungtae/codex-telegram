@@ -84,8 +84,103 @@ auto_response = "approve" # approve | session | deny
 enabled = false
 timeout_seconds = 8
 failure_policy = "manual_fallback" # manual_fallback | deny | approve | session
-explainability = "full_chain" # decision_only | summary | full_chain(summary + debug logs)
+explainability = "decision_only" # decision_only | summary
 apply_to_methods = ["*"]
+
+[[approval.guardian.rules]]
+name = "secret files"
+enabled = true
+action = "deny" # approve | session | deny | manual_fallback
+priority = 300
+path_glob_any = ["**/.env", "**/.env.*", "**/*.pem", "**/*.key", "**/id_rsa", "**/secrets/**"]
+
+[[approval.guardian.rules]]
+name = "protected build and deployment files"
+enabled = true
+action = "manual_fallback"
+priority = 250
+path_glob_any = ["**/pom.xml", "**/Dockerfile", "helm/**", "db/migration/**"]
+
+[[approval.guardian.rules]]
+name = "allow safe build commands"
+enabled = true
+action = "approve"
+priority = 220
+command_any = ["mvn -q test", "mvn -q -DskipTests compile", "./gradlew test", "git diff", "git status"]
+
+[[approval.guardian.rules]]
+name = "deny dangerous shell commands"
+enabled = true
+action = "deny"
+priority = 260
+command_any = ["rm -rf", "curl | sh", "apt install", "yum install", "dnf install", "apk add", "curl http://", "curl https://", "wget http://", "wget https://"]
+
+[[approval.guardian.rules]]
+name = "large change set"
+enabled = true
+action = "manual_fallback"
+priority = 210
+max_changed_files = 20
+
+[[approval.guardian.rules]]
+name = "public api change"
+enabled = true
+action = "manual_fallback"
+priority = 205
+require_public_api_change = true
+
+[[approval.guardian.rules]]
+name = "db schema change"
+enabled = true
+action = "manual_fallback"
+priority = 205
+require_db_schema_change = true
+
+[[approval.guardian.rules]]
+name = "auth or security change"
+enabled = true
+action = "manual_fallback"
+priority = 205
+require_auth_security_change = true
+
+[[approval.guardian.rules]]
+name = "block merge candidate after lint failure"
+enabled = true
+action = "deny"
+priority = 200
+command_any = ["merge", "merge candidate"]
+require_lint_failed = true
+
+[[approval.guardian.rules]]
+name = "coverage drop escalation"
+enabled = true
+action = "manual_fallback"
+priority = 190
+coverage_drop_gt = 2.0
+
+[[approval.guardian.rules]]
+name = "git access"
+enabled = true
+action = "approve"
+priority = 150
+match_method = ["item/tool/*"]
+match_question_any = ["git", "repository", "commit", "branch", "push", "pull"]
+
+[[approval.guardian.rules]]
+name = "workspace file access"
+enabled = true
+action = "approve"
+priority = 140
+match_method = ["item/tool/*"]
+match_question_any = ["workspace", "file", "read file", "write file", "edit file"]
+
+[[approval.guardian.rules]]
+name = "network access"
+enabled = true
+action = "deny"
+priority = 240
+match_method = ["item/tool/*"]
+match_question_any = ["network", "internet", "http", "https", "download", "fetch", "browse"]
 
 [logging]
 level = "INFO"
@@ -106,6 +201,10 @@ app_server_event_denylist = []
 max_message_length = 4000
 send_progress = true
 ```
+
+Guardian rule note:
+- Different matcher groups inside one rule are combined with `AND`.
+- Use separate rules when you want `OR` semantics across conditions like changed-file count, public API changes, DB schema changes, and auth/security changes.
 
 4. (Optional) Set token via environment variable
 
@@ -162,7 +261,7 @@ After starting a chat with the bot, run the following for a quick check:
 | `/exec <cmd>` | command/exec | Run command |
 | `/models` | model/list | List available models |
 | `/features` | experimentalFeature/list + command/exec | Show beta features and apply enable/disable via checkbox UI |
-| `/gurdian` (`/guardian`) | local config | Show guardian settings panel and apply changes via checkbox UI |
+| `/gurdian` (`/guardian`) | local config | Show guardian summary. Edit settings and rules in Web UI |
 | `/modes` | collaborationMode/list | List collaboration modes |
 | `/skills` | skills/list | List skills |
 | `/apps` | app/list | List apps |
@@ -182,7 +281,11 @@ UI note:
 - Prefer `approval.mode = "interactive"` in production. Use `approval.mode = "auto"` only in tightly controlled environments.
 - If `approval.mode = "auto"` is required, choose a conservative `approval.auto_response` (typically `deny` or `session`).
 - `approval.guardian.enabled` defaults to `false`; enable it when you need policy-based safety checks before approval decisions.
-- Guardian setting changes in Telegram `Settings -> Guardian` are applied immediately.
+- `approval.guardian.rules` are evaluated before Guardian LLM review and can return `approve`, `session`, `deny`, or `manual_fallback`.
+- Use `manual_fallback` for explicit human approval cases such as protected files, large change sets, DB schema changes, or coverage regressions.
+- Telegram no longer edits Guardian settings/rules; use Web `Guardian settings` instead.
+- Web `Guardian settings` shows only rules that already exist in `conf.toml`. If none are configured, the editor shows the `conf.toml.example` rules as commented examples.
+- Matcher groups inside one Guardian rule are combined with `AND`; use multiple rules when you need `OR`.
 - Guardian checks run in a dedicated Codex app-server session isolated from user conversation threads.
 - Run exactly one polling instance per bot token to avoid update and lock conflicts.
 - `telegram.bot.conflict_action` controls lock-conflict startup behavior. For unattended production, `exit` is the safest default.

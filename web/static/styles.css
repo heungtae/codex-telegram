@@ -278,6 +278,13 @@ select {
   flex: 0 0 auto;
 }
 
+.agent-settings-btn svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+  flex: 0 0 auto;
+}
+
 .agent-settings-btn:hover:not(:disabled) {
   background: #e6efff;
   border-color: #bacceb;
@@ -351,6 +358,22 @@ select {
   color: var(--text);
 }
 
+.agent-field-textarea {
+  min-height: 240px;
+  resize: vertical;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #fbfdff;
+  color: var(--text);
+  font: 12px/1.5 ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, monospace;
+}
+
+.agent-field-help {
+  font-size: 11px;
+  color: var(--muted);
+}
+
 .agent-settings-actions {
   display: flex;
   justify-content: flex-end;
@@ -405,6 +428,87 @@ select {
   color: var(--muted);
 }
 
+.agent-settings-summary {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(244, 248, 253, 0.85);
+  padding: 10px 12px;
+}
+
+.agent-settings-summary-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.agent-settings-summary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.agent-settings-summary-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.agent-settings-summary-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.agent-settings-summary-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.agent-settings-inline-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  background: #f1f6ff;
+  color: var(--text);
+  border-radius: 999px;
+  padding: 7px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: transform 0.12s ease, background 0.16s ease, border-color 0.16s ease;
+}
+
+.agent-settings-inline-btn svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+  flex: 0 0 auto;
+}
+
+.agent-settings-inline-btn:hover:not(:disabled) {
+  background: #eaf2ff;
+  border-color: #bacceb;
+  transform: translateY(-1px);
+}
+
+.agent-settings-inline-btn.active {
+  background: rgba(11, 140, 130, 0.14);
+  border-color: rgba(11, 140, 130, 0.34);
+  color: #0c665f;
+}
+
+.agent-settings-inline-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
 .main {
   flex: 1;
   display: flex;
@@ -413,6 +517,64 @@ select {
   min-height: 0;
   overflow: hidden;
   padding: 14px;
+  position: relative;
+}
+
+.agent-floating-settings {
+  position: absolute;
+  top: 86px;
+  left: 14px;
+  z-index: 5;
+}
+
+.agent-floating-settings-card {
+  width: 520px;
+  min-width: 360px;
+  max-width: min(720px, calc(100vw - 80px));
+  min-height: 280px;
+  max-height: calc(100vh - 120px);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(247, 250, 255, 0.96) 100%);
+  box-shadow: var(--shadow-md);
+  padding: 14px;
+  backdrop-filter: blur(12px);
+  overflow: auto;
+  resize: both;
+}
+
+.agent-floating-settings .agent-field-textarea {
+  min-height: 360px;
+}
+
+.agent-floating-settings-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  background: #f1f6ff;
+  color: var(--text);
+  border-radius: 999px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.agent-floating-settings-close:hover:not(:disabled) {
+  background: #eaf2ff;
+  border-color: #bacceb;
+}
+
+.agent-floating-settings-close:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.agent-floating-settings-note {
+  font-size: 11px;
+  color: var(--muted);
+  border-top: 1px solid rgba(210, 219, 232, 0.8);
+  padding-top: 10px;
 }
 
 .topbar {
@@ -927,7 +1089,9 @@ select {
 }
 
 :root[data-theme="dark"] .agent-settings-btn,
+:root[data-theme="dark"] .agent-settings-inline-btn,
 :root[data-theme="dark"] .agent-settings-action,
+:root[data-theme="dark"] .agent-floating-settings-close,
 :root[data-theme="dark"] .composer-new-chat,
 :root[data-theme="dark"] .secondary,
 :root[data-theme="dark"] .theme-toggle {
@@ -936,7 +1100,9 @@ select {
 }
 
 :root[data-theme="dark"] .agent-settings-btn:hover:not(:disabled),
+:root[data-theme="dark"] .agent-settings-inline-btn:hover:not(:disabled),
 :root[data-theme="dark"] .agent-settings-action:hover:not(:disabled),
+:root[data-theme="dark"] .agent-floating-settings-close:hover:not(:disabled),
 :root[data-theme="dark"] .composer-new-chat:hover,
 :root[data-theme="dark"] .secondary:hover,
 :root[data-theme="dark"] .theme-toggle:hover {
@@ -948,7 +1114,27 @@ select {
   border-top-color: #223548;
 }
 
+:root[data-theme="dark"] .agent-settings-summary {
+  background: rgba(14, 23, 36, 0.92);
+  border-color: #243548;
+}
+
+:root[data-theme="dark"] .agent-settings-inline-btn.active {
+  background: rgba(46, 196, 182, 0.18);
+  border-color: rgba(46, 196, 182, 0.34);
+  color: #b8fff7;
+}
+
+:root[data-theme="dark"] .agent-floating-settings-card {
+  background: linear-gradient(180deg, rgba(17, 27, 41, 0.96) 0%, rgba(22, 33, 50, 0.96) 100%);
+}
+
+:root[data-theme="dark"] .agent-floating-settings-note {
+  border-top-color: rgba(36, 53, 72, 0.9);
+}
+
 :root[data-theme="dark"] .agent-field select,
+:root[data-theme="dark"] .agent-field-textarea,
 :root[data-theme="dark"] .composer textarea,
 :root[data-theme="dark"] .login-card input,
 :root[data-theme="dark"] .slash-panel {
@@ -1069,6 +1255,24 @@ select {
   .topbar {
     gap: 10px;
     flex-wrap: wrap;
+  }
+
+  .main {
+    padding: 10px;
+  }
+
+  .agent-floating-settings {
+    position: static;
+    width: 100%;
+    margin-top: 12px;
+  }
+
+  .agent-floating-settings-card {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    max-height: none;
+    resize: vertical;
   }
 
   .topbar-actions {

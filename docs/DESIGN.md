@@ -41,6 +41,8 @@ Key sections:
 - `[users]`: allowed Telegram user IDs
 - `[approval]`: `interactive` or `auto`
 - `[approval.guardian]`: guardian on/off, timeout, fallback policy, explainability, method filters
+- `[[approval.guardian.rules]]`: typed approval policy rules with `action`, `priority`, and command/path/change/quality matchers plus optional legacy text matchers
+  - Different matcher groups inside a single rule are combined with `AND`
 - `[forwarding]`: event forwarding level/allowlist/denylist/rules
 - `[projects.*]` + `project`: project profiles and default profile
 
@@ -57,10 +59,8 @@ Main menu buttons:
 - `cmd:start`, `cmd:threads`, `cmd:skills`, `cmd:projects`, `cmd:config`, `cmd:interrupt`
 
 Settings callbacks:
-- `cmd:config_view`, `cmd:guardian_settings`, `cmd:features`, `cmd:apps`, `cmd:projects`, `cmd:models`, `cmd:modes`, `cmd:mcp`, `cmd:menu`
-- `guardian_toggle:enabled`
-- `guardian_cycle:timeout|failure_policy|explainability`
-- `guardian_apply`, `guardian_refresh`
+- `cmd:config_view`, `cmd:features`, `cmd:apps`, `cmd:projects`, `cmd:models`, `cmd:modes`, `cmd:mcp`, `cmd:menu`
+- legacy Guardian callbacks are redirected to a Web-only notice and no longer edit Telegram state
 
 Thread UI callbacks:
 - `threads_page:{active|arch}:{offset}:{limit}`
@@ -135,8 +135,11 @@ There are two layers:
 - In `interactive` mode, waits for user decision future.
 
 2. Guardian review layer
-- If `approval.guardian.enabled = true` and method matches filters, review runs first.
-- Review executes in a separate app-server client and returns `approve|session|deny`.
+- If `approval.guardian.enabled = true` and method matches filters, typed policy rules run first.
+- Policy context combines payload text, explicit command/path metadata, workspace change hints, and quality signals when available.
+- Matching policy rules can return `approve|session|deny|manual_fallback`.
+- `manual_fallback` means explicit human approval and keeps Telegram/Web approval buttons.
+- If no rule matches, Guardian review runs in a separate app-server client and returns `approve|session|deny`.
 - On guardian timeout/failure, fallback policy applies (`manual_fallback` keeps Telegram buttons).
 
 3. Telegram UI approval flow

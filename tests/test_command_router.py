@@ -145,7 +145,7 @@ class CommandRouterTests(unittest.IsolatedAsyncioTestCase):
                 "enabled": False,
                 "timeout_seconds": 8,
                 "failure_policy": "manual_fallback",
-                "explainability": "full_chain",
+                "explainability": "decision_only",
                 "apply_to_methods": ["*"],
             },
         ):

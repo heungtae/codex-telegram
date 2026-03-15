@@ -3,6 +3,8 @@ import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
+from fastapi import HTTPException
+
 from models import state
 from models.user import user_manager
 from web.runtime import session_manager
@@ -100,6 +102,120 @@ class WebServerLocalCommandTests(unittest.TestCase):
             ],
             body["agents"],
         )
+
+    def test_guardian_endpoint_accepts_rules_payload(self):
+        app = create_web_app()
+        endpoint = next(
+            route.endpoint
+            for route in app.routes
+            if getattr(route, "path", None) == "/api/guardian" and "POST" in getattr(route, "methods", set())
+        )
+        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+
+        with patch(
+            "web.server.save_guardian_settings",
+            return_value={"enabled": True, "rules": [{"name": "web rule"}]},
+        ) as mock_save:
+            body = asyncio.run(
+                endpoint(
+                    {
+                        "enabled": True,
+                        "timeout_seconds": 20,
+                        "failure_policy": "manual_fallback",
+                        "explainability": "decision_only",
+                        "rules": [{"name": "web rule", "action": "manual_fallback", "path_glob_any": ["helm/**"]}],
+                    },
+                    request,
+                )
+            )
+
+        self.assertTrue(body["enabled"])
+        self.assertEqual([{"name": "web rule"}], body["rules"])
+        mock_save.assert_called_once_with(
+            enabled=True,
+            timeout_seconds=20,
+            failure_policy="manual_fallback",
+            explainability="decision_only",
+            rules=[{"name": "web rule", "action": "manual_fallback", "path_glob_any": ["helm/**"]}],
+            rules_toml=None,
+        )
+
+    def test_guardian_endpoint_accepts_rules_toml_payload(self):
+        app = create_web_app()
+        endpoint = next(
+            route.endpoint
+            for route in app.routes
+            if getattr(route, "path", None) == "/api/guardian" and "POST" in getattr(route, "methods", set())
+        )
+        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+
+        with patch(
+            "web.server.save_guardian_settings",
+            return_value={"enabled": True, "rules_toml": "[[approval.guardian.rules]]\nname = \"web rule\"\n"},
+        ) as mock_save:
+            body = asyncio.run(
+                endpoint(
+                    {
+                        "enabled": True,
+                        "timeout_seconds": 20,
+                        "failure_policy": "manual_fallback",
+                        "explainability": "decision_only",
+                        "rules_toml": """
+[[approval.guardian.rules]]
+name = "web rule"
+enabled = true
+action = "manual_fallback"
+priority = 80
+path_glob_any = ["helm/**"]
+""".strip(),
+                    },
+                    request,
+                )
+            )
+
+        self.assertTrue(body["enabled"])
+        mock_save.assert_called_once_with(
+            enabled=True,
+            timeout_seconds=20,
+            failure_policy="manual_fallback",
+            explainability="decision_only",
+            rules=None,
+            rules_toml="""
+[[approval.guardian.rules]]
+name = "web rule"
+enabled = true
+action = "manual_fallback"
+priority = 80
+path_glob_any = ["helm/**"]
+""".strip(),
+        )
+
+    def test_guardian_endpoint_returns_http_400_for_invalid_rules(self):
+        app = create_web_app()
+        endpoint = next(
+            route.endpoint
+            for route in app.routes
+            if getattr(route, "path", None) == "/api/guardian" and "POST" in getattr(route, "methods", set())
+        )
+        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+
+        with patch("web.server.save_guardian_settings", side_effect=ValueError("Guardian rules must be a JSON array.")):
+            with self.assertRaises(HTTPException) as ctx:
+                asyncio.run(
+                    endpoint(
+                        {
+                            "enabled": True,
+                            "timeout_seconds": 20,
+                            "failure_policy": "manual_fallback",
+                            "explainability": "decision_only",
+                            "rules": {"broken": True},
+                        },
+                        request,
+                    )
+                )
+
+        self.assertEqual(400, ctx.exception.status_code)
+        self.assertEqual("Guardian rules must be a JSON array.", ctx.exception.detail)
 
     def test_thread_read_returns_chat_messages(self):
         app = create_web_app()

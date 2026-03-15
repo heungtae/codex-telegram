@@ -16,7 +16,7 @@ const AGENT_CONFIG_DEFS = {
         key: "explainability",
         label: "Explainability",
         type: "select",
-        options: ["decision_only", "summary", "full_chain"],
+        options: ["decision_only", "summary"],
       },
     ],
   },
@@ -24,6 +24,12 @@ const AGENT_CONFIG_DEFS = {
 
 const THEME_STORAGE_KEY = "codex-web-theme";
 const DEFAULT_THEME = "dark";
+const GUARDIAN_RULES_TOML_FALLBACK = "# Loading Guardian rules...\n";
+
+function formatGuardianRulesEditor(config) {
+  const raw = typeof config?.rules_toml === "string" ? config.rules_toml : "";
+  return raw.trim() ? raw : GUARDIAN_RULES_TOML_FALLBACK;
+}
 
 function normalizeTheme(theme) {
   return theme === "light" ? "light" : "dark";
@@ -180,6 +186,14 @@ function SaveIcon() {
   );
 }
 
+function SettingsIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M19.14 12.94a7.43 7.43 0 0 0 .05-.94 7.43 7.43 0 0 0-.05-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.28 7.28 0 0 0-1.63-.94L14.4 2.8a.49.49 0 0 0-.49-.4h-3.84a.49.49 0 0 0-.49.4l-.36 2.52c-.58.23-1.13.54-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.68 8.84a.5.5 0 0 0 .12.64l2.03 1.58a7.43 7.43 0 0 0-.05.94 7.43 7.43 0 0 0 .05.94L2.8 14.52a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .6.22l2.39-.96c.5.4 1.05.71 1.63.94l.36 2.52a.49.49 0 0 0 .49.4h3.84a.49.49 0 0 0 .49-.4l.36-2.52c.58-.23 1.13-.54 1.63-.94l2.39.96a.5.5 0 0 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64ZM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7Z" />
+    </svg>
+  );
+}
+
 function App() {
   const PALETTE_LIMIT = 10;
   const SIDEBAR_MIN = 260;
@@ -196,7 +210,9 @@ function App() {
   const [approvalItems, setApprovalItems] = useState([]);
   const [approvalBusyId, setApprovalBusyId] = useState(null);
   const [agentConfigs, setAgentConfigs] = useState({});
+  const [agentConfigRawEditors, setAgentConfigRawEditors] = useState({});
   const [activeAgentSettings, setActiveAgentSettings] = useState("");
+  const [floatingAgentSettings, setFloatingAgentSettings] = useState("");
   const [agentConfigLoading, setAgentConfigLoading] = useState("");
   const [agentConfigSaving, setAgentConfigSaving] = useState("");
   const [agentConfigError, setAgentConfigError] = useState("");
@@ -372,7 +388,18 @@ function App() {
     });
   };
 
-  const loadAgentConfig = async (agentName) => {
+  const syncAgentConfig = (agentName, config, syncRulesEditor = true) => {
+    setAgentConfigs((prev) => ({ ...prev, [agentName]: config }));
+    if (agentName === "guardian" && syncRulesEditor) {
+      setAgentConfigRawEditors((prev) => ({
+        ...prev,
+        [agentName]: formatGuardianRulesEditor(config),
+      }));
+    }
+  };
+
+  const loadAgentConfig = async (agentName, options = {}) => {
+    const { syncRulesEditor = true } = options;
     const def = AGENT_CONFIG_DEFS[agentName];
     if (!def) {
       return null;
@@ -381,11 +408,29 @@ function App() {
     setAgentConfigLoading(agentName);
     try {
       const config = await api(def.path);
-      setAgentConfigs((prev) => ({ ...prev, [agentName]: config }));
+      syncAgentConfig(agentName, config, syncRulesEditor);
       return config;
     } finally {
       setAgentConfigLoading((current) => (current === agentName ? "" : current));
     }
+  };
+
+  const buildAgentPayload = (agentName, draft, options = {}) => {
+    const { includeRules = false } = options;
+    if (agentName !== "guardian") {
+      return draft;
+    }
+    const payload = {
+      enabled: !!draft.enabled,
+      timeout_seconds: Number(draft.timeout_seconds ?? 20),
+      failure_policy: String(draft.failure_policy ?? "manual_fallback"),
+      explainability: String(draft.explainability ?? "decision_only"),
+    };
+    if (!includeRules) {
+      return payload;
+    }
+    const rawRules = agentConfigRawEditors[agentName] ?? formatGuardianRulesEditor(draft);
+    return { ...payload, rules_toml: rawRules };
   };
 
   const toggleAgent = async (agentName) => {
@@ -420,11 +465,21 @@ function App() {
     }
     if (activeAgentSettings === agentName) {
       setActiveAgentSettings("");
+      setFloatingAgentSettings((current) => (current === agentName ? "" : current));
       setAgentConfigError("");
       return;
     }
     setActiveAgentSettings(agentName);
+    if (agentName !== "guardian") {
+      setFloatingAgentSettings("");
+    }
     if (agentConfigs[agentName]) {
+      if (agentName === "guardian" && !agentConfigRawEditors[agentName]) {
+        setAgentConfigRawEditors((prev) => ({
+          ...prev,
+          [agentName]: formatGuardianRulesEditor(agentConfigs[agentName]),
+        }));
+      }
       setAgentConfigError("");
       return;
     }
@@ -433,6 +488,14 @@ function App() {
     } catch (err) {
       setAgentConfigError(err.message || "Failed to load settings.");
     }
+  };
+
+  const toggleFloatingAgentSettings = (agentName) => {
+    if (!agentName || activeAgentSettings !== agentName) {
+      return;
+    }
+    setFloatingAgentSettings((current) => (current === agentName ? "" : agentName));
+    setAgentConfigError("");
   };
 
   const updateAgentDraft = (agentName, key, value) => {
@@ -445,8 +508,8 @@ function App() {
     }));
   };
 
-  const saveAgentSettings = async () => {
-    const agentName = activeAgentSettings;
+  const saveAgentSettings = async (agentName = activeAgentSettings, options = {}) => {
+    const { includeRules = agentName === activeAgentSettings && agentName === "guardian" } = options;
     const def = AGENT_CONFIG_DEFS[agentName];
     const draft = agentConfigs[agentName];
     if (!def || !draft || agentConfigSaving || agentConfigLoading) {
@@ -455,11 +518,12 @@ function App() {
     setAgentConfigError("");
     setAgentConfigSaving(agentName);
     try {
+      const payload = buildAgentPayload(agentName, draft, { includeRules });
       const saved = await api(def.path, {
         method: "POST",
-        body: JSON.stringify(draft),
+        body: JSON.stringify(payload),
       });
-      setAgentConfigs((prev) => ({ ...prev, [agentName]: saved }));
+      syncAgentConfig(agentName, saved, includeRules);
       patchSessionAgent(agentName, !!saved.enabled);
     } catch (err) {
       setAgentConfigError(err.message || "Failed to save settings.");
@@ -693,9 +757,14 @@ function App() {
         setProjectSuggestions(items.filter((v) => typeof v === "string" && v));
       })
       .catch(() => {
-        setProjectSuggestions([]);
-      });
+      setProjectSuggestions([]);
+    });
   }, [activeToken?.type, activeToken?.query]);
+  useEffect(() => {
+    if (floatingAgentSettings && floatingAgentSettings !== activeAgentSettings) {
+      setFloatingAgentSettings("");
+    }
+  }, [activeAgentSettings, floatingAgentSettings]);
 
   const applyPaletteItem = (item) => {
     if (!activeToken) {
@@ -733,9 +802,17 @@ function App() {
 
   const activeAgentDef = activeAgentSettings ? AGENT_CONFIG_DEFS[activeAgentSettings] : null;
   const activeAgentConfig = activeAgentSettings ? agentConfigs[activeAgentSettings] : null;
-  const settingsBusy =
-    (!!activeAgentSettings && agentConfigLoading === activeAgentSettings) ||
-    (!!activeAgentSettings && agentConfigSaving === activeAgentSettings);
+  const floatingAgentConfig = floatingAgentSettings ? agentConfigs[floatingAgentSettings] : null;
+  const guardianRuleSummary =
+    activeAgentSettings === "guardian"
+      ? (activeAgentConfig?.rule_summary || { enabled: 0, total: 0, action_counts: {}, top: [] })
+      : null;
+  const guardianRulesEditor =
+    activeAgentSettings === "guardian"
+      ? (agentConfigRawEditors[activeAgentSettings] ??
+        formatGuardianRulesEditor(activeAgentConfig))
+      : "";
+  const settingsBusy = !!agentConfigLoading || !!agentConfigSaving;
   const interactionBusy = status === "running";
 
   return (
@@ -772,13 +849,7 @@ function App() {
                     title={`${agent.name} 설정`}
                     type="button"
                   >
-                    <svg
-                      className="agent-settings-icon"
-                      viewBox="0 0 24 24"
-                      aria-hidden="true"
-                    >
-                      <path d="M19.14 12.94a7.43 7.43 0 0 0 .05-.94 7.43 7.43 0 0 0-.05-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.28 7.28 0 0 0-1.63-.94L14.4 2.8a.49.49 0 0 0-.49-.4h-3.84a.49.49 0 0 0-.49.4l-.36 2.52c-.58.23-1.13.54-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.68 8.84a.5.5 0 0 0 .12.64l2.03 1.58a7.43 7.43 0 0 0-.05.94 7.43 7.43 0 0 0 .05.94L2.8 14.52a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .6.22l2.39-.96c.5.4 1.05.71 1.63.94l.36 2.52a.49.49 0 0 0 .49.4h3.84a.49.49 0 0 0 .49-.4l.36-2.52c.58-.23 1.13-.54 1.63-.94l2.39.96a.5.5 0 0 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64ZM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7Z" />
-                    </svg>
+                    <SettingsIcon />
                   </button>
                 ) : null}
               </div>
@@ -815,13 +886,58 @@ function App() {
                       </select>
                     </label>
                   ))}
+                  {activeAgentSettings === "guardian" ? (
+                    <div className="agent-settings-summary">
+                      <div className="agent-settings-summary-title">
+                        Rules: {guardianRuleSummary.enabled || 0}/{guardianRuleSummary.total || 0} enabled
+                      </div>
+                      {guardianRuleSummary.action_counts ? (
+                        <div className="agent-settings-summary-actions">
+                          {["approve", "session", "deny", "manual_fallback"].map((action) => (
+                            <span key={action}>
+                              {action}: {guardianRuleSummary.action_counts[action] || 0}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                      {Array.isArray(guardianRuleSummary.top) && guardianRuleSummary.top.length ? (
+                        <div className="agent-settings-summary-list">
+                          {guardianRuleSummary.top.slice(0, 3).map((rule, index) => (
+                            <div key={`${rule.name || "rule"}:${index}`} className="agent-settings-summary-item">
+                              <span>{rule.name || "unnamed-rule"}</span>
+                              <span>{`${rule.action || "deny"} · p${rule.priority || 0}`}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="agent-settings-empty">No guardian policy rules configured.</div>
+                      )}
+                      <div className="agent-settings-summary-footer">
+                        <button
+                          className={`agent-settings-inline-btn ${floatingAgentSettings === "guardian" ? "active" : ""}`}
+                          type="button"
+                          onClick={() => toggleFloatingAgentSettings("guardian")}
+                          disabled={settingsBusy}
+                          aria-label="Rules TOML"
+                          title="Rules TOML"
+                        >
+                          <SettingsIcon />
+                          <span>Settings</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
                   <div className="agent-settings-actions">
                     <button
                       className="agent-settings-action"
                       type="button"
-                      onClick={() => loadAgentConfig(activeAgentSettings).catch((err) => {
-                        setAgentConfigError(err.message || "Failed to refresh settings.");
-                      })}
+                      onClick={() =>
+                        loadAgentConfig(activeAgentSettings, {
+                          syncRulesEditor: activeAgentSettings !== "guardian",
+                        }).catch((err) => {
+                          setAgentConfigError(err.message || "Failed to refresh settings.");
+                        })
+                      }
                       disabled={settingsBusy}
                       aria-label="새로고침"
                       title="새로고침"
@@ -831,7 +947,11 @@ function App() {
                     <button
                       className="agent-settings-action agent-settings-action-primary"
                       type="button"
-                      onClick={saveAgentSettings}
+                      onClick={() =>
+                        saveAgentSettings(activeAgentSettings, {
+                          includeRules: false,
+                        })
+                      }
                       disabled={settingsBusy}
                       aria-label="저장"
                       title="저장"
@@ -894,6 +1014,75 @@ function App() {
             </span>
           </div>
         </div>
+        {floatingAgentSettings === "guardian" ? (
+          <div className="agent-floating-settings">
+            <div className="agent-floating-settings-card">
+              <div className="agent-settings-head">
+                <strong>Guardian Rules TOML</strong>
+                <button
+                  className="agent-floating-settings-close"
+                  type="button"
+                  onClick={() => setFloatingAgentSettings("")}
+                  disabled={settingsBusy}
+                >
+                  Close
+                </button>
+              </div>
+              {floatingAgentConfig ? (
+                <div className="agent-settings-form">
+                  <label className="agent-field">
+                    <span>Rules TOML</span>
+                    <textarea
+                      className="agent-field-textarea"
+                      value={guardianRulesEditor}
+                      onChange={(e) => {
+                        const nextValue = e.target.value;
+                        setAgentConfigRawEditors((prev) => ({
+                          ...prev,
+                          [floatingAgentSettings]: nextValue,
+                        }));
+                      }}
+                      disabled={settingsBusy}
+                      spellCheck={false}
+                    />
+                    <span className="agent-field-help">
+                      Only rules that already exist in `conf.toml` are active. If none are configured, commented examples from `conf.toml.example` are shown here.
+                    </span>
+                  </label>
+                  <div className="agent-floating-settings-note">
+                    Timeout, failure policy, and explainability stay in the left settings card.
+                  </div>
+                  <div className="agent-settings-actions">
+                    <button
+                      className="agent-settings-action"
+                      type="button"
+                      onClick={() => loadAgentConfig(floatingAgentSettings, { syncRulesEditor: true }).catch((err) => {
+                        setAgentConfigError(err.message || "Failed to refresh settings.");
+                      })}
+                      disabled={settingsBusy}
+                      aria-label="새로고침"
+                      title="새로고침"
+                    >
+                      <RefreshIcon />
+                    </button>
+                    <button
+                      className="agent-settings-action agent-settings-action-primary"
+                      type="button"
+                      onClick={() => saveAgentSettings(floatingAgentSettings, { includeRules: true })}
+                      disabled={settingsBusy}
+                      aria-label="저장"
+                      title="저장"
+                    >
+                      <SaveIcon />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="agent-settings-empty">설정을 불러오는 중입니다.</div>
+              )}
+            </div>
+          </div>
+        ) : null}
         <div className="chat" ref={chatRef}>
           {approvalItems.length ? (
             <div className="approval-stack">
@@ -902,6 +1091,7 @@ function App() {
                   <div className="approval-title">Approval required</div>
                   <div>Method: {item.method || "-"}</div>
                   <div>Request ID: {item.id}</div>
+                  {item.policy_rule ? <div>Policy: {item.policy_rule}</div> : null}
                   {item.reason ? <div>Reason: {item.reason}</div> : null}
                   {item.question ? <div>Question: {item.question}</div> : null}
                   <div className="approval-actions">

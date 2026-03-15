@@ -22,8 +22,6 @@ class UserState:
     feature_panel_names: dict[str, str] = field(default_factory=dict)
     feature_panel_current: dict[str, bool] = field(default_factory=dict)
     feature_panel_draft: dict[str, bool] = field(default_factory=dict)
-    guardian_panel_current: dict[str, Any] = field(default_factory=dict)
-    guardian_panel_draft: dict[str, Any] = field(default_factory=dict)
     
     def set_thread(self, thread_id: str | None):
         self.active_thread_id = thread_id
@@ -51,23 +49,6 @@ class UserState:
         }
         self.feature_panel_current = {k: bool(current.get(k, False)) for k in self.feature_panel_keys}
         self.feature_panel_draft = dict(self.feature_panel_current)
-
-    def set_guardian_panel(self, current: dict[str, Any]):
-        enabled_raw = current.get("enabled", False)
-        if isinstance(enabled_raw, bool):
-            enabled = enabled_raw
-        else:
-            enabled = str(enabled_raw).strip().lower() in {"1", "true", "yes", "on"}
-        timeout_raw = current.get("timeout_seconds", 20)
-        timeout = timeout_raw if isinstance(timeout_raw, int) and timeout_raw > 0 else 20
-        normalized = {
-            "enabled": enabled,
-            "timeout_seconds": timeout,
-            "failure_policy": str(current.get("failure_policy", "manual_fallback")),
-            "explainability": str(current.get("explainability", "full_chain")),
-        }
-        self.guardian_panel_current = normalized
-        self.guardian_panel_draft = dict(normalized)
 
     def set_project(self, key: str, name: str, path: str):
         self.selected_project_key = key

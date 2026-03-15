@@ -51,7 +51,6 @@ def settings_keyboard() -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton("📁 Project Select", callback_data="cmd:projects"),
-            InlineKeyboardButton("🛡 Guardian", callback_data="cmd:guardian_settings"),
         ],
         [
             InlineKeyboardButton("🤖 Models", callback_data="cmd:models"),
