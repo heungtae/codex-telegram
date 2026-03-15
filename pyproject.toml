@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "codex-telegram"
 dynamic = ["version"]
-description = "Telegram bot for controlling Codex App Server"
+description = "Bridge for controlling the Codex App Server from Telegram and Web UI"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
