@@ -35,6 +35,7 @@ from bot import (
     callback_handler,
 )
 from bot.keyboard import approval_keyboard
+from codex_telegram import __version__
 from models import state
 from models.user import user_manager
 from web import create_web_app
@@ -72,7 +73,7 @@ async def setup_codex() -> CodexClient:
     await client.initialize({
         "name": "codex-telegram",
         "title": "Codex Telegram Bot",
-        "version": "0.2.0",
+        "version": __version__,
     })
     return client
 

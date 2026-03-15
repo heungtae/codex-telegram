@@ -10,6 +10,7 @@ from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+from codex_telegram import __version__
 from codex.command_router.common import first_text
 from models import state
 from models.user import user_manager
@@ -406,7 +407,7 @@ async def _run_local_feature_toggle(feature_key: str, enabled: bool) -> tuple[bo
 
 
 def create_web_app() -> FastAPI:
-    app = FastAPI(title="Codex Web", version="0.1.0")
+    app = FastAPI(title="Codex Web", version=__version__)
     app.mount("/assets", StaticFiles(directory=str(STATIC_DIR)), name="assets")
 
     @app.get("/")

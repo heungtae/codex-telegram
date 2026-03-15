@@ -5,6 +5,8 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
+from codex_telegram import __version__
+
 from .client import CodexClient
 
 
@@ -42,7 +44,7 @@ class ApprovalGuardianService:
             {
                 "name": "codex-telegram-guardian",
                 "title": "Codex Telegram Guardian",
-                "version": "0.1.0",
+                "version": __version__,
             }
         )
 
