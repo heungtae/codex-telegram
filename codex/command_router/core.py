@@ -37,9 +37,12 @@ class CommandRouter:
             "/exec": self._dispatch_exec,
             "/models": self._dispatch_models,
             "/features": self._dispatch_features,
-            "/gurdian": self._dispatch_gurdian,
-            "/guardian": self._dispatch_gurdian,
-            "/modes": self._dispatch_modes,
+            "/guardian": self._dispatch_guardian,
+            "/modes": self._dispatch_collab,
+            "/collab": self._dispatch_collab,
+            "/mode": self._dispatch_mode,
+            "/plan": self._dispatch_plan,
+            "/build": self._dispatch_build,
             "/skills": self._dispatch_skills,
             "/apps": self._dispatch_apps,
             "/mcp": self._dispatch_mcp,
@@ -109,11 +112,20 @@ class CommandRouter:
     async def _dispatch_features(self, _args: list[str], _user_id: int) -> CommandResult:
         return await self.system.experimental_feature_list()
 
-    async def _dispatch_gurdian(self, _args: list[str], _user_id: int) -> CommandResult:
+    async def _dispatch_guardian(self, _args: list[str], _user_id: int) -> CommandResult:
         return await self.system.guardian_settings()
 
-    async def _dispatch_modes(self, _args: list[str], _user_id: int) -> CommandResult:
+    async def _dispatch_collab(self, _args: list[str], _user_id: int) -> CommandResult:
         return await self.system.collaboration_mode_list()
+
+    async def _dispatch_mode(self, args: list[str], user_id: int) -> CommandResult:
+        return await self.system.collaboration_mode(args, user_id)
+
+    async def _dispatch_plan(self, _args: list[str], user_id: int) -> CommandResult:
+        return await self.system.collaboration_mode_set("plan", user_id)
+
+    async def _dispatch_build(self, _args: list[str], user_id: int) -> CommandResult:
+        return await self.system.collaboration_mode_set("build", user_id)
 
     async def _dispatch_skills(self, args: list[str], _user_id: int) -> CommandResult:
         return await self.system.skills_list(args)

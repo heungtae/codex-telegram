@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from codex.command_router.core import CommandRouter
 from models.user import user_manager
@@ -60,6 +60,111 @@ class CommandRouterTests(unittest.IsolatedAsyncioTestCase):
         result = await self.router.route("/models", ["--help"], 1)
         self.assertEqual("usage", result.kind)
         self.assertIn("Usage: /models", result.text)
+
+    async def test_plan_sets_collaboration_mode_to_plan(self):
+        self.codex.call = AsyncMock(
+            side_effect=lambda method, params=None: (
+                {"data": [{"name": "Plan", "mode": "plan", "model": "gpt-5.3-codex"}]}
+                if method == "collaborationMode/list"
+                else {}
+            )
+        )
+        result = await self.router.route("/plan", [], 1)
+        self.assertEqual("text", result.kind)
+        self.assertIn("PLAN", result.text)
+        self.assertIn("codex target=Plan", result.text)
+        self.codex.call.assert_awaited_with("collaborationMode/list")
+        self.assertEqual("plan", user_manager.get(1).collaboration_mode)
+
+    async def test_build_sets_collaboration_mode_to_default(self):
+        user_manager.get(1).set_collaboration_mode("plan")
+        self.codex.call = AsyncMock(
+            side_effect=lambda method, params=None: (
+                {"data": [{"name": "Default", "mode": "default", "model": "gpt-5.3-codex"}]}
+                if method == "collaborationMode/list"
+                else {}
+            )
+        )
+        result = await self.router.route("/build", [], 1)
+        self.assertEqual("text", result.kind)
+        self.assertIn("BUILD", result.text)
+        self.assertIn("codex target=Default", result.text)
+        self.codex.call.assert_awaited_with("collaborationMode/list")
+        self.assertEqual("build", user_manager.get(1).collaboration_mode)
+
+    async def test_mode_toggle_switches_to_plan_from_build(self):
+        self.assertEqual("build", user_manager.get(1).collaboration_mode)
+        self.codex.call = AsyncMock(
+            side_effect=lambda method, params=None: (
+                {"data": [{"name": "Plan", "mode": "plan", "model": "gpt-5.3-codex"}]}
+                if method == "collaborationMode/list"
+                else {}
+            )
+        )
+        result = await self.router.route("/mode", ["toggle"], 1)
+        self.assertEqual("text", result.kind)
+        self.assertIn("codex target=Plan", result.text)
+        self.codex.call.assert_awaited_with("collaborationMode/list")
+        self.assertEqual("plan", user_manager.get(1).collaboration_mode)
+
+    async def test_plan_caches_collaboration_mode_mask(self):
+        self.codex.call = AsyncMock(
+            side_effect=lambda method, params=None: (
+                {
+                    "data": [
+                        {"name": "default", "mode": "default", "model": "gpt-5.3-codex", "reasoning_effort": "medium"},
+                        {"name": "plan", "mode": "plan", "model": "gpt-5.3-codex", "reasoning_effort": "high"},
+                    ]
+                }
+                if method == "collaborationMode/list"
+                else {}
+            )
+        )
+        result = await self.router.route("/plan", [], 1)
+        self.assertEqual("text", result.kind)
+        self.assertEqual(
+            {
+                "name": "plan",
+                "mode": "plan",
+                "model": "gpt-5.3-codex",
+                "reasoning_effort": "high",
+            },
+            user_manager.get(1).collaboration_mode_mask,
+        )
+
+    async def test_plan_caches_collaboration_mode_mask_from_nested_settings_shape(self):
+        self.codex.call = AsyncMock(
+            side_effect=lambda method, params=None: (
+                {
+                    "data": {
+                        "modes": [
+                            {
+                                "name": "default",
+                                "settings": {"model": "gpt-5.3-codex", "reasoningEffort": "medium"},
+                            },
+                            {
+                                "name": "plan",
+                                "mode": "plan",
+                                "settings": {"model": "gpt-5.3-codex", "reasoningEffort": "high"},
+                            },
+                        ]
+                    }
+                }
+                if method == "collaborationMode/list"
+                else {}
+            )
+        )
+        result = await self.router.route("/plan", [], 1)
+        self.assertEqual("text", result.kind)
+        self.assertEqual(
+            {
+                "name": "plan",
+                "mode": "plan",
+                "model": "gpt-5.3-codex",
+                "reasoning_effort": "high",
+            },
+            user_manager.get(1).collaboration_mode_mask,
+        )
 
     async def test_skills_returns_kind_and_names_meta(self):
         result = await self.router.route("/skills", [], 1)
@@ -138,7 +243,7 @@ class CommandRouterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual({"use_linux_sandbox_bwrap": False, "js_repl": True}, result.meta.get("feature_enabled"))
         self.assertIn(("experimentalFeature/list", {"limit": 200}), self.codex.calls)
 
-    async def test_gurdian_returns_guardian_settings_kind(self):
+    async def test_guardian_returns_guardian_settings_kind(self):
         with patch(
             "codex.command_router.system.get_guardian_settings",
             return_value={
@@ -149,11 +254,53 @@ class CommandRouterTests(unittest.IsolatedAsyncioTestCase):
                 "apply_to_methods": ["*"],
             },
         ):
-            result = await self.router.route("/gurdian", [], 1)
+            result = await self.router.route("/guardian", [], 1)
 
         self.assertEqual("guardian_settings", result.kind)
         self.assertIn("Guardian settings:", result.text)
         self.assertFalse(self.codex.calls)
+
+    async def test_collab_lists_collaboration_modes(self):
+        self.codex.call = AsyncMock(
+            return_value={
+                "data": [
+                    {"name": "default"},
+                    {"name": "plan"},
+                ]
+            }
+        )
+
+        result = await self.router.route("/collab", [], 1)
+
+        self.assertEqual("text", result.kind)
+        self.assertIn("Collaboration modes:", result.text)
+        self.assertIn("default", result.text)
+        self.assertIn("plan", result.text)
+        self.codex.call.assert_awaited_once_with("collaborationMode/list")
+
+    async def test_build_matches_runtime_default_preset_name(self):
+        self.codex.call = AsyncMock(
+            return_value={
+                "data": [
+                    {"name": "Plan", "mode": "plan", "model": "gpt-5.3-codex"},
+                    {"name": "Default", "mode": "default", "model": "gpt-5.3-codex"},
+                ]
+            }
+        )
+
+        result = await self.router.route("/build", [], 1)
+
+        self.assertEqual("text", result.kind)
+        self.assertIn("codex target=Default", result.text)
+        self.assertEqual(
+            {
+                "name": "Default",
+                "mode": "default",
+                "model": "gpt-5.3-codex",
+                "reasoning_effort": None,
+            },
+            user_manager.get(1).collaboration_mode_mask,
+        )
 
     async def test_mcp_uses_alternate_status_fields(self):
         self.codex.mcp_server_status_data = [

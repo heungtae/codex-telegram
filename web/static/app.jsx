@@ -194,6 +194,44 @@ function SettingsIcon() {
   );
 }
 
+function normalizePlanStatus(raw) {
+  const value = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+  if (value === "completed") {
+    return "completed";
+  }
+  if (value === "inprogress" || value === "in_progress" || value === "in-progress") {
+    return "in_progress";
+  }
+  return "pending";
+}
+
+function formatPlanChecklistText(explanation, plan) {
+  const lines = [];
+  const summary = typeof explanation === "string" ? explanation.trim() : "";
+  if (summary) {
+    lines.push(summary);
+  }
+  const steps = Array.isArray(plan) ? plan : [];
+  for (const entry of steps) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+    const step = typeof entry.step === "string" ? entry.step.trim() : "";
+    if (!step) {
+      continue;
+    }
+    const status = normalizePlanStatus(entry.status);
+    const marker =
+      status === "completed" ? "[done]" : status === "in_progress" ? "[doing]" : "[todo]";
+    lines.push(`${marker} ${step}`);
+  }
+  return lines.join("\n").trim();
+}
+
+function normalizeThreadId(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : "";
+}
+
 function App() {
   const PALETTE_LIMIT = 10;
   const SIDEBAR_MIN = 260;
@@ -207,6 +245,8 @@ function App() {
   const [skillSuggestions, setSkillSuggestions] = useState([]);
   const [sessionSummary, setSessionSummary] = useState(null);
   const [status, setStatus] = useState("idle");
+  const [collaborationMode, setCollaborationMode] = useState("build");
+  const [modeSwitchBusy, setModeSwitchBusy] = useState(false);
   const [approvalItems, setApprovalItems] = useState([]);
   const [approvalBusyId, setApprovalBusyId] = useState(null);
   const [agentConfigs, setAgentConfigs] = useState({});
@@ -242,8 +282,12 @@ function App() {
       "/projects",
       "/project",
       "/models",
+      "/collab",
       "/features",
       "/modes",
+      "/mode",
+      "/plan",
+      "/build",
       "/skills",
       "/apps",
       "/mcp",
@@ -336,6 +380,9 @@ function App() {
     const summary = await api("/api/session/summary");
     setSessionSummary(summary);
     setStatus(summary?.active_turn_id ? "running" : "idle");
+    if (typeof summary?.collaboration_mode === "string") {
+      setCollaborationMode(normalizeCollaborationMode(summary.collaboration_mode));
+    }
     if (summary && typeof summary.active_thread_id === "string" && summary.active_thread_id) {
       setActiveThread(summary.active_thread_id);
     }
@@ -546,7 +593,8 @@ function App() {
       await runCommand(text);
       return;
     }
-    setMessages((prev) => [...prev, { role: "user", text }]);
+    const messageThreadId = normalizeThreadId(activeThread);
+    setMessages((prev) => [...prev, { role: "user", text, threadId: messageThreadId }]);
     setStatus("running");
     try {
       const result = await api("/api/chat/messages", {
@@ -554,14 +602,63 @@ function App() {
         body: JSON.stringify({ text, thread_id: activeThread || undefined }),
       });
       if (result.local_command) {
-        setMessages((prev) => [...prev, { role: "assistant", text: result.output || "" }]);
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            text: result.output || "",
+            threadId: normalizeThreadId(result.thread_id) || messageThreadId,
+          },
+        ]);
         setStatus("idle");
         loadSessionSummary().catch(() => {});
       }
     } catch (err) {
       setStatus("idle");
-      setMessages((prev) => [...prev, { role: "system", text: err.message || "Request failed.", streaming: false }]);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "system",
+          text: err.message || "Request failed.",
+          threadId: messageThreadId,
+          streaming: false,
+        },
+      ]);
       loadSessionSummary().catch(() => {});
+    }
+  };
+
+  const normalizeCollaborationMode = (raw) => {
+    if (typeof raw !== "string") {
+      return "build";
+    }
+    return raw.trim().toLowerCase() === "plan" ? "plan" : "build";
+  };
+
+  const toggleComposerMode = async () => {
+    if (status === "running" || modeSwitchBusy) {
+      return;
+    }
+    setModeSwitchBusy(true);
+    try {
+      const result = await api("/api/command", {
+        method: "POST",
+        body: JSON.stringify({ command_line: "/mode toggle" }),
+      });
+      const nextMode = normalizeCollaborationMode(result?.meta?.collaboration_mode);
+      setCollaborationMode(nextMode);
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "system",
+          text: err.message || "Failed to switch mode.",
+          threadId: normalizeThreadId(activeThread),
+          streaming: false,
+        },
+      ]);
+    } finally {
+      setModeSwitchBusy(false);
     }
   };
 
@@ -606,12 +703,21 @@ function App() {
             role: item.role === "user" ? "user" : item.role === "assistant" ? "assistant" : "system",
             text: item.text,
             variant: item.variant === "subagent" ? "subagent" : "",
+            kind: item.kind === "plan" ? "plan" : "",
+            threadId: normalizeThreadId(item.thread_id) || normalizeThreadId(threadId),
             streaming: false,
           }))
       );
       return;
     }
-    setMessages([{ role: "assistant", text: result.text, streaming: false }]);
+    setMessages([
+      {
+        role: "assistant",
+        text: result.text,
+        threadId: normalizeThreadId(result.thread_id) || normalizeThreadId(threadId),
+        streaming: false,
+      },
+    ]);
   };
 
   const runCommand = async (line) => {
@@ -619,13 +725,26 @@ function App() {
     if (!cmd) {
       return;
     }
-    setMessages((prev) => [...prev, { role: "user", text: cmd }]);
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", text: cmd, threadId: normalizeThreadId(activeThread) },
+    ]);
     setStatus("running");
     const result = await api("/api/command", {
       method: "POST",
       body: JSON.stringify({ command_line: cmd }),
     });
-    setMessages((prev) => [...prev, { role: "assistant", text: result.text }]);
+    if (result?.meta?.collaboration_mode) {
+      setCollaborationMode(normalizeCollaborationMode(result.meta.collaboration_mode));
+    }
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "assistant",
+        text: result.text,
+        threadId: normalizeThreadId(result?.meta?.thread_id) || normalizeThreadId(activeThread),
+      },
+    ]);
     setStatus("idle");
     if (
       cmd.startsWith("/threads") ||
@@ -664,18 +783,40 @@ function App() {
         return;
       }
       const variant = data.variant === "subagent" ? "subagent" : "";
+      const threadId = normalizeThreadId(data.thread_id);
       setMessages((prev) => {
         const copy = [...prev];
         const last = copy[copy.length - 1];
         if (last && last.role === "assistant" && last.streaming && (last.variant || "") === variant) {
           last.text += text;
+          if (!last.threadId && threadId) {
+            last.threadId = threadId;
+          }
           return copy;
         }
-        copy.push({ role: "assistant", text, variant, streaming: true });
+        copy.push({ role: "assistant", text, variant, threadId, streaming: true });
         return copy;
       });
     });
-    es.addEventListener("turn_started", () => {
+    es.addEventListener("plan_delta", (ev) => {
+      const data = JSON.parse(ev.data);
+      upsertPlanMessage("append", data);
+    });
+    es.addEventListener("plan_completed", (ev) => {
+      const data = JSON.parse(ev.data);
+      upsertPlanMessage("final", data);
+      loadSessionSummary().catch(() => {});
+    });
+    es.addEventListener("plan_checklist", (ev) => {
+      const data = JSON.parse(ev.data);
+      upsertPlanChecklist(data);
+    });
+    es.addEventListener("turn_started", (ev) => {
+      const data = JSON.parse(ev.data);
+      const actualMode = data?.params?.collaboration_mode_kind || data?.params?.collaborationModeKind;
+      if (typeof actualMode === "string") {
+        setCollaborationMode(normalizeCollaborationMode(actualMode));
+      }
       setStatus("running");
     });
     es.addEventListener("turn_completed", () => {
@@ -687,8 +828,9 @@ function App() {
     es.addEventListener("turn_failed", (ev) => {
       const data = JSON.parse(ev.data);
       const text = data.text || "Turn failed.";
+      const threadId = normalizeThreadId(data.thread_id);
       setStatus("idle");
-      setMessages((prev) => [...prev, { role: "system", text, streaming: false }]);
+      setMessages((prev) => [...prev, { role: "system", text, threadId, streaming: false }]);
       loadSessionSummary().catch(() => {});
     });
     es.addEventListener("approval_required", (ev) => {
@@ -705,7 +847,36 @@ function App() {
       if (!text) {
         return;
       }
-      setMessages((prev) => [...prev, { role: "system", text, streaming: false }]);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "system",
+          text,
+          threadId: normalizeThreadId(data.thread_id),
+          streaming: false,
+        },
+      ]);
+      loadSessionSummary().catch(() => {});
+    });
+    es.addEventListener("file_change", (ev) => {
+      const data = JSON.parse(ev.data);
+      const summary = data.summary || data.text || "";
+      const files = Array.isArray(data.files) ? data.files : [];
+      const threadId = normalizeThreadId(data.thread_id);
+      if (!summary && files.length === 0) {
+        return;
+      }
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "system",
+          text: summary || "Applied patch changes",
+          files,
+          threadId,
+          kind: "file_change",
+          streaming: false,
+        },
+      ]);
       loadSessionSummary().catch(() => {});
     });
     es.onerror = () => {
@@ -815,6 +986,73 @@ function App() {
     setTheme((current) => (current === "dark" ? "light" : "dark"));
   };
 
+  const upsertPlanMessage = (mode, payload) => {
+    const itemId = typeof payload?.item_id === "string" ? payload.item_id : "";
+    const text = typeof payload?.text === "string" ? payload.text : "";
+    if (!itemId || !text) {
+      return;
+    }
+    setMessages((prev) => {
+      const next = [...prev];
+      const existingIndex = next.findIndex(
+        (message) => message.kind === "plan" && message.itemId === itemId
+      );
+      const streaming = mode !== "final";
+      if (existingIndex >= 0) {
+        const existing = next[existingIndex];
+        next[existingIndex] = {
+          ...existing,
+          role: "assistant",
+          kind: "plan",
+          itemId,
+          threadId: normalizeThreadId(payload?.thread_id),
+          text: mode === "append" ? `${existing.text || ""}${text}` : text,
+          streaming,
+        };
+        return next;
+      }
+      next.push({
+        role: "assistant",
+        kind: "plan",
+        itemId,
+        threadId: normalizeThreadId(payload?.thread_id),
+        text,
+        streaming,
+      });
+      return next;
+    });
+  };
+
+  const upsertPlanChecklist = (payload) => {
+    const text = formatPlanChecklistText(payload?.explanation, payload?.plan);
+    const turnId = typeof payload?.turn_id === "string" ? payload.turn_id : "";
+    if (!text || !turnId) {
+      return;
+    }
+    setMessages((prev) => {
+      const next = [...prev];
+      const existingIndex = next.findIndex(
+        (message) => message.kind === "plan_checklist" && message.turnId === turnId
+      );
+      const value = {
+        role: "system",
+        kind: "plan_checklist",
+        threadId: normalizeThreadId(payload?.thread_id),
+        turnId,
+        text,
+        plan: Array.isArray(payload?.plan) ? payload.plan : [],
+        explanation: typeof payload?.explanation === "string" ? payload.explanation : "",
+        streaming: false,
+      };
+      if (existingIndex >= 0) {
+        next[existingIndex] = { ...next[existingIndex], ...value };
+        return next;
+      }
+      next.push(value);
+      return next;
+    });
+  };
+
   if (!me) {
     return <Login onLoggedIn={loadSession} theme={theme} onToggleTheme={toggleTheme} />;
   }
@@ -833,6 +1071,7 @@ function App() {
       : "";
   const settingsBusy = !!agentConfigLoading || !!agentConfigSaving;
   const interactionBusy = status === "running";
+  const composerLocked = interactionBusy;
 
   return (
     <div className="app">
@@ -844,6 +1083,8 @@ function App() {
           <div className="meta-value">{activeThread || sessionSummary?.active_thread_id || "-"}</div>
           <div className="meta-line"><b>Workspace</b></div>
           <div className="meta-value">{sessionSummary?.workspace || "-"}</div>
+          <div className="meta-line"><b>Mode</b></div>
+          <div className="meta-value">{collaborationMode.toUpperCase()}</div>
         </div>
         <div className="panel">
           <h3>Enabled Agents</h3>
@@ -1145,8 +1386,20 @@ function App() {
           ) : null}
           {messages.map((m, idx) => (
             <div key={idx} className={`msg-row ${m.role}`}>
-              <div className={`msg ${m.role}${m.variant ? ` ${m.variant}` : ""}`}>
+              <div className={`msg ${m.role}${m.variant ? ` ${m.variant}` : ""}${m.kind ? ` kind-${m.kind}` : ""}`}>
+                {m.kind === "plan" ? <div className="msg-label">Plan</div> : null}
+                {m.kind === "plan_checklist" ? <div className="msg-label">Plan Checklist</div> : null}
                 <div className="msg-body">{m.text}</div>
+                {m.kind === "file_change" && Array.isArray(m.files) && m.files.length ? (
+                  <div className="msg-body">
+                    {m.files.map((file, fileIdx) => (
+                      <div key={`${file.path || "file"}:${fileIdx}`}>
+                        {(file.change_type || "M")} {file.path || "-"} (+{Number(file.additions || 0)} -{Number(file.deletions || 0)})
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                {m.threadId ? <div className="msg-meta">threadId: {m.threadId}</div> : null}
               </div>
             </div>
           ))}
@@ -1174,64 +1427,88 @@ function App() {
                   })}
                 </div>
               ) : null}
-              <textarea
-                ref={inputRef}
-                rows={1}
-                value={input}
-                disabled={interactionBusy}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (interactionBusy) {
-                    return;
-                  }
-                  if (e.isComposing) {
-                    return;
-                  }
-                  if (paletteOpen && e.key === "ArrowDown") {
+              <div className={`composer-input-shell mode-${collaborationMode}`}>
+                <button
+                  type="button"
+                  className={`composer-mode mode-${collaborationMode}`}
+                  disabled={composerLocked || modeSwitchBusy}
+                  onMouseDown={(e) => {
                     e.preventDefault();
-                    setPaletteSelectedIndex((prev) => (prev + 1) % paletteItems.length);
-                    return;
-                  }
-                  if (paletteOpen && e.key === "ArrowUp") {
+                  }}
+                  onClick={() => {
+                    toggleComposerMode().catch(() => {});
+                    focusComposer();
+                  }}
+                  title="Press Tab to toggle mode"
+                  aria-label={`Collaboration mode ${collaborationMode}. Press Tab to toggle.`}
+                >
+                  <span className="composer-mode-label">{collaborationMode.toUpperCase()}</span>
+                  <span className="composer-mode-key">TAB</span>
+                </button>
+                <textarea
+                  ref={inputRef}
+                  rows={1}
+                  value={input}
+                  disabled={composerLocked}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (composerLocked) {
+                      return;
+                    }
+                    if (e.isComposing) {
+                      return;
+                    }
+                    if (e.key === "Tab" && !e.altKey && !e.ctrlKey && !e.metaKey) {
+                      e.preventDefault();
+                      toggleComposerMode().catch(() => {});
+                      return;
+                    }
+                    if (paletteOpen && e.key === "ArrowDown") {
+                      e.preventDefault();
+                      setPaletteSelectedIndex((prev) => (prev + 1) % paletteItems.length);
+                      return;
+                    }
+                    if (paletteOpen && e.key === "ArrowUp") {
+                      e.preventDefault();
+                      setPaletteSelectedIndex((prev) =>
+                        (prev - 1 + paletteItems.length) % paletteItems.length
+                      );
+                      return;
+                    }
+                    if (paletteOpen && e.key === "Escape") {
+                      e.preventDefault();
+                      return;
+                    }
+                    if (e.key !== "Enter") {
+                      return;
+                    }
+                    if (e.altKey || e.shiftKey) {
+                      e.preventDefault();
+                      const el = e.currentTarget;
+                      const start = el.selectionStart ?? input.length;
+                      const end = el.selectionEnd ?? input.length;
+                      const next = `${input.slice(0, start)}\n${input.slice(end)}`;
+                      setInput(next);
+                      queueMicrotask(() => {
+                        const pos = start + 1;
+                        if (inputRef.current) {
+                          inputRef.current.selectionStart = pos;
+                          inputRef.current.selectionEnd = pos;
+                        }
+                      });
+                      return;
+                    }
+                    if (paletteOpen) {
+                      e.preventDefault();
+                      applyPaletteItem(paletteItems[paletteSelectedIndex]);
+                      return;
+                    }
                     e.preventDefault();
-                    setPaletteSelectedIndex((prev) =>
-                      (prev - 1 + paletteItems.length) % paletteItems.length
-                    );
-                    return;
-                  }
-                  if (paletteOpen && e.key === "Escape") {
-                    e.preventDefault();
-                    return;
-                  }
-                  if (e.key !== "Enter") {
-                    return;
-                  }
-                  if (e.altKey || e.shiftKey) {
-                    e.preventDefault();
-                    const el = e.currentTarget;
-                    const start = el.selectionStart ?? input.length;
-                    const end = el.selectionEnd ?? input.length;
-                    const next = `${input.slice(0, start)}\n${input.slice(end)}`;
-                    setInput(next);
-                    queueMicrotask(() => {
-                      const pos = start + 1;
-                      if (inputRef.current) {
-                        inputRef.current.selectionStart = pos;
-                        inputRef.current.selectionEnd = pos;
-                      }
-                    });
-                    return;
-                  }
-                  if (paletteOpen) {
-                    e.preventDefault();
-                    applyPaletteItem(paletteItems[paletteSelectedIndex]);
-                    return;
-                  }
-                  e.preventDefault();
-                  sendMessage().catch(() => {});
-                }}
-                placeholder="Message..."
-              />
+                    sendMessage().catch(() => {});
+                  }}
+                  placeholder="Message..."
+                />
+              </div>
             </div>
             {status === "running" ? (
               <button className="composer-action composer-stop" onClick={interrupt} aria-label="Stop" title="Stop">

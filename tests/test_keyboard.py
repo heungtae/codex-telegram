@@ -13,6 +13,7 @@ class KeyboardTests(unittest.TestCase):
             if button.callback_data
         ]
         self.assertIn("cmd:config", callbacks)
+        self.assertIn("cmd:mode_quick_toggle", callbacks)
         self.assertNotIn("cmd:features", callbacks)
         self.assertNotIn("cmd:apps", callbacks)
 
@@ -29,12 +30,15 @@ class KeyboardTests(unittest.TestCase):
             "cmd:apps",
             "cmd:projects",
             "cmd:models",
-            "cmd:modes",
             "cmd:mcp",
             "cmd:config_view",
             "cmd:menu",
         ):
             self.assertIn(expected, callbacks)
+        self.assertNotIn("cmd:modes", callbacks)
+        self.assertNotIn("cmd:mode_plan", callbacks)
+        self.assertNotIn("cmd:mode_toggle", callbacks)
+        self.assertNotIn("cmd:mode_quick_toggle", callbacks)
         self.assertNotIn("cmd:guardian_settings", callbacks)
         self.assertNotIn("cmd:reviewer_settings", callbacks)
 

@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import sys
 import threading
 from typing import Any
@@ -34,7 +35,7 @@ from bot import (
     error_handler,
     callback_handler,
 )
-from bot.keyboard import approval_keyboard
+from bot.keyboard import approval_keyboard, main_menu_keyboard
 from codex_telegram import __version__
 from models import state
 from models.user import user_manager
@@ -43,6 +44,17 @@ from web.runtime import event_hub
 logger = setup("codex-telegram")
 _web_server = None
 _web_server_thread = None
+
+
+def _normalize_mode_kind(raw: object) -> str | None:
+    if not isinstance(raw, str):
+        return None
+    normalized = raw.strip().lower()
+    if normalized == "plan":
+        return "plan"
+    if normalized == "default":
+        return "build"
+    return None
 
 
 class WebServerThread:
@@ -172,6 +184,245 @@ async def post_init(app: Application | None):
             return "subagent"
         return None
 
+    def _coerce_int(value: Any) -> int:
+        if isinstance(value, bool):
+            return 0
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float):
+            return int(value)
+        if isinstance(value, str):
+            raw = value.strip()
+            if raw.isdigit():
+                return int(raw)
+        return 0
+
+    def _clean_file_path(path: Any) -> str:
+        if not isinstance(path, str):
+            return ""
+        normalized = path.strip()
+        if normalized.startswith("a/") or normalized.startswith("b/"):
+            return normalized[2:]
+        if normalized == "/dev/null":
+            return ""
+        return normalized
+
+    def _extract_preview(value: Any) -> str:
+        if not isinstance(value, str):
+            return ""
+        lines = [line.rstrip() for line in value.splitlines() if line.strip()]
+        if not lines:
+            return ""
+        return "\n".join(lines[:6])[:800]
+
+    def _entry_from_mapping(item: dict[str, Any]) -> dict[str, Any] | None:
+        path = ""
+        for key in ("path", "file", "filepath", "filePath", "newPath", "oldPath", "target", "source"):
+            path = _clean_file_path(item.get(key))
+            if path:
+                break
+        if not path:
+            nested = item.get("file")
+            if isinstance(nested, dict):
+                for key in ("path", "filePath", "newPath", "oldPath"):
+                    path = _clean_file_path(nested.get(key))
+                    if path:
+                        break
+        if not path:
+            return None
+        change_type = str(
+            item.get("change_type")
+            or item.get("changeType")
+            or item.get("status")
+            or item.get("type")
+            or "M"
+        ).strip().upper()[:1] or "M"
+        preview = _extract_preview(
+            item.get("preview")
+            or item.get("patch")
+            or item.get("diff")
+            or item.get("content")
+        )
+        return {
+            "path": path,
+            "change_type": change_type if change_type in {"A", "M", "D", "R"} else "M",
+            "additions": _coerce_int(item.get("additions") or item.get("added")),
+            "deletions": _coerce_int(item.get("deletions") or item.get("removed")),
+            "preview": preview,
+        }
+
+    def _parse_unified_diff(diff_text: str) -> list[dict[str, Any]]:
+        entries: list[dict[str, Any]] = []
+        current: dict[str, Any] | None = None
+        for raw_line in diff_text.splitlines():
+            line = raw_line.rstrip("\n")
+            if line.startswith("diff --git "):
+                if current and current.get("path"):
+                    entries.append(current)
+                match = re.match(r"diff --git a/(.+?) b/(.+)$", line)
+                path = ""
+                if match:
+                    path = _clean_file_path(match.group(2) or match.group(1))
+                current = {
+                    "path": path,
+                    "change_type": "M",
+                    "additions": 0,
+                    "deletions": 0,
+                    "preview": "",
+                }
+                continue
+            if current is None:
+                continue
+            if line.startswith("new file mode "):
+                current["change_type"] = "A"
+                continue
+            if line.startswith("deleted file mode "):
+                current["change_type"] = "D"
+                continue
+            if line.startswith("rename to "):
+                renamed = _clean_file_path(line[len("rename to "):])
+                if renamed:
+                    current["path"] = renamed
+                    current["change_type"] = "R"
+                continue
+            if line.startswith("+++ "):
+                new_path = _clean_file_path(line[4:])
+                if new_path:
+                    current["path"] = new_path
+                continue
+            if line.startswith("--- ") or line.startswith("@@"):
+                if not current.get("preview") and line.startswith("@@"):
+                    current["preview"] = line[:800]
+                continue
+            if line.startswith("+") and not line.startswith("+++"):
+                current["additions"] = int(current.get("additions", 0)) + 1
+                continue
+            if line.startswith("-") and not line.startswith("---"):
+                current["deletions"] = int(current.get("deletions", 0)) + 1
+                continue
+        if current and current.get("path"):
+            entries.append(current)
+        return entries
+
+    def _extract_file_change_summary(method: str, params: dict | None) -> dict[str, Any] | None:
+        p = params or {}
+        if method != "turn/diff/updated":
+            return None
+
+        files: list[dict[str, Any]] = []
+        for key in ("files", "changes"):
+            value = p.get(key)
+            if not isinstance(value, list):
+                continue
+            for item in value:
+                if not isinstance(item, dict):
+                    continue
+                entry = _entry_from_mapping(item)
+                if entry is not None:
+                    files.append(entry)
+
+        diff_text = ""
+        for key in ("diff", "patch"):
+            value = p.get(key)
+            if isinstance(value, str) and value.strip():
+                diff_text = value
+                break
+        if diff_text:
+            existing_paths = {str(item.get("path")) for item in files}
+            for entry in _parse_unified_diff(diff_text):
+                if entry["path"] in existing_paths:
+                    continue
+                files.append(entry)
+
+        deduped: list[dict[str, Any]] = []
+        seen_paths: set[str] = set()
+        for item in files:
+            path = str(item.get("path") or "")
+            if not path or path in seen_paths:
+                continue
+            seen_paths.add(path)
+            deduped.append(item)
+
+        if not deduped and not diff_text:
+            return None
+
+        if deduped:
+            lines = ["Applied patch changes"]
+            for entry in deduped[:8]:
+                lines.append(
+                    f"{entry['change_type']} {entry['path']} (+{entry['additions']} -{entry['deletions']})"
+                )
+            if len(deduped) > 8:
+                lines.append(f"... ({len(deduped) - 8} more files)")
+            summary = "\n".join(lines)
+        else:
+            summary = "Applied patch changes"
+
+        return {
+            "thread_id": _extract_thread_id(method, p),
+            "turn_id": _extract_turn_id(method, p),
+            "source": "apply_patch",
+            "summary": summary,
+            "files": deduped,
+            "raw_params": p,
+        }
+
+    def _extract_plan_item_payload(method: str, params: dict | None) -> dict[str, Any] | None:
+        p = params or {}
+        if method == "item/plan/delta":
+            item_id = p.get("itemId")
+            delta = p.get("delta")
+            if isinstance(item_id, str) and item_id and isinstance(delta, str) and delta:
+                return {
+                    "thread_id": _extract_thread_id(method, p),
+                    "turn_id": _extract_turn_id(method, p),
+                    "item_id": item_id,
+                    "text": delta,
+                    "is_final": False,
+                }
+            return None
+        if method != "item/completed":
+            return None
+        item = p.get("item")
+        if not isinstance(item, dict):
+            return None
+        item_type = str(item.get("type") or "").strip().lower()
+        if item_type != "plan":
+            return None
+        item_id = item.get("id")
+        text = item.get("text")
+        if not isinstance(item_id, str) or not item_id or not isinstance(text, str):
+            return None
+        return {
+            "thread_id": _extract_thread_id(method, p),
+            "turn_id": _extract_turn_id(method, p),
+            "item_id": item_id,
+            "text": text,
+            "is_final": True,
+        }
+
+    def _extract_plan_checklist_payload(method: str, params: dict | None) -> dict[str, Any] | None:
+        p = params or {}
+        if method != "turn/plan/updated":
+            return None
+        raw_plan = p.get("plan")
+        steps: list[dict[str, str]] = []
+        if isinstance(raw_plan, list):
+            for item in raw_plan:
+                if not isinstance(item, dict):
+                    continue
+                step = str(item.get("step") or "").strip()
+                status = str(item.get("status") or "").strip()
+                if not step or not status:
+                    continue
+                steps.append({"step": step, "status": status})
+        return {
+            "thread_id": _extract_thread_id(method, p),
+            "turn_id": _extract_turn_id(method, p),
+            "explanation": str(p.get("explanation") or "").strip(),
+            "plan": steps,
+        }
+
     def _get_path_value(payload: dict[str, Any], path: str) -> Any:
         current: Any = payload
         for part in path.split("."):
@@ -255,11 +506,25 @@ async def post_init(app: Application | None):
                 return f"[app-server] Thread status changed: {status}"
         if method == "item/agentMessage/delta" and text:
             return text
+        if method == "item/plan/delta":
+            return None
+        if method == "turn/plan/updated":
+            return None
+        if method == "item/completed":
+            item = p.get("item")
+            if isinstance(item, dict) and str(item.get("type") or "").strip().lower() == "plan":
+                return None
         if method == "turn/started":
             turn_id = (p.get("turn") or {}).get("id") if isinstance(p.get("turn"), dict) else p.get("turnId")
+            actual_mode = _normalize_mode_kind(p.get("collaboration_mode_kind") or p.get("collaborationModeKind"))
+            if actual_mode:
+                return f"[app-server] Turn started: {turn_id or 'unknown'} (mode: {actual_mode.upper()})"
             return f"[app-server] Turn started: {turn_id or 'unknown'}"
         if method == "turn/completed":
             turn_id = (p.get("turn") or {}).get("id") if isinstance(p.get("turn"), dict) else p.get("turnId")
+            actual_mode = _normalize_mode_kind(p.get("collaboration_mode_kind") or p.get("collaborationModeKind"))
+            if actual_mode:
+                return f"[app-server] Turn completed: {turn_id or 'unknown'} (mode: {actual_mode.upper()})"
             return f"[app-server] Turn completed: {turn_id or 'unknown'}"
         if method.startswith("codex/event/"):
             if text:
@@ -276,7 +541,14 @@ async def post_init(app: Application | None):
             return 20
         if method == "item/agentMessage/delta":
             return 10
+        if method == "item/plan/delta":
+            return 0
+        if method == "turn/plan/updated":
+            return 0
         if method == "item/completed":
+            item = p.get("item")
+            if isinstance(item, dict) and str(item.get("type") or "").strip().lower() == "plan":
+                return 0
             return 20
         if method in ("turn/started", "turn/completed", "thread/status/changed"):
             return 20
@@ -343,6 +615,31 @@ async def post_init(app: Application | None):
             },
         )
 
+    async def _send_telegram_file_change(user_id: int, payload: dict[str, Any]) -> None:
+        if user_id <= 0 or app is None:
+            return
+        thread_id = payload.get("thread_id")
+        summary = str(payload.get("summary") or "").strip()
+        if not summary:
+            return
+        footer = f"\n\nthreadId: {thread_id or 'unknown'}"
+        max_body_len = 3900 - len(footer)
+        if len(summary) > max_body_len:
+            summary = summary[: max(1, max_body_len - len("\n...(truncated)"))] + "\n...(truncated)"
+        try:
+            await app.bot.send_message(chat_id=user_id, text=summary + footer)
+        except Exception:
+            logger.exception("Failed to forward file change to Telegram user_id=%s", user_id)
+
+    async def _send_telegram_plan(user_id: int, payload: dict[str, Any]) -> None:
+        if user_id <= 0 or app is None:
+            return
+        plan_text = str(payload.get("text") or "").strip()
+        if not plan_text:
+            return
+        summary = f"Plan proposal\n\n{plan_text}"
+        await _send_telegram_message(user_id, summary, payload.get("thread_id"))
+
     async def forward_event(method: str, params: dict | None):
         thread_id = _extract_thread_id(method, params)
         turn_id = _extract_turn_id(method, params)
@@ -353,10 +650,74 @@ async def post_init(app: Application | None):
 
         # Keep runtime turn state in sync even when event forwarding is filtered out.
         if method == "turn/started" and turn_id and owner_id is not None:
-            user_manager.get(owner_id).set_turn(turn_id)
+            state_user = user_manager.get(owner_id)
+            state_user.set_turn(turn_id)
+            actual_mode = _normalize_mode_kind((params or {}).get("collaboration_mode_kind") or (params or {}).get("collaborationModeKind"))
+            if actual_mode is not None:
+                state_user.set_collaboration_mode(actual_mode)
+                logger.info(
+                    "Codex turn started user_id=%s thread_id=%s turn_id=%s actual_mode=%s raw_params=%s",
+                    owner_id,
+                    thread_id,
+                    turn_id,
+                    actual_mode,
+                    params,
+                )
         elif method in ("turn/completed", "turn/failed", "turn/cancelled"):
             if owner_id is not None:
                 user_manager.get(owner_id).clear_turn()
+
+        file_change = _extract_file_change_summary(method, params)
+        if file_change is not None:
+            target_user_id = owner_id if owner_id is not None else user_id_by_thread
+            if target_user_id is not None:
+                await event_hub.publish_event(
+                    target_user_id,
+                    {
+                        "type": "file_change",
+                        "thread_id": file_change.get("thread_id"),
+                        "turn_id": file_change.get("turn_id"),
+                        "source": file_change.get("source"),
+                        "summary": file_change.get("summary"),
+                        "files": file_change.get("files"),
+                    },
+                )
+                await _send_telegram_file_change(target_user_id, file_change)
+            return
+
+        plan_item = _extract_plan_item_payload(method, params)
+        if plan_item is not None:
+            target_user_id = owner_id if owner_id is not None else user_id_by_thread
+            if target_user_id is not None:
+                await event_hub.publish_event(
+                    target_user_id,
+                    {
+                        "type": "plan_completed" if plan_item["is_final"] else "plan_delta",
+                        "thread_id": plan_item.get("thread_id"),
+                        "turn_id": plan_item.get("turn_id"),
+                        "item_id": plan_item.get("item_id"),
+                        "text": plan_item.get("text") or "",
+                    },
+                )
+                if plan_item["is_final"]:
+                    await _send_telegram_plan(target_user_id, plan_item)
+            return
+
+        plan_checklist = _extract_plan_checklist_payload(method, params)
+        if plan_checklist is not None:
+            target_user_id = owner_id if owner_id is not None else user_id_by_thread
+            if target_user_id is not None:
+                await event_hub.publish_event(
+                    target_user_id,
+                    {
+                        "type": "plan_checklist",
+                        "thread_id": plan_checklist.get("thread_id"),
+                        "turn_id": plan_checklist.get("turn_id"),
+                        "explanation": plan_checklist.get("explanation") or "",
+                        "plan": plan_checklist.get("plan") or [],
+                    },
+                )
+            return
 
         if user_id_by_thread is not None:
             event_type = "app_event"
@@ -380,6 +741,15 @@ async def post_init(app: Application | None):
                     "params": params or {},
                 },
             )
+            if method == "turn/completed":
+                actual_mode = _normalize_mode_kind((params or {}).get("collaboration_mode_kind") or (params or {}).get("collaborationModeKind"))
+                mode_suffix = f" Mode: {actual_mode.upper()}." if actual_mode else ""
+                await _publish_system_message(
+                    user_id_by_thread,
+                    thread_id,
+                    turn_id,
+                    f"Turn completed.{mode_suffix}",
+                )
 
         if _method_matches(method, denylist):
             return
@@ -419,7 +789,10 @@ async def post_init(app: Application | None):
         )
         if user_id > 0 and app is not None:
             try:
-                await app.bot.send_message(chat_id=user_id, text=msg)
+                kwargs: dict[str, Any] = {}
+                if method in ("turn/completed", "turn/failed", "turn/cancelled"):
+                    kwargs["reply_markup"] = main_menu_keyboard(user_manager.get(user_id).collaboration_mode)
+                await app.bot.send_message(chat_id=user_id, text=msg, **kwargs)
             except Exception:
                 logger.exception("Failed to forward app-server event to Telegram")
 
@@ -853,7 +1226,7 @@ def main():
     app.add_handler(TypeHandler(Update, debug_update_handler), group=-1)
     app.add_handler(CommandHandler("start", start_handler))
     app.add_handler(CommandHandler("help", start_handler))
-    app.add_handler(CommandHandler(["commands", "start", "projects", "project", "resume", "threads", "read", "archive", "unarchive", "compact", "rollback", "interrupt", "review", "exec", "models", "features", "gurdian", "guardian", "modes", "skills", "apps", "mcp", "config"], command_handler))
+    app.add_handler(CommandHandler(["commands", "start", "projects", "project", "resume", "threads", "read", "archive", "unarchive", "compact", "rollback", "interrupt", "review", "exec", "models", "features", "guardian", "modes", "collab", "mode", "plan", "build", "skills", "apps", "mcp", "config"], command_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
     app.add_handler(CallbackQueryHandler(callback_handler))
     app.add_error_handler(error_handler)

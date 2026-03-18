@@ -1,6 +1,10 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 
+def _normalized_mode(collaboration_mode: str | None) -> str:
+    return "plan" if (collaboration_mode or "").strip().lower() == "plan" else "build"
+
+
 def approval_keyboard(request_id: int) -> InlineKeyboardMarkup:
     keyboard = [
         [
@@ -26,7 +30,9 @@ def thread_keyboard(thread_id: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(keyboard)
 
 
-def main_menu_keyboard() -> InlineKeyboardMarkup:
+def main_menu_keyboard(collaboration_mode: str = "build") -> InlineKeyboardMarkup:
+    current = _normalized_mode(collaboration_mode)
+    toggle_label = "🧭 Mode: PLAN → BUILD" if current == "plan" else "🧭 Mode: BUILD → PLAN"
     keyboard = [
         [
             InlineKeyboardButton("📝 New Thread", callback_data="cmd:start"),
@@ -38,12 +44,13 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton("⚙️ Settings", callback_data="cmd:config"),
+            InlineKeyboardButton(toggle_label, callback_data="cmd:mode_quick_toggle"),
         ],
     ]
     return InlineKeyboardMarkup(keyboard)
 
 
-def settings_keyboard() -> InlineKeyboardMarkup:
+def settings_keyboard(collaboration_mode: str = "build") -> InlineKeyboardMarkup:
     keyboard = [
         [
             InlineKeyboardButton("🧪 Features", callback_data="cmd:features"),
@@ -54,7 +61,6 @@ def settings_keyboard() -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton("🤖 Models", callback_data="cmd:models"),
-            InlineKeyboardButton("🧭 Modes", callback_data="cmd:modes"),
         ],
         [
             InlineKeyboardButton("🔌 MCP", callback_data="cmd:mcp"),

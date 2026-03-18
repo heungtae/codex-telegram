@@ -74,7 +74,7 @@ Other callbacks:
 ## Command Router and Supported Commands
 `CommandRouter` maps commands to handlers:
 - Threads: `/start`, `/resume`, `/fork`, `/threads`, `/read`, `/archive`, `/unarchive`, `/compact`, `/rollback`, `/interrupt`
-- System: `/commands`, `/exec`, `/models`, `/features`, `/modes`, `/skills`, `/apps`, `/mcp`, `/config`
+- System: `/commands`, `/exec`, `/models`, `/features`, `/modes`, `/collab`, `/skills`, `/apps`, `/mcp`, `/config`
 - Projects: `/projects`, `/project`
 - Review: `/review`
 

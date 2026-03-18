@@ -3,8 +3,14 @@ import json
 
 from .common import commands_overview
 from .context import RouterContext
-from .contracts import CommandResult, text_result, usage_result
+from .contracts import CommandResult, error_result, text_result, usage_result
 from utils.config import get_guardian_settings
+from models.user import user_manager
+from codex.collaboration_mode import (
+    find_collaboration_mode_mask,
+    find_collaboration_mode_mask_by_aliases,
+    list_collaboration_modes,
+)
 
 
 class SystemCommands:
@@ -115,7 +121,7 @@ class SystemCommands:
     async def collaboration_mode_list(self) -> CommandResult:
         result = await self.ctx.codex.call("collaborationMode/list")
 
-        modes = result.get("data", [])
+        modes = list_collaboration_modes(result)
         if not modes:
             return text_result("No collaboration modes.")
 
@@ -125,6 +131,69 @@ class SystemCommands:
             lines.append(f"• {name}")
 
         return text_result("\n".join(lines))
+
+    def _normalize_local_mode(self, raw_mode: str | None) -> str:
+        return "plan" if (raw_mode or "").strip().lower() == "plan" else "build"
+
+    def _resolve_mode(self, requested: str) -> tuple[str, str, list[str]] | None:
+        normalized = requested.strip().lower()
+        if normalized == "plan":
+            return ("plan", "plan", ["plan"])
+        if normalized in {"build", "default"}:
+            return ("default", "build", ["default", "build"])
+        return None
+
+    async def collaboration_mode_set(self, requested: str, user_id: int) -> CommandResult:
+        resolved = self._resolve_mode(requested)
+        if resolved is None:
+            return usage_result("Usage: /mode [toggle|plan|build]")
+        codex_mode, local_mode, aliases = resolved
+        mask = None
+        try:
+            result = await self.ctx.codex.call("collaborationMode/list")
+            modes = list_collaboration_modes(result)
+            available_raw = [
+                str(m.get("name", "")).strip()
+                for m in modes
+                if isinstance(m, dict) and isinstance(m.get("name"), str)
+            ]
+            mask = find_collaboration_mode_mask_by_aliases(modes, aliases)
+            if mask is None:
+                mask = find_collaboration_mode_mask(modes, codex_mode)
+            if modes and mask is None:
+                return error_result(
+                    f"Mode '{requested.strip() or codex_mode}' is not available in runtime. "
+                    f"Available: {', '.join(sorted(v for v in available_raw if v)) or 'none'}"
+                )
+        except Exception as exc:
+            return error_result(f"Failed to validate collaboration mode: {exc}")
+        state_user = user_manager.get(user_id)
+        state_user.set_collaboration_mode(local_mode)
+        state_user.set_collaboration_mode_mask(mask)
+        selected_name = str((mask or {}).get("name") or codex_mode)
+        return text_result(
+            f"Collaboration mode set: {local_mode.upper()} (session-local, codex target={selected_name})",
+            collaboration_mode=local_mode,
+            codex_mode=selected_name,
+            mode_scope="session_local",
+        )
+
+    async def collaboration_mode_toggle(self, user_id: int) -> CommandResult:
+        current = self._normalize_local_mode(user_manager.get(user_id).collaboration_mode)
+        next_mode = "build" if current == "plan" else "plan"
+        return await self.collaboration_mode_set(next_mode, user_id)
+
+    async def collaboration_mode(self, args: list[str], user_id: int) -> CommandResult:
+        if not args:
+            current = self._normalize_local_mode(user_manager.get(user_id).collaboration_mode)
+            return text_result(
+                f"Current collaboration mode: {current.upper()}\nUse /mode toggle, /plan, or /build.",
+                collaboration_mode=current,
+            )
+        action = args[0].strip().lower()
+        if action == "toggle":
+            return await self.collaboration_mode_toggle(user_id)
+        return await self.collaboration_mode_set(action, user_id)
 
     async def guardian_settings(self) -> CommandResult:
         settings = get_guardian_settings()

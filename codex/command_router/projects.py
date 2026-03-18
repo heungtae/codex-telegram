@@ -193,6 +193,8 @@ class ProjectCommands:
 
         state = user_manager.get(user_id)
         state.set_project(selected["key"], selected["name"], selected["path"])
+        state.set_collaboration_mode("build")
+        state.set_collaboration_mode_mask(None)
 
         interrupt_message = ""
         if state.active_thread_id and state.active_turn_id:
@@ -255,4 +257,6 @@ class ProjectCommands:
             f"Workspace: {selected['path']}\n"
             f"Thread started: {new_thread_id or 'unknown'}{interrupt_message}{thread_start_note}",
             project_key=selected["key"],
+            workspace_changed=True,
+            collaboration_mode="build",
         )

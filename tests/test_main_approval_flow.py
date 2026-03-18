@@ -153,6 +153,249 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([7], [item["id"] for item in approvals])
         client.submit_approval_decision.assert_any_call(6, "deny")
 
+    async def test_turn_diff_updated_is_forwarded_to_web_and_telegram(self):
+        client = _DummyCodexClient(submit_result=True)
+        router = SimpleNamespace(projects=SimpleNamespace(resolve_effective_project=Mock(return_value=None)))
+        guardian = SimpleNamespace(stop=AsyncMock())
+        bot = SimpleNamespace(send_message=AsyncMock())
+        telegram_app = SimpleNamespace(bot=bot)
+        guardian_settings = {
+            "enabled": False,
+            "apply_to_methods": ["*"],
+            "failure_policy": "manual_fallback",
+            "explainability": "decision_only",
+            "timeout_seconds": 5,
+            "rules": [],
+        }
+
+        with patch("main.setup_codex", new=AsyncMock(return_value=client)), \
+             patch("main.CommandRouter", return_value=router), \
+             patch("main.ApprovalGuardianService", return_value=guardian), \
+             patch("main.get", side_effect=lambda key, default=None: default), \
+             patch("main.get_guardian_settings", return_value=guardian_settings):
+            await app_main.post_init(telegram_app)
+            user_manager.bind_thread_owner(1, "thread-1")
+            queue = await event_hub.subscribe(1)
+            try:
+                await client._any_handler(
+                    "turn/diff/updated",
+                    {
+                        "threadId": "thread-1",
+                        "turnId": "turn-1",
+                        "files": [
+                            {
+                                "path": "src/main.py",
+                                "change_type": "M",
+                                "additions": 12,
+                                "deletions": 3,
+                            }
+                        ],
+                    },
+                )
+                event = await queue.get()
+            finally:
+                await event_hub.unsubscribe(1, queue)
+
+        self.assertEqual("file_change", event["type"])
+        self.assertEqual("thread-1", event["thread_id"])
+        self.assertEqual("turn-1", event["turn_id"])
+        self.assertEqual("apply_patch", event["source"])
+        self.assertEqual("src/main.py", event["files"][0]["path"])
+        self.assertIn("Applied patch changes", event["summary"])
+        bot.send_message.assert_awaited_once()
+        kwargs = bot.send_message.await_args.kwargs
+        self.assertEqual(1, kwargs["chat_id"])
+        self.assertIn("src/main.py (+12 -3)", kwargs["text"])
+        self.assertIn("threadId: thread-1", kwargs["text"])
+
+    async def test_turn_completed_publishes_system_message_to_web(self):
+        client = _DummyCodexClient(submit_result=True)
+        router = SimpleNamespace(projects=SimpleNamespace(resolve_effective_project=Mock(return_value=None)))
+        guardian = SimpleNamespace(stop=AsyncMock())
+        bot = SimpleNamespace(send_message=AsyncMock())
+        telegram_app = SimpleNamespace(bot=bot)
+        guardian_settings = {
+            "enabled": False,
+            "apply_to_methods": ["*"],
+            "failure_policy": "manual_fallback",
+            "explainability": "decision_only",
+            "timeout_seconds": 5,
+            "rules": [],
+        }
+
+        with patch("main.setup_codex", new=AsyncMock(return_value=client)), \
+             patch("main.CommandRouter", return_value=router), \
+             patch("main.ApprovalGuardianService", return_value=guardian), \
+             patch("main.get", side_effect=lambda key, default=None: default), \
+             patch("main.get_guardian_settings", return_value=guardian_settings):
+            await app_main.post_init(telegram_app)
+            user_manager.bind_thread_owner(1, "thread-1")
+            queue = await event_hub.subscribe(1)
+            try:
+                await client._any_handler(
+                    "turn/completed",
+                    {
+                        "threadId": "thread-1",
+                        "turnId": "turn-1",
+                        "collaboration_mode_kind": "plan",
+                    },
+                )
+                first = await queue.get()
+                second = await queue.get()
+            finally:
+                await event_hub.unsubscribe(1, queue)
+
+        self.assertEqual("turn_completed", first["type"])
+        self.assertEqual("system_message", second["type"])
+        self.assertEqual("Turn completed. Mode: PLAN.", second["text"])
+        bot.send_message.assert_awaited()
+        kwargs = bot.send_message.await_args.kwargs
+        self.assertEqual(1, kwargs["chat_id"])
+        self.assertIn("Turn completed", kwargs["text"])
+        self.assertIn("reply_markup", kwargs)
+
+    async def test_plan_delta_is_forwarded_to_web_only(self):
+        client = _DummyCodexClient(submit_result=True)
+        router = SimpleNamespace(projects=SimpleNamespace(resolve_effective_project=Mock(return_value=None)))
+        guardian = SimpleNamespace(stop=AsyncMock())
+        bot = SimpleNamespace(send_message=AsyncMock())
+        telegram_app = SimpleNamespace(bot=bot)
+        guardian_settings = {
+            "enabled": False,
+            "apply_to_methods": ["*"],
+            "failure_policy": "manual_fallback",
+            "explainability": "decision_only",
+            "timeout_seconds": 5,
+            "rules": [],
+        }
+
+        with patch("main.setup_codex", new=AsyncMock(return_value=client)), \
+             patch("main.CommandRouter", return_value=router), \
+             patch("main.ApprovalGuardianService", return_value=guardian), \
+             patch("main.get", side_effect=lambda key, default=None: default), \
+             patch("main.get_guardian_settings", return_value=guardian_settings):
+            await app_main.post_init(telegram_app)
+            user_manager.bind_thread_owner(1, "thread-1")
+            queue = await event_hub.subscribe(1)
+            try:
+                await client._any_handler(
+                    "item/plan/delta",
+                    {
+                        "threadId": "thread-1",
+                        "turnId": "turn-1",
+                        "itemId": "turn-1-plan",
+                        "delta": "# Plan\n",
+                    },
+                )
+                event = await queue.get()
+            finally:
+                await event_hub.unsubscribe(1, queue)
+
+        self.assertEqual("plan_delta", event["type"])
+        self.assertEqual("turn-1-plan", event["item_id"])
+        self.assertEqual("# Plan\n", event["text"])
+        bot.send_message.assert_not_awaited()
+
+    async def test_plan_completed_is_forwarded_to_web_and_telegram(self):
+        client = _DummyCodexClient(submit_result=True)
+        router = SimpleNamespace(projects=SimpleNamespace(resolve_effective_project=Mock(return_value=None)))
+        guardian = SimpleNamespace(stop=AsyncMock())
+        bot = SimpleNamespace(send_message=AsyncMock())
+        telegram_app = SimpleNamespace(bot=bot)
+        guardian_settings = {
+            "enabled": False,
+            "apply_to_methods": ["*"],
+            "failure_policy": "manual_fallback",
+            "explainability": "decision_only",
+            "timeout_seconds": 5,
+            "rules": [],
+        }
+
+        with patch("main.setup_codex", new=AsyncMock(return_value=client)), \
+             patch("main.CommandRouter", return_value=router), \
+             patch("main.ApprovalGuardianService", return_value=guardian), \
+             patch("main.get", side_effect=lambda key, default=None: default), \
+             patch("main.get_guardian_settings", return_value=guardian_settings):
+            await app_main.post_init(telegram_app)
+            user_manager.bind_thread_owner(1, "thread-1")
+            queue = await event_hub.subscribe(1)
+            try:
+                await client._any_handler(
+                    "item/completed",
+                    {
+                        "threadId": "thread-1",
+                        "turnId": "turn-1",
+                        "item": {
+                            "type": "plan",
+                            "id": "turn-1-plan",
+                            "text": "# Final plan\n- first\n",
+                        },
+                    },
+                )
+                event = await queue.get()
+            finally:
+                await event_hub.unsubscribe(1, queue)
+
+        self.assertEqual("plan_completed", event["type"])
+        self.assertEqual("turn-1-plan", event["item_id"])
+        self.assertEqual("# Final plan\n- first\n", event["text"])
+        bot.send_message.assert_awaited_once()
+        kwargs = bot.send_message.await_args.kwargs
+        self.assertIn("Plan proposal", kwargs["text"])
+        self.assertIn("# Final plan", kwargs["text"])
+        self.assertIn("threadId: thread-1", kwargs["text"])
+
+    async def test_plan_checklist_is_forwarded_to_web_only(self):
+        client = _DummyCodexClient(submit_result=True)
+        router = SimpleNamespace(projects=SimpleNamespace(resolve_effective_project=Mock(return_value=None)))
+        guardian = SimpleNamespace(stop=AsyncMock())
+        bot = SimpleNamespace(send_message=AsyncMock())
+        telegram_app = SimpleNamespace(bot=bot)
+        guardian_settings = {
+            "enabled": False,
+            "apply_to_methods": ["*"],
+            "failure_policy": "manual_fallback",
+            "explainability": "decision_only",
+            "timeout_seconds": 5,
+            "rules": [],
+        }
+
+        with patch("main.setup_codex", new=AsyncMock(return_value=client)), \
+             patch("main.CommandRouter", return_value=router), \
+             patch("main.ApprovalGuardianService", return_value=guardian), \
+             patch("main.get", side_effect=lambda key, default=None: default), \
+             patch("main.get_guardian_settings", return_value=guardian_settings):
+            await app_main.post_init(telegram_app)
+            user_manager.bind_thread_owner(1, "thread-1")
+            queue = await event_hub.subscribe(1)
+            try:
+                await client._any_handler(
+                    "turn/plan/updated",
+                    {
+                        "threadId": "thread-1",
+                        "turnId": "turn-1",
+                        "explanation": "Working plan",
+                        "plan": [
+                            {"step": "Inspect protocol", "status": "completed"},
+                            {"step": "Render UI", "status": "inProgress"},
+                        ],
+                    },
+                )
+                event = await queue.get()
+            finally:
+                await event_hub.unsubscribe(1, queue)
+
+        self.assertEqual("plan_checklist", event["type"])
+        self.assertEqual("Working plan", event["explanation"])
+        self.assertEqual(
+            [
+                {"step": "Inspect protocol", "status": "completed"},
+                {"step": "Render UI", "status": "inProgress"},
+            ],
+            event["plan"],
+        )
+        bot.send_message.assert_not_awaited()
+
 
 if __name__ == "__main__":
     unittest.main()

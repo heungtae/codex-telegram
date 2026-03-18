@@ -261,8 +261,9 @@ After starting a chat with the bot, run the following for a quick check:
 | `/exec <cmd>` | command/exec | Run command |
 | `/models` | model/list | List available models |
 | `/features` | experimentalFeature/list + command/exec | Show beta features and apply enable/disable via checkbox UI |
-| `/gurdian` (`/guardian`) | local config | Show guardian summary. Edit settings and rules in Web UI |
+| `/guardian` | local config | Show guardian summary. Edit settings and rules in Web UI |
 | `/modes` | collaborationMode/list | List collaboration modes |
+| `/collab` | collaborationMode/list | List collaboration modes |
 | `/skills` | skills/list | List skills |
 | `/apps` | app/list | List apps |
 | `/mcp` | mcpServerStatus/list | List MCP servers |

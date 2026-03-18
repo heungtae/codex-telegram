@@ -59,6 +59,7 @@ exec - Execute a command
 models - List available models
 features - List experimental features
 modes - List collaboration modes
+collab - List collaboration modes
 skills - List skills
 apps - List apps
 mcp - List MCP servers

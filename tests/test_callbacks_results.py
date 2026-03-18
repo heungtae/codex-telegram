@@ -98,5 +98,91 @@ class CallbackResultTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(callbacks.GUARDIAN_WEB_ONLY_TEXT, kwargs["text"])
         self.assertIn("reply_markup", kwargs)
 
+    async def test_callback_mode_quick_toggle_routes_to_plan_when_current_is_build(self):
+        self.mock_router.route.return_value = CommandResult(
+            kind="text",
+            text="Collaboration mode set: PLAN (session-local, codex target=Plan)",
+            meta={"collaboration_mode": "plan"},
+        )
+        user_manager.get(1).set_collaboration_mode("build")
+        query = SimpleNamespace(
+            data="cmd:mode_quick_toggle",
+            answer=AsyncMock(),
+            edit_message_text=AsyncMock(),
+        )
+        update = SimpleNamespace(
+            callback_query=query,
+            effective_user=SimpleNamespace(id=1),
+            effective_chat=SimpleNamespace(id=100),
+        )
+
+        await callbacks.callback_handler(update, self.context)
+
+        self.mock_router.route.assert_awaited_with("/plan", [], 1)
+        kwargs = self.context.bot.send_message.await_args.kwargs
+        self.assertIn("Collaboration mode set", kwargs["text"])
+        self.assertIn("reply_markup", kwargs)
+
+    async def test_callback_menu_shows_current_mode(self):
+        user_manager.get(1).set_collaboration_mode("plan")
+        query = SimpleNamespace(
+            data="cmd:menu",
+            answer=AsyncMock(),
+            edit_message_text=AsyncMock(),
+        )
+        update = SimpleNamespace(
+            callback_query=query,
+            effective_user=SimpleNamespace(id=1),
+            effective_chat=SimpleNamespace(id=100),
+        )
+
+        await callbacks.callback_handler(update, self.context)
+
+        kwargs = self.context.bot.send_message.await_args.kwargs
+        self.assertIn("Current mode: PLAN", kwargs["text"])
+
+    async def test_callback_config_shows_current_mode(self):
+        user_manager.get(1).set_collaboration_mode("build")
+        query = SimpleNamespace(
+            data="cmd:config",
+            answer=AsyncMock(),
+            edit_message_text=AsyncMock(),
+        )
+        update = SimpleNamespace(
+            callback_query=query,
+            effective_user=SimpleNamespace(id=1),
+            effective_chat=SimpleNamespace(id=100),
+        )
+
+        await callbacks.callback_handler(update, self.context)
+
+        kwargs = self.context.bot.send_message.await_args.kwargs
+        self.assertIn("Current mode: BUILD", kwargs["text"])
+
+    async def test_callback_mode_quick_toggle_routes_to_build_when_current_is_plan(self):
+        self.mock_router.route.return_value = CommandResult(
+            kind="text",
+            text="Collaboration mode set: BUILD (session-local, codex target=Default)",
+            meta={"collaboration_mode": "build"},
+        )
+        user_manager.get(1).set_collaboration_mode("plan")
+        query = SimpleNamespace(
+            data="cmd:mode_quick_toggle",
+            answer=AsyncMock(),
+            edit_message_text=AsyncMock(),
+        )
+        update = SimpleNamespace(
+            callback_query=query,
+            effective_user=SimpleNamespace(id=1),
+            effective_chat=SimpleNamespace(id=100),
+        )
+
+        await callbacks.callback_handler(update, self.context)
+
+        self.mock_router.route.assert_awaited_with("/build", [], 1)
+        kwargs = self.context.bot.send_message.await_args.kwargs
+        self.assertIn("Collaboration mode set", kwargs["text"])
+        self.assertIn("reply_markup", kwargs)
+
 if __name__ == "__main__":
     unittest.main()

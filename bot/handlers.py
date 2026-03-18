@@ -6,6 +6,12 @@ from telegram.error import Conflict
 from telegram.ext import ContextTypes
 
 from models.user import user_manager
+from codex.collaboration_mode import (
+    build_turn_collaboration_mode,
+    codex_mode_name,
+    find_collaboration_mode_mask,
+    with_collaboration_mode_model,
+)
 from utils.config import get
 from bot.keyboard import main_menu_keyboard, interrupt_keyboard
 from bot.thread_ui import threads_keyboard
@@ -18,6 +24,72 @@ from utils.local_command import run_bang_command
 
 logger = logging.getLogger("codex-telegram.bot")
 _last_conflict_log_at = 0.0
+
+
+def _mode_label(local_mode: str | None) -> str:
+    return "PLAN" if (local_mode or "").strip().lower() == "plan" else "BUILD"
+
+
+async def _resolve_turn_collaboration_mode(state_user) -> dict | None:
+    target_mode = codex_mode_name(state_user.collaboration_mode)
+    payload = build_turn_collaboration_mode(state_user.collaboration_mode_mask, target_mode)
+    if payload is not None:
+        return payload
+    if state.codex_client is None:
+        return None
+    result = await state.codex_client.call("collaborationMode/list")
+    mask = find_collaboration_mode_mask(result, target_mode)
+    if mask is not None and not mask.get("model"):
+        fallback_model = await _resolve_default_model()
+        mask = with_collaboration_mode_model(mask, fallback_model)
+    state_user.set_collaboration_mode_mask(mask)
+    return build_turn_collaboration_mode(mask, target_mode)
+
+
+async def _resolve_default_model() -> str | None:
+    if state.codex_client is None:
+        return None
+    try:
+        config_result = await state.codex_client.call("config/read")
+    except Exception:
+        config_result = {}
+    config = config_result.get("config", {}) if isinstance(config_result, dict) else {}
+    if isinstance(config, dict):
+        for key in ("model", "model_id", "modelId", "default_model", "defaultModel"):
+            value = config.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    try:
+        model_result = await state.codex_client.call("model/list", {"limit": 20})
+    except Exception:
+        return None
+    models = model_result.get("data", []) if isinstance(model_result, dict) else []
+    if not isinstance(models, list):
+        return None
+    for model in models:
+        if not isinstance(model, dict) or not model.get("isDefault"):
+            continue
+        for key in ("id", "name", "displayName"):
+            value = model.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    if models:
+        first = models[0]
+        if isinstance(first, dict):
+            for key in ("id", "name", "displayName"):
+                value = first.get(key)
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+    return None
+
+
+async def _require_turn_collaboration_mode(state_user) -> dict:
+    payload = await _resolve_turn_collaboration_mode(state_user)
+    if payload is None:
+        raise RuntimeError(
+            f"Failed to resolve collaboration mode payload for {_mode_label(state_user.collaboration_mode)}. Turn was not started."
+        )
+    return payload
 
 
 async def wait_for_codex():
@@ -51,10 +123,11 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await wait_for_codex()
     start_result = await state.command_router.route("/start", [], user_id)
     
-    keyboard = main_menu_keyboard()
+    keyboard = main_menu_keyboard(user_manager.get(user_id).collaboration_mode)
     await send_reply(
         update,
         "Welcome to Codex Telegram Bot!\n\n"
+        f"Current mode: {_mode_label(user_manager.get(user_id).collaboration_mode)}\n\n"
         "Available commands:\n"
         "/commands - List all commands\n"
         "/start - Start a new thread\n"
@@ -63,8 +136,12 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/resume <id> - Resume a thread\n"
         "/threads - List your threads\n"
         "/models - List available models\n"
+        "/collab - List collaboration modes\n"
+        "/mode - Show/toggle collaboration mode\n"
+        "/plan - Switch collaboration mode to plan\n"
+        "/build - Switch collaboration mode to build(default)\n"
         "/features - Manage beta features\n"
-        "/gurdian - Show guardian summary (edit in Web UI)\n"
+        "/guardian - Show guardian summary (edit in Web UI)\n"
         "/skills - List skills\n"
         "/apps - List apps\n"
         "/mcp - MCP server status\n\n"
@@ -125,10 +202,21 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_reply(update, "Processing...", user_id, reply_markup=interrupt_keyboard())
     
     try:
-        result = await state.codex_client.call("turn/start", {
+        params = {
             "threadId": state_user.active_thread_id,
             "input": [{"type": "text", "text": text}],
-        })
+        }
+        collaboration_mode = await _require_turn_collaboration_mode(state_user)
+        params["collaborationMode"] = collaboration_mode
+        logger.info(
+            "Starting Telegram turn user_id=%s thread_id=%s local_mode=%s target_codex_mode=%s collaboration_payload=%s",
+            user_id,
+            state_user.active_thread_id,
+            state_user.collaboration_mode,
+            codex_mode_name(state_user.collaboration_mode),
+            collaboration_mode,
+        )
+        result = await state.codex_client.call("turn/start", params)
         
         turn = result.get("turn", {})
         turn_id = turn.get("id", "unknown")
@@ -239,6 +327,16 @@ async def command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             update,
             f"{result.text}\n\nGuardian settings and rules can be edited in Web UI only.",
             user_id,
+        )
+        return
+
+    if bool(result.meta.get("workspace_changed")):
+        mode_label = _mode_label(state_user.collaboration_mode)
+        await send_reply(
+            update,
+            f"{result.text}\nMode: {mode_label}",
+            user_id,
+            reply_markup=main_menu_keyboard(state_user.collaboration_mode),
         )
         return
 

@@ -11,6 +11,12 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Streamin
 from fastapi.staticfiles import StaticFiles
 
 from codex_telegram import __version__
+from codex.collaboration_mode import (
+    build_turn_collaboration_mode,
+    codex_mode_name,
+    find_collaboration_mode_mask,
+    with_collaboration_mode_model,
+)
 from codex.command_router.common import first_text
 from models import state
 from models.user import user_manager
@@ -42,6 +48,73 @@ def _normalize_bool(value: Any, default: bool = False) -> bool:
         if raw in {"0", "false", "no", "off"}:
             return False
     return default
+
+
+async def _resolve_turn_collaboration_mode(state_user) -> dict[str, Any] | None:
+    target_mode = codex_mode_name(state_user.collaboration_mode)
+    payload = build_turn_collaboration_mode(state_user.collaboration_mode_mask, target_mode)
+    if payload is not None:
+        return payload
+    if state.codex_client is None:
+        return None
+    result = await state.codex_client.call("collaborationMode/list")
+    mask = find_collaboration_mode_mask(result, target_mode)
+    if mask is not None and not mask.get("model"):
+        fallback_model = await _resolve_default_model()
+        mask = with_collaboration_mode_model(mask, fallback_model)
+    state_user.set_collaboration_mode_mask(mask)
+    return build_turn_collaboration_mode(mask, target_mode)
+
+
+async def _resolve_default_model() -> str | None:
+    if state.codex_client is None:
+        return None
+    try:
+        config_result = await state.codex_client.call("config/read")
+    except Exception:
+        config_result = {}
+    config = config_result.get("config", {}) if isinstance(config_result, dict) else {}
+    if isinstance(config, dict):
+        for key in ("model", "model_id", "modelId", "default_model", "defaultModel"):
+            value = config.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    try:
+        model_result = await state.codex_client.call("model/list", {"limit": 20})
+    except Exception:
+        return None
+    models = model_result.get("data", []) if isinstance(model_result, dict) else []
+    if not isinstance(models, list):
+        return None
+    for model in models:
+        if not isinstance(model, dict) or not model.get("isDefault"):
+            continue
+        for key in ("id", "name", "displayName"):
+            value = model.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    if models:
+        first = models[0]
+        if isinstance(first, dict):
+            for key in ("id", "name", "displayName"):
+                value = first.get(key)
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+    return None
+
+
+async def _require_turn_collaboration_mode(state_user) -> dict[str, Any]:
+    payload = await _resolve_turn_collaboration_mode(state_user)
+    if payload is None:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to resolve collaboration mode payload for {_mode_label(state_user.collaboration_mode)}. Turn was not started.",
+        )
+    return payload
+
+
+def _mode_label(local_mode: str | None) -> str:
+    return "plan" if (local_mode or "").strip().lower() == "plan" else "build"
 
 
 def _asset_url(filename: str) -> str:
@@ -111,22 +184,34 @@ def _thread_turns(result: dict[str, Any], thread: dict[str, Any]) -> list[dict[s
     return to_turn_list(thread.get("turns"))
 
 
-def _thread_turn_messages(turns: list[dict[str, Any]]) -> list[dict[str, str]]:
+def _thread_turn_messages(turns: list[dict[str, Any]], default_thread_id: str | None = None) -> list[dict[str, str]]:
     messages: list[dict[str, str]] = []
-    seen: set[tuple[str, str, str]] = set()
+    seen: set[tuple[str, str, str, str, str]] = set()
 
-    def add_message(role: str, text: str, variant: str | None = None) -> None:
+    def add_message(
+        role: str,
+        text: str,
+        variant: str | None = None,
+        kind: str | None = None,
+        thread_id: str | None = None,
+    ) -> None:
         cleaned = str(text or "").strip()
         if not cleaned:
             return
         normalized_variant = variant if isinstance(variant, str) and variant else ""
-        key = (role, normalized_variant, cleaned)
+        normalized_kind = kind if isinstance(kind, str) and kind else ""
+        normalized_thread_id = thread_id if isinstance(thread_id, str) and thread_id else ""
+        key = (role, normalized_variant, normalized_kind, normalized_thread_id, cleaned)
         if key in seen:
             return
         seen.add(key)
         message = {"role": role, "text": cleaned}
         if normalized_variant:
             message["variant"] = normalized_variant
+        if normalized_kind:
+            message["kind"] = normalized_kind
+        if normalized_thread_id:
+            message["thread_id"] = normalized_thread_id
         messages.append(message)
 
     def infer_role(value: dict[str, Any], default_role: str) -> str:
@@ -157,36 +242,38 @@ def _thread_turn_messages(turns: list[dict[str, Any]]) -> list[dict[str, str]]:
             return "subagent"
         return default_variant
 
-    def walk(value: Any, default_role: str, default_variant: str | None = None) -> None:
+    def walk(value: Any, default_role: str, default_variant: str | None = None, thread_id: str | None = None) -> None:
         if isinstance(value, str):
-            add_message(default_role, value, default_variant)
+            add_message(default_role, value, default_variant, None, thread_id)
             return
         if isinstance(value, list):
             for item in value:
-                walk(item, default_role, default_variant)
+                walk(item, default_role, default_variant, thread_id)
             return
         if not isinstance(value, dict):
             return
 
         role = infer_role(value, default_role)
         variant = infer_variant(value, role, default_variant)
+        item_type = str(value.get("type") or "").strip().lower()
+        kind = "plan" if item_type == "plan" and role == "assistant" else None
         direct = value.get("text")
         if isinstance(direct, str) and direct.strip():
-            add_message(role, direct, variant)
+            add_message(role, direct, variant, kind, thread_id)
 
         content = value.get("content")
         if isinstance(content, str) and content.strip():
-            add_message(role, content, variant)
+            add_message(role, content, variant, kind, thread_id)
         elif isinstance(content, list):
             for item in content:
                 if isinstance(item, dict):
                     text = item.get("text")
                     if isinstance(text, str) and text.strip():
-                        add_message(role, text, variant)
+                        add_message(role, text, variant, kind, thread_id)
                     else:
-                        walk(item, role, variant)
+                        walk(item, role, variant, thread_id)
                 else:
-                    walk(item, role, variant)
+                    walk(item, role, variant, thread_id)
 
         for key in ("input", "userInput", "prompt", "output", "items", "messages"):
             nested = value.get(key)
@@ -196,16 +283,21 @@ def _thread_turn_messages(turns: list[dict[str, Any]]) -> list[dict[str, str]]:
             if key in {"output", "items", "messages"} and role == "user":
                 next_role = "assistant"
             next_variant = variant if next_role == "assistant" else None
-            walk(nested, next_role, next_variant)
+            walk(nested, next_role, next_variant, thread_id)
 
     for turn in turns:
+        turn_thread_id = default_thread_id
+        if isinstance(turn.get("threadId"), str) and turn.get("threadId"):
+            turn_thread_id = turn.get("threadId")
+        elif isinstance(turn.get("thread_id"), str) and turn.get("thread_id"):
+            turn_thread_id = turn.get("thread_id")
         before_count = len(messages)
-        walk(turn.get("input"), "user")
-        walk(turn.get("userInput"), "user")
-        walk(turn.get("prompt"), "user")
-        walk(turn.get("output"), "assistant")
-        walk(turn.get("items"), "assistant")
-        walk(turn.get("messages"), "assistant")
+        walk(turn.get("input"), "user", None, turn_thread_id)
+        walk(turn.get("userInput"), "user", None, turn_thread_id)
+        walk(turn.get("prompt"), "user", None, turn_thread_id)
+        walk(turn.get("output"), "assistant", None, turn_thread_id)
+        walk(turn.get("items"), "assistant", None, turn_thread_id)
+        walk(turn.get("messages"), "assistant", None, turn_thread_id)
 
         # Fallback when turns only expose a single text-like field.
         if len(messages) == before_count:
@@ -218,9 +310,9 @@ def _thread_turn_messages(turns: list[dict[str, Any]]) -> list[dict[str, str]]:
                 or first_text(turn.get("preview"))
             )
             if user_text:
-                add_message("user", user_text)
+                add_message("user", user_text, None, None, turn_thread_id)
             if assistant_text:
-                add_message("assistant", assistant_text)
+                add_message("assistant", assistant_text, None, None, turn_thread_id)
     return messages
 
 
@@ -685,13 +777,21 @@ def create_web_app() -> FastAPI:
             raise HTTPException(status_code=409, detail="a turn is already running")
 
         try:
-            result = await state.codex_client.call(
-                "turn/start",
-                {
-                    "threadId": thread_id,
-                    "input": [{"type": "text", "text": text}],
-                },
+            params = {
+                "threadId": thread_id,
+                "input": [{"type": "text", "text": text}],
+            }
+            collaboration_mode = await _require_turn_collaboration_mode(state_user)
+            params["collaborationMode"] = collaboration_mode
+            logger.info(
+                "Starting Web turn user_id=%s thread_id=%s local_mode=%s target_codex_mode=%s collaboration_payload=%s",
+                session.user_id,
+                thread_id,
+                state_user.collaboration_mode,
+                codex_mode_name(state_user.collaboration_mode),
+                collaboration_mode,
             )
+            result = await state.codex_client.call("turn/start", params)
         except Exception:
             raise
         turn = result.get("turn", {}) if isinstance(result, dict) else {}
@@ -722,7 +822,7 @@ def create_web_app() -> FastAPI:
         result = await state.codex_client.call("thread/read", {"threadId": thread_id.strip(), "includeTurns": True})
         thread = result.get("thread", {}) if isinstance(result, dict) else {}
         turns = _thread_turns(result if isinstance(result, dict) else {}, thread if isinstance(thread, dict) else {})
-        messages = _thread_turn_messages(turns)
+        messages = _thread_turn_messages(turns, thread_id.strip())
         if not messages:
             summary = await _route("/read", [thread_id.strip()], session.user_id)
             return {
@@ -805,7 +905,12 @@ def create_web_app() -> FastAPI:
     @app.get("/api/modes")
     async def modes(request: Request) -> dict[str, Any]:
         session = await _session_from_request(request)
-        return await _route("/modes", [], session.user_id)
+        return await _route("/collab", [], session.user_id)
+
+    @app.get("/api/collab")
+    async def collab(request: Request) -> dict[str, Any]:
+        session = await _session_from_request(request)
+        return await _route("/collab", [], session.user_id)
 
     @app.get("/api/skills")
     async def skills(request: Request) -> dict[str, Any]:
@@ -849,6 +954,7 @@ def create_web_app() -> FastAPI:
         return {
             "active_thread_id": state_user.active_thread_id,
             "active_turn_id": state_user.active_turn_id,
+            "collaboration_mode": _mode_label(state_user.collaboration_mode),
             "workspace": workspace,
             "project_key": project_key,
             "agents": agents,

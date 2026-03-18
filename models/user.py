@@ -7,6 +7,8 @@ class UserState:
     user_id: int
     active_thread_id: str | None = None
     active_turn_id: str | None = None
+    collaboration_mode: str = "build"
+    collaboration_mode_mask: dict[str, Any] | None = None
     selected_project_key: str | None = None
     selected_project_name: str | None = None
     selected_project_path: str | None = None
@@ -35,6 +37,13 @@ class UserState:
 
     def clear_turn(self):
         self.active_turn_id = None
+
+    def set_collaboration_mode(self, mode: str):
+        normalized = (mode or "").strip().lower()
+        self.collaboration_mode = "plan" if normalized == "plan" else "build"
+
+    def set_collaboration_mode_mask(self, mask: dict[str, Any] | None):
+        self.collaboration_mode_mask = dict(mask) if isinstance(mask, dict) else None
 
     def set_last_listed_threads(self, thread_ids: list[str]):
         self.last_listed_thread_ids = thread_ids

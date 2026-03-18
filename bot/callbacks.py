@@ -11,10 +11,15 @@ from bot.skills_ui import skills_keyboard
 from bot.projects_ui import projects_keyboard
 from bot.features_ui import features_keyboard, features_panel_text
 from models import state
+from models.user import user_manager
 from codex.commands import CommandResult
 
 logger = logging.getLogger("codex-telegram.bot")
 GUARDIAN_WEB_ONLY_TEXT = "Guardian settings and rules can be edited in Web UI only."
+
+
+def _mode_label(user_id: int) -> str:
+    return "PLAN" if user_manager.get(user_id).collaboration_mode == "plan" else "BUILD"
 
 
 async def _wait_for_codex():
@@ -24,6 +29,15 @@ async def _wait_for_codex():
         if state.command_router is not None:
             return
         await asyncio.sleep(0.1)
+
+
+def _settings_markup(user_id: int):
+    return settings_keyboard()
+
+
+def _main_menu_markup(user_id: int):
+    mode = user_manager.get(user_id).collaboration_mode
+    return main_menu_keyboard(mode)
 
 
 async def edit_with_log(query, context: ContextTypes.DEFAULT_TYPE, text: str, user_id: int, **kwargs):
@@ -87,9 +101,9 @@ async def send_threads_page(
     listed = result.meta.get("thread_ids", [])
     if result.kind != "threads" or not listed:
         if query is None:
-            await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=main_menu_keyboard())
+            await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=_main_menu_markup(user_id))
             return
-        await edit_with_log(query, context, result.text, user_id, reply_markup=main_menu_keyboard())
+        await edit_with_log(query, context, result.text, user_id, reply_markup=_main_menu_markup(user_id))
         return
     keyboard = threads_keyboard(listed, offset, limit, archived=archived)
     if query is None:
@@ -108,9 +122,9 @@ async def send_skills_picker(
     skill_names = result.meta.get("skill_names", [])
     if result.kind != "skills" or not skill_names:
         if query is None:
-            await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=main_menu_keyboard())
+            await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=_main_menu_markup(user_id))
             return
-        await edit_with_log(query, context, result.text, user_id, reply_markup=main_menu_keyboard())
+        await edit_with_log(query, context, result.text, user_id, reply_markup=_main_menu_markup(user_id))
         return
 
     picker_text = "Skills: choose one to insert template into chat."
@@ -131,9 +145,9 @@ async def send_projects_picker(
     listed = result.meta.get("project_keys", [])
     if result.kind != "projects" or not listed:
         if query is None:
-            await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=main_menu_keyboard())
+            await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=_main_menu_markup(user_id))
             return
-        await edit_with_log(query, context, result.text, user_id, reply_markup=main_menu_keyboard())
+        await edit_with_log(query, context, result.text, user_id, reply_markup=_main_menu_markup(user_id))
         return
 
     keyboard = projects_keyboard(listed)
@@ -157,9 +171,9 @@ async def send_features_picker(
     enabled = result.meta.get("feature_enabled", {})
     if result.kind != "features" or not isinstance(keys, list) or not keys:
         if query is None:
-            await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=main_menu_keyboard())
+            await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=_main_menu_markup(user_id))
             return
-        await edit_with_log(query, context, result.text, user_id, reply_markup=main_menu_keyboard())
+        await edit_with_log(query, context, result.text, user_id, reply_markup=_main_menu_markup(user_id))
         return
 
     state_user = user_manager.get(user_id)
@@ -187,9 +201,9 @@ async def send_guardian_web_only_notice(
     query=None,
 ):
     if query is None:
-        await context.bot.send_message(chat_id=chat_id, text=GUARDIAN_WEB_ONLY_TEXT, reply_markup=settings_keyboard())
+        await context.bot.send_message(chat_id=chat_id, text=GUARDIAN_WEB_ONLY_TEXT, reply_markup=_settings_markup(user_id))
         return
-    await edit_with_log(query, context, GUARDIAN_WEB_ONLY_TEXT, user_id, reply_markup=settings_keyboard())
+    await edit_with_log(query, context, GUARDIAN_WEB_ONLY_TEXT, user_id, reply_markup=_settings_markup(user_id))
 
 
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -212,10 +226,14 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if command == "start":
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
                 result = await run_callback_command("/start", user_id)
-                await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=main_menu_keyboard())
+                await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=_main_menu_markup(user_id))
             elif command == "menu":
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
-                await context.bot.send_message(chat_id=chat_id, text="Main menu", reply_markup=main_menu_keyboard())
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=f"Main menu\nCurrent mode: {_mode_label(user_id)}",
+                    reply_markup=_main_menu_markup(user_id),
+                )
             elif command == "threads":
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
                 await send_threads_page(context, user_id, chat_id, offset=0, limit=5, archived=False)
@@ -228,33 +246,34 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             elif command == "apps":
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
                 result = await run_callback_command("/apps", user_id)
-                await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=settings_keyboard())
+                await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=_settings_markup(user_id))
             elif command == "features":
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
                 await send_features_picker(context, user_id, chat_id)
             elif command == "models":
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
                 result = await run_callback_command("/models", user_id)
-                await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=settings_keyboard())
-            elif command == "modes":
+                await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=_settings_markup(user_id))
+            elif command == "mode_quick_toggle":
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
-                result = await run_callback_command("/modes", user_id)
-                await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=settings_keyboard())
+                next_command = "/build" if user_manager.get(user_id).collaboration_mode == "plan" else "/plan"
+                result = await state.command_router.route(next_command, [], user_id)
+                await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=_main_menu_markup(user_id))
             elif command == "mcp":
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
                 result = await run_callback_command("/mcp", user_id)
-                await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=settings_keyboard())
+                await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=_settings_markup(user_id))
             elif command == "config":
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
                 await context.bot.send_message(
                     chat_id=chat_id,
-                    text="Settings menu:",
-                    reply_markup=settings_keyboard(),
+                    text=f"Settings menu\nCurrent mode: {_mode_label(user_id)}",
+                    reply_markup=_settings_markup(user_id),
                 )
             elif command == "config_view":
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
                 result = await run_callback_command("/config", user_id)
-                await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=settings_keyboard())
+                await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=_settings_markup(user_id))
             elif command == "guardian_settings":
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
                 await send_guardian_web_only_notice(context, user_id, chat_id, query=query)
@@ -275,7 +294,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 mode, offset_raw, limit_raw = "", "", ""
 
             if not offset_raw.isdigit() or not limit_raw.isdigit() or mode not in ("active", "arch"):
-                await edit_with_log(query, context, "Invalid page action.", user_id, reply_markup=main_menu_keyboard())
+                await edit_with_log(query, context, "Invalid page action.", user_id, reply_markup=_main_menu_markup(user_id))
             else:
                 offset = max(0, int(offset_raw))
                 limit = max(1, min(100, int(limit_raw)))
@@ -361,31 +380,31 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             thread_id = data[7:]
             logger.info("Executing callback action user_id=%s data=%s", user_id, data)
             result = await state.command_router.route("/resume", [thread_id], user_id)
-            await edit_with_log(query, context, result.text, user_id, reply_markup=main_menu_keyboard())
+            await edit_with_log(query, context, result.text, user_id, reply_markup=_main_menu_markup(user_id))
         
         elif data.startswith("fork:"):
             thread_id = data[5:]
             logger.info("Executing callback action user_id=%s data=%s", user_id, data)
             result = await state.command_router.route("/fork", [thread_id], user_id)
-            await edit_with_log(query, context, result.text, user_id, reply_markup=main_menu_keyboard())
+            await edit_with_log(query, context, result.text, user_id, reply_markup=_main_menu_markup(user_id))
         
         elif data.startswith("read:"):
             thread_id = data[5:]
             logger.info("Executing callback action user_id=%s data=%s", user_id, data)
             result = await state.command_router.route("/read", [thread_id], user_id)
-            await edit_with_log(query, context, result.text, user_id, reply_markup=main_menu_keyboard())
+            await edit_with_log(query, context, result.text, user_id, reply_markup=_main_menu_markup(user_id))
         
         elif data.startswith("archive:"):
             thread_id = data[8:]
             logger.info("Executing callback action user_id=%s data=%s", user_id, data)
             result = await state.command_router.route("/archive", [thread_id], user_id)
-            await edit_with_log(query, context, result.text, user_id, reply_markup=main_menu_keyboard())
+            await edit_with_log(query, context, result.text, user_id, reply_markup=_main_menu_markup(user_id))
 
         elif data.startswith("unarchive:"):
             thread_id = data[10:]
             logger.info("Executing callback action user_id=%s data=%s", user_id, data)
             result = await state.command_router.route("/unarchive", [thread_id], user_id)
-            await edit_with_log(query, context, result.text, user_id, reply_markup=main_menu_keyboard())
+            await edit_with_log(query, context, result.text, user_id, reply_markup=_main_menu_markup(user_id))
 
         elif data.startswith("skillpick:"):
             skill_name = data[len("skillpick:"):].strip()
@@ -397,7 +416,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 context,
                 f"Inserted template: {template}",
                 user_id,
-                reply_markup=main_menu_keyboard(),
+                reply_markup=_main_menu_markup(user_id),
             )
 
         elif data.startswith("projectsel:"):
@@ -413,18 +432,16 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     kind="error",
                     text="Project switch timed out. Please try again or run /start.",
                 )
-            await edit_with_log(query, context, result.text, user_id, reply_markup=main_menu_keyboard())
+            await edit_with_log(query, context, result.text, user_id, reply_markup=_main_menu_markup(user_id))
         elif data.startswith("feature_toggle:"):
-            from models.user import user_manager
-
             idx_raw = data[len("feature_toggle:"):].strip()
             if not idx_raw.isdigit():
-                await edit_with_log(query, context, "Invalid feature toggle.", user_id, reply_markup=main_menu_keyboard())
+                await edit_with_log(query, context, "Invalid feature toggle.", user_id, reply_markup=_main_menu_markup(user_id))
             else:
                 idx = int(idx_raw)
                 state_user = user_manager.get(user_id)
                 if idx < 0 or idx >= len(state_user.feature_panel_keys):
-                    await edit_with_log(query, context, "Feature index out of range.", user_id, reply_markup=main_menu_keyboard())
+                    await edit_with_log(query, context, "Feature index out of range.", user_id, reply_markup=_main_menu_markup(user_id))
                 else:
                     key = state_user.feature_panel_keys[idx]
                     current_value = state_user.feature_panel_draft.get(
@@ -446,8 +463,6 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif data == "feature_refresh":
             await send_features_picker(context, user_id, chat_id, query=query)
         elif data == "feature_apply":
-            from models.user import user_manager
-
             state_user = user_manager.get(user_id)
             changes: list[tuple[str, bool]] = []
             for key in state_user.feature_panel_keys:
@@ -498,7 +513,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await send_guardian_web_only_notice(context, user_id, chat_id, query=query)
         else:
             logger.info("Executing callback action user_id=%s data=%s (unsupported)", user_id, data)
-            await edit_with_log(query, context, "Unsupported button action.", user_id, reply_markup=main_menu_keyboard())
+            await edit_with_log(query, context, "Unsupported button action.", user_id, reply_markup=_main_menu_markup(user_id))
     except Exception:
         logger.exception("Error handling callback data=%s user_id=%s", data, user_id)
         try:

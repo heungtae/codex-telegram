@@ -15,6 +15,8 @@ class WebServerLocalCommandTests(unittest.TestCase):
     def setUp(self):
         self.original_codex_client = state.codex_client
         self.original_command_router = state.command_router
+        user_manager._users.clear()
+        user_manager._thread_owners.clear()
         state.codex_ready.set()
         state.codex_client = SimpleNamespace(call=AsyncMock())
         state.command_router = SimpleNamespace(
@@ -44,6 +46,41 @@ class WebServerLocalCommandTests(unittest.TestCase):
         self.assertEqual("$ ls\ncwd: /tmp/web-workspace\nexit code: 0", body["output"])
         mock_run.assert_awaited_once_with("!ls", "/tmp/web-workspace")
         state.codex_client.call.assert_not_called()
+
+    def test_chat_messages_passes_collaboration_mode_to_turn_start(self):
+        app = create_web_app()
+        endpoint = next(
+            route.endpoint
+            for route in app.routes
+            if getattr(route, "path", None) == "/api/chat/messages"
+        )
+        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+        state_user = user_manager.get(self.session.user_id)
+        state_user.active_thread_id = "thread-1"
+        state_user.set_collaboration_mode("plan")
+        state_user.set_collaboration_mode_mask(
+            {"name": "plan", "mode": "plan", "model": "gpt-5.3-codex", "reasoning_effort": "medium"}
+        )
+        state.codex_client.call.return_value = {"turn": {"id": "turn-1"}}
+
+        body = asyncio.run(endpoint({"text": "hello"}, request))
+
+        self.assertTrue(body["ok"])
+        state.codex_client.call.assert_awaited_once_with(
+            "turn/start",
+            {
+                "threadId": "thread-1",
+                "collaborationMode": {
+                    "mode": "plan",
+                    "settings": {
+                        "model": "gpt-5.3-codex",
+                        "reasoning_effort": "medium",
+                        "developer_instructions": None,
+                    },
+                },
+                "input": [{"type": "text", "text": "hello"}],
+            },
+        )
 
     def test_index_includes_theme_bootstrap_and_versioned_assets(self):
         app = create_web_app()
@@ -79,6 +116,107 @@ class WebServerLocalCommandTests(unittest.TestCase):
 
         self.assertEqual("thread-1", state_user.active_thread_id)
 
+    def test_chat_messages_fails_when_collaboration_mode_payload_cannot_be_resolved(self):
+        app = create_web_app()
+        endpoint = next(
+            route.endpoint
+            for route in app.routes
+            if getattr(route, "path", None) == "/api/chat/messages"
+        )
+        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+        state_user = user_manager.get(self.session.user_id)
+        state_user.active_thread_id = "thread-1"
+        state_user.set_collaboration_mode("plan")
+        state.codex_client.call.return_value = {"data": []}
+
+        with self.assertRaises(HTTPException) as ctx:
+            asyncio.run(endpoint({"text": "second"}, request))
+
+        self.assertEqual(500, ctx.exception.status_code)
+        self.assertIn("Failed to resolve collaboration mode payload for plan", ctx.exception.detail)
+
+    def test_chat_messages_resolves_collaboration_mode_from_nested_settings_shape(self):
+        app = create_web_app()
+        endpoint = next(
+            route.endpoint
+            for route in app.routes
+            if getattr(route, "path", None) == "/api/chat/messages"
+        )
+        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+        state_user = user_manager.get(self.session.user_id)
+        state_user.active_thread_id = "thread-1"
+        state_user.set_collaboration_mode("plan")
+        state.codex_client.call = AsyncMock(
+            side_effect=[
+                {
+                    "data": {
+                        "modes": [
+                            {"name": "default", "settings": {"model": "gpt-5.3-codex", "reasoningEffort": "medium"}},
+                            {"name": "plan", "mode": "plan", "settings": {"model": "gpt-5.3-codex", "reasoningEffort": "high"}},
+                        ]
+                    }
+                },
+                {"turn": {"id": "turn-1"}},
+            ]
+        )
+
+        body = asyncio.run(endpoint({"text": "hello"}, request))
+
+        self.assertTrue(body["ok"])
+        state.codex_client.call.assert_any_await(
+            "turn/start",
+            {
+                "threadId": "thread-1",
+                "collaborationMode": {
+                    "mode": "plan",
+                    "settings": {
+                        "model": "gpt-5.3-codex",
+                        "reasoning_effort": "high",
+                        "developer_instructions": None,
+                    },
+                },
+                "input": [{"type": "text", "text": "hello"}],
+            },
+        )
+
+    def test_chat_messages_resolves_collaboration_mode_using_default_model_when_preset_has_no_model(self):
+        app = create_web_app()
+        endpoint = next(
+            route.endpoint
+            for route in app.routes
+            if getattr(route, "path", None) == "/api/chat/messages"
+        )
+        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+        state_user = user_manager.get(self.session.user_id)
+        state_user.active_thread_id = "thread-1"
+        state_user.set_collaboration_mode("plan")
+        state.codex_client.call = AsyncMock(
+            side_effect=[
+                {"data": [{"name": "Plan", "mode": "plan"}]},
+                {"config": {"model": "gpt-5.3-codex"}},
+                {"turn": {"id": "turn-1"}},
+            ]
+        )
+
+        body = asyncio.run(endpoint({"text": "hello"}, request))
+
+        self.assertTrue(body["ok"])
+        state.codex_client.call.assert_any_await(
+            "turn/start",
+            {
+                "threadId": "thread-1",
+                "collaborationMode": {
+                    "mode": "plan",
+                    "settings": {
+                        "model": "gpt-5.3-codex",
+                        "reasoning_effort": None,
+                        "developer_instructions": None,
+                    },
+                },
+                "input": [{"type": "text", "text": "hello"}],
+            },
+        )
+
     def test_session_summary_exposes_agent_capabilities(self):
         app = create_web_app()
         endpoint = next(
@@ -95,12 +233,59 @@ class WebServerLocalCommandTests(unittest.TestCase):
             body = asyncio.run(endpoint(request))
 
         self.assertEqual("/tmp/web-workspace", body["workspace"])
+        self.assertEqual("build", body["collaboration_mode"])
         self.assertEqual(
             [
                 {"name": "default", "enabled": True, "toggleable": False, "configurable": False},
                 {"name": "guardian", "enabled": True, "toggleable": True, "configurable": True},
             ],
             body["agents"],
+        )
+
+    def test_read_thread_preserves_plan_items_as_plan_messages(self):
+        app = create_web_app()
+        endpoint = next(
+            route.endpoint
+            for route in app.routes
+            if getattr(route, "path", None) == "/api/threads/read"
+        )
+        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+        state.codex_client.call.return_value = {
+            "thread": {"id": "thread-1"},
+            "turns": [
+                {
+                    "id": "turn-1",
+                    "items": [
+                        {
+                            "type": "userMessage",
+                            "id": "user-1",
+                            "content": [{"type": "text", "text": "Plan this"}],
+                        },
+                        {
+                            "type": "plan",
+                            "id": "turn-1-plan",
+                            "text": "# Final plan\n- first\n- second\n",
+                        },
+                    ],
+                }
+            ],
+        }
+
+        body = asyncio.run(endpoint(request, "thread-1"))
+
+        self.assertTrue(body["ok"])
+        self.assertEqual("thread-1", body["thread_id"])
+        self.assertEqual(
+            [
+                {"role": "user", "text": "Plan this", "thread_id": "thread-1"},
+                {
+                    "role": "assistant",
+                    "text": "# Final plan\n- first\n- second",
+                    "kind": "plan",
+                    "thread_id": "thread-1",
+                },
+            ],
+            body["messages"],
         )
 
     def test_guardian_endpoint_accepts_rules_payload(self):
@@ -242,8 +427,8 @@ path_glob_any = ["helm/**"]
         self.assertTrue(body["ok"])
         self.assertEqual(
             [
-                {"role": "user", "text": "hello"},
-                {"role": "assistant", "text": "world"},
+                {"role": "user", "text": "hello", "thread_id": "thread-1"},
+                {"role": "assistant", "text": "world", "thread_id": "thread-1"},
             ],
             body["messages"],
         )
@@ -279,11 +464,11 @@ path_glob_any = ["helm/**"]
 
         self.assertEqual(
             [
-                {"role": "user", "text": "first question"},
-                {"role": "assistant", "text": "first answer"},
-                {"role": "assistant", "text": "more detail"},
-                {"role": "user", "text": "second question"},
-                {"role": "assistant", "text": "second answer"},
+                {"role": "user", "text": "first question", "thread_id": "thread-2"},
+                {"role": "assistant", "text": "first answer", "thread_id": "thread-2"},
+                {"role": "assistant", "text": "more detail", "thread_id": "thread-2"},
+                {"role": "user", "text": "second question", "thread_id": "thread-2"},
+                {"role": "assistant", "text": "second answer", "thread_id": "thread-2"},
             ],
             body["messages"],
         )
@@ -316,8 +501,8 @@ path_glob_any = ["helm/**"]
 
         self.assertEqual(
             [
-                {"role": "user", "text": "question"},
-                {"role": "assistant", "text": "answer"},
+                {"role": "user", "text": "question", "thread_id": "thread-3"},
+                {"role": "assistant", "text": "answer", "thread_id": "thread-3"},
             ],
             body["messages"],
         )
@@ -348,8 +533,8 @@ path_glob_any = ["helm/**"]
 
         self.assertEqual(
             [
-                {"role": "user", "text": "question"},
-                {"role": "assistant", "text": "answer"},
+                {"role": "user", "text": "question", "thread_id": "thread-4"},
+                {"role": "assistant", "text": "answer", "thread_id": "thread-4"},
             ],
             body["messages"],
         )
@@ -380,8 +565,13 @@ path_glob_any = ["helm/**"]
 
         self.assertEqual(
             [
-                {"role": "user", "text": "question"},
-                {"role": "assistant", "text": "subagent answer", "variant": "subagent"},
+                {"role": "user", "text": "question", "thread_id": "thread-subagent"},
+                {
+                    "role": "assistant",
+                    "text": "subagent answer",
+                    "variant": "subagent",
+                    "thread_id": "thread-subagent",
+                },
             ],
             body["messages"],
         )
@@ -437,6 +627,8 @@ path_glob_any = ["helm/**"]
             if getattr(route, "path", None) == "/api/threads/summaries"
         )
         request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+        user_manager.get(self.session.user_id).selected_project_key = "default"
+        user_manager.bind_thread_project("t-1", "default")
         state.codex_client.call = AsyncMock(
             side_effect=[
                 {
