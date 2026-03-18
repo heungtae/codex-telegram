@@ -665,6 +665,10 @@ select {
   justify-content: center;
 }
 
+.msg-row.file-panel {
+  display: block;
+}
+
 .msg {
   position: relative;
   max-width: min(78%, 760px);
@@ -793,6 +797,103 @@ select {
 .msg.system.kind-plan_checklist .msg-label {
   color: #426b96;
   opacity: 0.92;
+}
+
+.file-change-panel {
+  width: 100%;
+  border: 1px solid rgba(125, 156, 196, 0.52);
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(244, 249, 255, 0.96) 0%, rgba(236, 244, 255, 0.98) 100%);
+  box-shadow: 0 10px 22px rgba(16, 24, 40, 0.08);
+  overflow: hidden;
+}
+
+.file-change-panel-scroll {
+  max-height: calc(10 * 1.45em + 84px);
+  overflow: auto;
+}
+
+.file-change-entry {
+  padding: 14px 16px 16px;
+  border-top: 1px solid rgba(125, 156, 196, 0.18);
+}
+
+.file-change-entry:first-child {
+  border-top: 0;
+}
+
+.file-change-summary {
+  white-space: pre-wrap;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #183556;
+}
+
+.file-change-files {
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #45637f;
+  white-space: pre-wrap;
+}
+
+.file-change-code {
+  margin: 12px 0 0;
+  border-radius: 14px;
+  border: 1px solid rgba(125, 156, 196, 0.3);
+  background: #0d1726;
+  color: #dce9fb;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow: auto;
+  font-family: "SFMono-Regular", "Consolas", "Liberation Mono", monospace;
+}
+
+.file-change-code-row {
+  display: grid;
+  grid-template-columns: 56px 56px minmax(0, 1fr);
+  align-items: start;
+}
+
+.file-change-code-row:first-child {
+  border-top-left-radius: 14px;
+  border-top-right-radius: 14px;
+}
+
+.file-change-code-row:last-child {
+  border-bottom-left-radius: 14px;
+  border-bottom-right-radius: 14px;
+}
+
+.file-change-code-row.type-add {
+  background: rgba(35, 80, 49, 0.34);
+}
+
+.file-change-code-row.type-del {
+  background: rgba(106, 39, 39, 0.34);
+}
+
+.file-change-code-row.type-hunk,
+.file-change-code-row.type-meta {
+  background: rgba(73, 108, 154, 0.18);
+}
+
+.file-change-code-line,
+.file-change-code-text {
+  display: block;
+  padding: 6px 10px;
+}
+
+.file-change-code-line {
+  color: #7e97b4;
+  text-align: right;
+  user-select: none;
+  border-right: 1px solid rgba(125, 156, 196, 0.18);
+}
+
+.file-change-code-text {
+  white-space: pre;
+  overflow-x: auto;
 }
 
 .composer {
@@ -1330,6 +1431,35 @@ select {
 
 :root[data-theme="dark"] .msg.system.kind-plan_checklist .msg-label {
   color: #96c5ff;
+}
+
+:root[data-theme="dark"] .file-change-panel {
+  border-color: rgba(68, 101, 140, 0.82);
+  background: linear-gradient(180deg, rgba(13, 22, 34, 0.96) 0%, rgba(16, 27, 43, 0.98) 100%);
+  box-shadow: 0 14px 28px rgba(2, 8, 18, 0.34);
+}
+
+:root[data-theme="dark"] .file-change-entry {
+  border-top-color: rgba(68, 101, 140, 0.28);
+}
+
+:root[data-theme="dark"] .file-change-summary {
+  color: #d6e6ff;
+}
+
+:root[data-theme="dark"] .file-change-files {
+  color: #8ca8c9;
+}
+
+:root[data-theme="dark"] .file-change-code {
+  border-color: rgba(68, 101, 140, 0.38);
+  background: #08111d;
+  color: #dcecff;
+}
+
+:root[data-theme="dark"] .file-change-code-line {
+  color: #6f89a7;
+  border-right-color: rgba(68, 101, 140, 0.28);
 }
 
 :root[data-theme="dark"] .composer-input-shell:focus-within {

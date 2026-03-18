@@ -172,7 +172,8 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
              patch("main.CommandRouter", return_value=router), \
              patch("main.ApprovalGuardianService", return_value=guardian), \
              patch("main.get", side_effect=lambda key, default=None: default), \
-             patch("main.get_guardian_settings", return_value=guardian_settings):
+             patch("main.get_guardian_settings", return_value=guardian_settings), \
+             patch("main.asyncio.sleep", new=AsyncMock()) as sleep_mock:
             await app_main.post_init(telegram_app)
             user_manager.bind_thread_owner(1, "thread-1")
             queue = await event_hub.subscribe(1)
@@ -182,6 +183,7 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
                     {
                         "threadId": "thread-1",
                         "turnId": "turn-1",
+                        "diff": "--- a/src/main.py\n+++ b/src/main.py\n@@ -1 +1 @@\n-old\n+new\n",
                         "files": [
                             {
                                 "path": "src/main.py",
@@ -201,12 +203,17 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("turn-1", event["turn_id"])
         self.assertEqual("apply_patch", event["source"])
         self.assertEqual("src/main.py", event["files"][0]["path"])
+        self.assertIn("+new", event["diff"])
         self.assertIn("Applied patch changes", event["summary"])
-        bot.send_message.assert_awaited_once()
-        kwargs = bot.send_message.await_args.kwargs
-        self.assertEqual(1, kwargs["chat_id"])
-        self.assertIn("src/main.py (+12 -3)", kwargs["text"])
-        self.assertIn("threadId: thread-1", kwargs["text"])
+        self.assertEqual(2, bot.send_message.await_count)
+        first_call = bot.send_message.await_args_list[0].kwargs
+        second_call = bot.send_message.await_args_list[1].kwargs
+        self.assertEqual(1, first_call["chat_id"])
+        self.assertEqual("Applied patch changes", first_call["text"])
+        self.assertEqual(1, second_call["chat_id"])
+        self.assertIn("src/main.py (+12 -3)", second_call["text"])
+        self.assertIn("threadId: thread-1", second_call["text"])
+        sleep_mock.assert_awaited_once_with(app_main.FILE_CHANGE_LINE_DELAY_SECONDS)
 
     async def test_turn_completed_publishes_system_message_to_web(self):
         client = _DummyCodexClient(submit_result=True)

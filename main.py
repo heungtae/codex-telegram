@@ -44,6 +44,7 @@ from web.runtime import event_hub
 logger = setup("codex-telegram")
 _web_server = None
 _web_server_thread = None
+FILE_CHANGE_LINE_DELAY_SECONDS = 0.35
 
 
 def _normalize_mode_kind(raw: object) -> str | None:
@@ -364,6 +365,7 @@ async def post_init(app: Application | None):
             "source": "apply_patch",
             "summary": summary,
             "files": deduped,
+            "diff": diff_text,
             "raw_params": p,
         }
 
@@ -622,12 +624,20 @@ async def post_init(app: Application | None):
         summary = str(payload.get("summary") or "").strip()
         if not summary:
             return
-        footer = f"\n\nthreadId: {thread_id or 'unknown'}"
-        max_body_len = 3900 - len(footer)
-        if len(summary) > max_body_len:
-            summary = summary[: max(1, max_body_len - len("\n...(truncated)"))] + "\n...(truncated)"
+        lines = [line.strip() for line in summary.splitlines() if line.strip()]
+        if not lines:
+            return
         try:
-            await app.bot.send_message(chat_id=user_id, text=summary + footer)
+            last_index = len(lines) - 1
+            for index, line in enumerate(lines):
+                footer = f"\n\nthreadId: {thread_id or 'unknown'}" if index == last_index else ""
+                max_body_len = 3900 - len(footer)
+                body = line
+                if len(body) > max_body_len:
+                    body = body[: max(1, max_body_len - len("\n...(truncated)"))] + "\n...(truncated)"
+                await app.bot.send_message(chat_id=user_id, text=body + footer)
+                if index < last_index:
+                    await asyncio.sleep(FILE_CHANGE_LINE_DELAY_SECONDS)
         except Exception:
             logger.exception("Failed to forward file change to Telegram user_id=%s", user_id)
 
@@ -680,6 +690,7 @@ async def post_init(app: Application | None):
                         "source": file_change.get("source"),
                         "summary": file_change.get("summary"),
                         "files": file_change.get("files"),
+                        "diff": file_change.get("diff"),
                     },
                 )
                 await _send_telegram_file_change(target_user_id, file_change)

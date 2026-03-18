@@ -232,6 +232,125 @@ function normalizeThreadId(value) {
   return typeof value === "string" && value.trim() ? value.trim() : "";
 }
 
+function parseDiffLineNumber(value) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function renderDiffRows(diffText) {
+  const source = typeof diffText === "string" ? diffText : "";
+  if (!source) {
+    return [];
+  }
+  const lines = source.split("\n");
+  const rows = [];
+  let oldLine = 0;
+  let newLine = 0;
+
+  for (const line of lines) {
+    const hunkMatch = line.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+    if (hunkMatch) {
+      oldLine = parseDiffLineNumber(hunkMatch[1]);
+      newLine = parseDiffLineNumber(hunkMatch[2]);
+      rows.push({
+        type: "hunk",
+        left: "",
+        right: "",
+        text: line,
+      });
+      continue;
+    }
+    if (
+      line.startsWith("diff ") ||
+      line.startsWith("index ") ||
+      line.startsWith("--- ") ||
+      line.startsWith("+++ ") ||
+      line.startsWith("rename ") ||
+      line.startsWith("new file") ||
+      line.startsWith("deleted file")
+    ) {
+      rows.push({
+        type: "meta",
+        left: "",
+        right: "",
+        text: line,
+      });
+      continue;
+    }
+    if (line.startsWith("+")) {
+      rows.push({
+        type: "add",
+        left: "",
+        right: String(newLine),
+        text: line,
+      });
+      newLine += 1;
+      continue;
+    }
+    if (line.startsWith("-")) {
+      rows.push({
+        type: "del",
+        left: String(oldLine),
+        right: "",
+        text: line,
+      });
+      oldLine += 1;
+      continue;
+    }
+    rows.push({
+      type: "ctx",
+      left: oldLine > 0 ? String(oldLine) : "",
+      right: newLine > 0 ? String(newLine) : "",
+      text: line,
+    });
+    if (line !== "\\ No newline at end of file") {
+      if (oldLine > 0) {
+        oldLine += 1;
+      }
+      if (newLine > 0) {
+        newLine += 1;
+      }
+    }
+  }
+  return rows;
+}
+
+function FileChangeDiff({ diff }) {
+  const rows = renderDiffRows(diff);
+  if (!rows.length) {
+    return null;
+  }
+  return (
+    <div className="file-change-code" role="table" aria-label="File change diff">
+      {rows.map((row, index) => (
+        <div key={`diff:${index}`} className={`file-change-code-row type-${row.type}`} role="row">
+          <span className="file-change-code-line" role="cell">{row.left}</span>
+          <span className="file-change-code-line" role="cell">{row.right}</span>
+          <span className="file-change-code-text" role="cell">{row.text || " "}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function groupMessagesForRender(messages) {
+  const groups = [];
+  let filePanel = null;
+  for (const message of Array.isArray(messages) ? messages : []) {
+    if (message?.kind === "file_change") {
+      if (!filePanel) {
+        filePanel = { type: "file_panel", entries: [] };
+        groups.push(filePanel);
+      }
+      filePanel.entries.push(message);
+      continue;
+    }
+    filePanel = null;
+    groups.push({ type: "message", message });
+  }
+  return groups;
+}
+
 function App() {
   const PALETTE_LIMIT = 10;
   const SIDEBAR_MIN = 260;
@@ -352,6 +471,7 @@ function App() {
     () => paletteItems.slice(paletteWindowStart, paletteWindowStart + PALETTE_LIMIT),
     [paletteItems, paletteWindowStart]
   );
+  const renderItems = useMemo(() => groupMessagesForRender(messages), [messages]);
 
   const loadSession = async () => {
     try {
@@ -784,17 +904,27 @@ function App() {
       }
       const variant = data.variant === "subagent" ? "subagent" : "";
       const threadId = normalizeThreadId(data.thread_id);
+      const turnId = typeof data.turn_id === "string" && data.turn_id ? data.turn_id : "";
       setMessages((prev) => {
         const copy = [...prev];
         const last = copy[copy.length - 1];
-        if (last && last.role === "assistant" && last.streaming && (last.variant || "") === variant) {
+        if (
+          last &&
+          last.role === "assistant" &&
+          last.streaming &&
+          (last.variant || "") === variant &&
+          ((last.turnId || "") === turnId || !turnId)
+        ) {
           last.text += text;
           if (!last.threadId && threadId) {
             last.threadId = threadId;
           }
+          if (!last.turnId && turnId) {
+            last.turnId = turnId;
+          }
           return copy;
         }
-        copy.push({ role: "assistant", text, variant, threadId, streaming: true });
+        copy.push({ role: "assistant", text, variant, threadId, turnId, streaming: true });
         return copy;
       });
     });
@@ -817,6 +947,7 @@ function App() {
       if (typeof actualMode === "string") {
         setCollaborationMode(normalizeCollaborationMode(actualMode));
       }
+      setMessages((prev) => prev.map((m) => (m.streaming ? { ...m, streaming: false } : m)));
       setStatus("running");
     });
     es.addEventListener("turn_completed", () => {
@@ -862,8 +993,9 @@ function App() {
       const data = JSON.parse(ev.data);
       const summary = data.summary || data.text || "";
       const files = Array.isArray(data.files) ? data.files : [];
+      const diff = typeof data.diff === "string" ? data.diff : "";
       const threadId = normalizeThreadId(data.thread_id);
-      if (!summary && files.length === 0) {
+      if (!summary && files.length === 0 && !diff) {
         return;
       }
       setMessages((prev) => [
@@ -872,6 +1004,7 @@ function App() {
           role: "system",
           text: summary || "Applied patch changes",
           files,
+          diff,
           threadId,
           kind: "file_change",
           streaming: false,
@@ -892,6 +1025,16 @@ function App() {
     }
     chatRef.current.scrollTop = chatRef.current.scrollHeight;
   }, [messages]);
+
+  useEffect(() => {
+    if (!chatRef.current) {
+      return;
+    }
+    const panels = chatRef.current.querySelectorAll(".file-change-panel-scroll");
+    panels.forEach((panel) => {
+      panel.scrollTop = panel.scrollHeight;
+    });
+  }, [renderItems]);
 
   useEffect(() => {
     if (status === "running" || !pendingComposerFocusRef.current) {
@@ -1083,8 +1226,6 @@ function App() {
           <div className="meta-value">{activeThread || sessionSummary?.active_thread_id || "-"}</div>
           <div className="meta-line"><b>Workspace</b></div>
           <div className="meta-value">{sessionSummary?.workspace || "-"}</div>
-          <div className="meta-line"><b>Mode</b></div>
-          <div className="meta-value">{collaborationMode.toUpperCase()}</div>
         </div>
         <div className="panel">
           <h3>Enabled Agents</h3>
@@ -1384,25 +1525,44 @@ function App() {
               ))}
             </div>
           ) : null}
-          {messages.map((m, idx) => (
-            <div key={idx} className={`msg-row ${m.role}`}>
-              <div className={`msg ${m.role}${m.variant ? ` ${m.variant}` : ""}${m.kind ? ` kind-${m.kind}` : ""}`}>
-                {m.kind === "plan" ? <div className="msg-label">Plan</div> : null}
-                {m.kind === "plan_checklist" ? <div className="msg-label">Plan Checklist</div> : null}
-                <div className="msg-body">{m.text}</div>
-                {m.kind === "file_change" && Array.isArray(m.files) && m.files.length ? (
-                  <div className="msg-body">
-                    {m.files.map((file, fileIdx) => (
-                      <div key={`${file.path || "file"}:${fileIdx}`}>
-                        {(file.change_type || "M")} {file.path || "-"} (+{Number(file.additions || 0)} -{Number(file.deletions || 0)})
-                      </div>
-                    ))}
+          {renderItems.map((item, idx) => {
+            if (item.type === "file_panel") {
+              return (
+                <div key={`file-panel:${idx}`} className="msg-row file-panel">
+                  <div className="file-change-panel">
+                    <div className="file-change-panel-scroll">
+                      {item.entries.map((entry, entryIdx) => (
+                        <div key={`file-entry:${idx}:${entryIdx}`} className="file-change-entry">
+                          <div className="file-change-summary">{entry.text}</div>
+                          {Array.isArray(entry.files) && entry.files.length ? (
+                            <div className="file-change-files">
+                              {entry.files.map((file, fileIdx) => (
+                                <div key={`${file.path || "file"}:${fileIdx}`}>
+                                  {(file.change_type || "M")} {file.path || "-"} (+{Number(file.additions || 0)} -{Number(file.deletions || 0)})
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+                          {entry.diff ? <FileChangeDiff diff={entry.diff} /> : null}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                ) : null}
-                {m.threadId ? <div className="msg-meta">threadId: {m.threadId}</div> : null}
+                </div>
+              );
+            }
+            const m = item.message;
+            return (
+              <div key={idx} className={`msg-row ${m.role}`}>
+                <div className={`msg ${m.role}${m.variant ? ` ${m.variant}` : ""}${m.kind ? ` kind-${m.kind}` : ""}`}>
+                  {m.kind === "plan" ? <div className="msg-label">Plan</div> : null}
+                  {m.kind === "plan_checklist" ? <div className="msg-label">Plan Checklist</div> : null}
+                  <div className="msg-body">{m.text}</div>
+                  {m.threadId ? <div className="msg-meta">threadId: {m.threadId}</div> : null}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
         <div className="composer">
           <div className="composer-inner">
