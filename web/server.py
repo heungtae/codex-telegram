@@ -474,6 +474,204 @@ def _workspace_suggestions(workspace: str, prefix: str, limit: int) -> list[str]
     return [row[2] for row in scored[:limit]]
 
 
+def _resolve_workspace_for_user(user_id: int) -> str:
+    state_user = user_manager.get(user_id)
+    workspace = state_user.selected_project_path
+    if not workspace and state.command_router is not None:
+        effective = state.command_router.projects.resolve_effective_project(user_id)
+        if effective and isinstance(effective.get("path"), str):
+            workspace = effective["path"]
+    if not workspace:
+        raise HTTPException(status_code=400, detail="No active workspace is selected")
+    real_workspace = os.path.realpath(workspace)
+    if not os.path.isdir(real_workspace):
+        raise HTTPException(status_code=400, detail="Workspace path does not exist")
+    return real_workspace
+
+
+def _resolve_workspace_path(
+    workspace: str,
+    raw_path: str = "",
+    *,
+    allow_missing: bool = False,
+    expect_dir: bool | None = None,
+) -> tuple[str, str]:
+    normalized = str(raw_path or "").replace("\\", "/").strip()
+    normalized = normalized.lstrip("/")
+    parts = [part for part in normalized.split("/") if part and part != "."]
+    if any(part == ".." for part in parts):
+        raise HTTPException(status_code=400, detail="Path must stay inside the workspace")
+    rel_path = "/".join(parts)
+    target = os.path.realpath(os.path.join(workspace, rel_path)) if rel_path else workspace
+    try:
+        if os.path.commonpath([workspace, target]) != workspace:
+            raise HTTPException(status_code=400, detail="Path must stay inside the workspace")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid workspace path") from exc
+    if not allow_missing and not os.path.exists(target):
+        raise HTTPException(status_code=404, detail="Workspace path was not found")
+    if expect_dir is True and os.path.exists(target) and not os.path.isdir(target):
+        raise HTTPException(status_code=400, detail="Path is not a directory")
+    if expect_dir is False and os.path.exists(target) and not os.path.isfile(target):
+        raise HTTPException(status_code=400, detail="Path is not a file")
+    return rel_path, target
+
+
+def _has_visible_children(path: str) -> bool:
+    try:
+        with os.scandir(path) as entries:
+            for entry in entries:
+                if entry.name == ".git":
+                    continue
+                return True
+    except OSError:
+        return False
+    return False
+
+
+def _workspace_tree_items(workspace: str, rel_path: str, depth: int) -> list[dict[str, Any]]:
+    _, directory = _resolve_workspace_path(workspace, rel_path, expect_dir=True)
+    safe_depth = max(1, min(4, depth))
+    try:
+        with os.scandir(directory) as entries:
+            rows = sorted(
+                entries,
+                key=lambda entry: (0 if entry.is_dir(follow_symlinks=False) else 1, entry.name.lower()),
+            )
+    except OSError:
+        return []
+
+    items: list[dict[str, Any]] = []
+    for entry in rows:
+        if entry.name == ".git":
+            continue
+        child_rel = f"{rel_path}/{entry.name}" if rel_path else entry.name
+        is_dir = entry.is_dir(follow_symlinks=False)
+        item: dict[str, Any] = {
+            "name": entry.name,
+            "path": child_rel,
+            "type": "directory" if is_dir else "file",
+        }
+        if is_dir:
+            item["has_children"] = _has_visible_children(entry.path)
+            if safe_depth > 1:
+                item["children"] = _workspace_tree_items(workspace, child_rel, safe_depth - 1)
+        items.append(item)
+    return items
+
+
+async def _run_process(argv: list[str], cwd: str | None = None) -> tuple[int, str, str]:
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *argv,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=cwd,
+        )
+    except FileNotFoundError:
+        return 127, "", f"Command not found: {argv[0]}"
+    except Exception as exc:
+        return 1, "", str(exc)
+    stdout, stderr = await proc.communicate()
+    return (
+        proc.returncode,
+        stdout.decode(errors="replace"),
+        stderr.decode(errors="replace"),
+    )
+
+
+async def _git_is_repo(workspace: str) -> bool:
+    code, _stdout, _stderr = await _run_process(["git", "-C", workspace, "rev-parse", "--show-toplevel"])
+    return code == 0
+
+
+def _status_code_from_porcelain(xy: str) -> str:
+    status = (xy or "").strip()
+    if status == "??":
+        return "??"
+    letters = [char for char in xy if char not in {" ", "?"}]
+    if "R" in letters:
+        return "R"
+    if "D" in letters:
+        return "D"
+    if "A" in letters:
+        return "A"
+    if "M" in letters:
+        return "M"
+    if "C" in letters:
+        return "C"
+    return letters[0] if letters else ""
+
+
+async def _workspace_git_status(workspace: str) -> dict[str, dict[str, str]]:
+    if not await _git_is_repo(workspace):
+        return {}
+    code, stdout, _stderr = await _run_process(
+        ["git", "-C", workspace, "status", "--porcelain=v1", "--untracked-files=all"]
+    )
+    if code != 0:
+        return {}
+
+    items: dict[str, dict[str, str]] = {}
+    for raw_line in stdout.splitlines():
+        line = raw_line.rstrip("\n")
+        if len(line) < 4:
+            continue
+        xy = line[:2]
+        payload = line[3:]
+        path_text = payload
+        original_path = ""
+        if " -> " in payload:
+            original_path, path_text = payload.split(" -> ", 1)
+        normalized_path = path_text.replace("\\", "/").strip()
+        if not normalized_path:
+            continue
+        items[normalized_path] = {
+            "code": _status_code_from_porcelain(xy),
+            "xy": xy,
+            "original_path": original_path.replace("\\", "/").strip(),
+        }
+    return items
+
+
+def _read_text_file(path: str, limit: int = 200_000) -> tuple[str, bool, bool]:
+    with open(path, "rb") as handle:
+        raw = handle.read(limit + 1)
+    if b"\x00" in raw[:8192]:
+        return "", True, False
+    truncated = len(raw) > limit
+    text = raw[:limit].decode("utf-8", errors="replace")
+    return text, False, truncated
+
+
+async def _workspace_file_diff(workspace: str, rel_path: str, abs_path: str) -> tuple[str, str]:
+    status_items = await _workspace_git_status(workspace)
+    status = status_items.get(rel_path, {}).get("code", "")
+    if not status:
+        return "", ""
+
+    if status == "??":
+        if not os.path.isfile(abs_path):
+            return "", status
+        code, stdout, _stderr = await _run_process(
+            ["git", "-C", workspace, "diff", "--no-index", "--", "/dev/null", abs_path]
+        )
+        if code in {0, 1}:
+            return stdout.strip(), status
+        return "", status
+
+    segments: list[str] = []
+    for argv in (
+        ["git", "-C", workspace, "diff", "--no-ext-diff", "--", rel_path],
+        ["git", "-C", workspace, "diff", "--no-ext-diff", "--cached", "--", rel_path],
+    ):
+        code, stdout, _stderr = await _run_process(argv)
+        if code == 0 and stdout.strip():
+            segments.append(stdout.strip())
+    merged = "\n".join(segment for segment in segments if segment).strip()
+    return merged, status
+
+
 async def _run_local_feature_toggle(feature_key: str, enabled: bool) -> tuple[bool, str]:
     action = "enable" if enabled else "disable"
     try:
@@ -960,6 +1158,69 @@ def create_web_app() -> FastAPI:
             "agents": agents,
         }
 
+    @app.get("/api/workspace/tree")
+    async def workspace_tree(
+        request: Request,
+        path: str = "",
+        depth: int = 1,
+    ) -> dict[str, Any]:
+        session = await _session_from_request(request)
+        await _wait_for_codex()
+        workspace = _resolve_workspace_for_user(session.user_id)
+        rel_path, _target = _resolve_workspace_path(workspace, path, expect_dir=True)
+        items = _workspace_tree_items(workspace, rel_path, depth)
+        return {
+            "workspace": workspace,
+            "path": rel_path,
+            "items": items,
+        }
+
+    @app.get("/api/workspace/status")
+    async def workspace_status(request: Request) -> dict[str, Any]:
+        session = await _session_from_request(request)
+        await _wait_for_codex()
+        workspace = _resolve_workspace_for_user(session.user_id)
+        is_git = await _git_is_repo(workspace)
+        items = await _workspace_git_status(workspace)
+        return {
+            "workspace": workspace,
+            "is_git": is_git,
+            "items": items,
+        }
+
+    @app.get("/api/workspace/file")
+    async def workspace_file(request: Request, path: str) -> dict[str, Any]:
+        session = await _session_from_request(request)
+        await _wait_for_codex()
+        workspace = _resolve_workspace_for_user(session.user_id)
+        rel_path, abs_path = _resolve_workspace_path(workspace, path, expect_dir=False)
+        content, is_binary, truncated = _read_text_file(abs_path)
+        return {
+            "workspace": workspace,
+            "path": rel_path,
+            "content": content,
+            "is_binary": is_binary,
+            "truncated": truncated,
+            "preview_available": not is_binary,
+        }
+
+    @app.get("/api/workspace/diff")
+    async def workspace_diff(request: Request, path: str) -> dict[str, Any]:
+        session = await _session_from_request(request)
+        await _wait_for_codex()
+        workspace = _resolve_workspace_for_user(session.user_id)
+        rel_path, abs_path = _resolve_workspace_path(workspace, path, allow_missing=True)
+        is_git = await _git_is_repo(workspace)
+        diff, status = await _workspace_file_diff(workspace, rel_path, abs_path)
+        return {
+            "workspace": workspace,
+            "path": rel_path,
+            "status": status,
+            "diff": diff,
+            "has_diff": bool(diff),
+            "is_git": is_git,
+        }
+
     @app.get("/api/workspace/suggestions")
     async def workspace_suggestions(
         request: Request,
@@ -968,17 +1229,7 @@ def create_web_app() -> FastAPI:
     ) -> dict[str, Any]:
         session = await _session_from_request(request)
         await _wait_for_codex()
-        state_user = user_manager.get(session.user_id)
-
-        workspace = state_user.selected_project_path
-        if not workspace and state.command_router is not None:
-            effective = state.command_router.projects.resolve_effective_project(session.user_id)
-            if effective and isinstance(effective.get("path"), str):
-                workspace = effective["path"]
-        if not workspace:
-            raise HTTPException(status_code=400, detail="No active workspace is selected")
-        if not os.path.isdir(workspace):
-            raise HTTPException(status_code=400, detail="Workspace path does not exist")
+        workspace = _resolve_workspace_for_user(session.user_id)
 
         safe_limit = max(1, min(1000, limit))
         items = _workspace_suggestions(workspace, prefix, safe_limit)

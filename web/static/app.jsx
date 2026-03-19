@@ -203,6 +203,34 @@ function MenuIcon() {
   );
 }
 
+function ChevronIcon({ expanded = false }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      {expanded ? <path d="M7 10l5 5 5-5z" /> : <path d="M10 7l5 5-5 5z" />}
+    </svg>
+  );
+}
+
+function FolderIcon({ open = false }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      {open ? (
+        <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v7A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5z" />
+      ) : (
+        <path d="M4 6.5A2.5 2.5 0 0 1 6.5 4H10l2 2h5.5A2.5 2.5 0 0 1 20 8.5v1H4zM4 10h16v6.5A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5z" />
+      )}
+    </svg>
+  );
+}
+
+function FileIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6.5 3h7L19 8.5v11A1.5 1.5 0 0 1 17.5 21h-11A1.5 1.5 0 0 1 5 19.5v-15A1.5 1.5 0 0 1 6.5 3Zm6 1.5V9h4.5" />
+    </svg>
+  );
+}
+
 function normalizePlanStatus(raw) {
   const value = typeof raw === "string" ? raw.trim().toLowerCase() : "";
   if (value === "completed") {
@@ -280,6 +308,29 @@ function formatWebSearchAction(action) {
 
 function normalizeThreadId(value) {
   return typeof value === "string" && value.trim() ? value.trim() : "";
+}
+
+function normalizeWorkspacePath(value) {
+  return typeof value === "string" ? value.replace(/\\/g, "/").replace(/^\/+/, "").trim() : "";
+}
+
+function basename(value) {
+  const normalized = normalizeWorkspacePath(value);
+  if (!normalized) {
+    return "";
+  }
+  const parts = normalized.split("/");
+  return parts[parts.length - 1] || normalized;
+}
+
+function statusClassName(code) {
+  if (code === "??") {
+    return "status-untracked";
+  }
+  if (!code) {
+    return "";
+  }
+  return `status-${String(code).toLowerCase()}`;
 }
 
 function parseDiffLineNumber(value) {
@@ -383,6 +434,24 @@ function FileChangeDiff({ diff }) {
   );
 }
 
+function FileCodePreview({ content }) {
+  const rows = typeof content === "string" ? content.split("\n") : [];
+  if (!rows.length) {
+    return <div className="workspace-preview-empty">File is empty.</div>;
+  }
+  return (
+    <div className="file-change-code workspace-file-code" role="table" aria-label="File preview">
+      {rows.map((row, index) => (
+        <div key={`file:${index}`} className="file-change-code-row type-ctx" role="row">
+          <span className="file-change-code-line" role="cell">{index + 1}</span>
+          <span className="file-change-code-line" role="cell" />
+          <span className="file-change-code-text" role="cell">{row || " "}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function groupMessagesForRender(messages) {
   const groups = [];
   let panel = null;
@@ -440,6 +509,11 @@ function App() {
     typeof window !== "undefined" ? window.innerWidth <= MOBILE_BREAKPOINT : false
   );
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [workspaceTree, setWorkspaceTree] = useState({});
+  const [expandedWorkspaceDirs, setExpandedWorkspaceDirs] = useState({ "": true });
+  const [workspaceStatus, setWorkspaceStatus] = useState({ is_git: false, items: {} });
+  const [workspaceError, setWorkspaceError] = useState("");
+  const [workspacePreview, setWorkspacePreview] = useState(null);
   const slashCommands = useMemo(
     () => [
       "/commands",
@@ -569,6 +643,116 @@ function App() {
     const items = Array.isArray(result.items) ? result.items : [];
     const filtered = items.filter((item) => item && typeof item.id === "number");
     setApprovalItems(filtered.length ? [filtered[filtered.length - 1]] : []);
+  };
+
+  const loadWorkspaceTree = async (path = "", options = {}) => {
+    const { depth = 1, force = false } = options;
+    const normalizedPath = normalizeWorkspacePath(path);
+    if (!force && workspaceTree[normalizedPath]) {
+      return workspaceTree[normalizedPath];
+    }
+    const result = await api(
+      `/api/workspace/tree?path=${encodeURIComponent(normalizedPath)}&depth=${encodeURIComponent(String(depth))}`
+    );
+    const items = Array.isArray(result.items) ? result.items : [];
+    setWorkspaceTree((prev) => ({ ...prev, [normalizedPath]: items }));
+    return items;
+  };
+
+  const loadWorkspaceStatus = async () => {
+    try {
+      const result = await api("/api/workspace/status");
+      setWorkspaceStatus({
+        is_git: !!result.is_git,
+        items: result && typeof result.items === "object" ? result.items : {},
+      });
+      setWorkspaceError("");
+    } catch (err) {
+      setWorkspaceStatus({ is_git: false, items: {} });
+      setWorkspaceError(err.message || "Failed to load workspace status.");
+    }
+  };
+
+  const openWorkspaceFile = async (path, statusCode = "") => {
+    const normalizedPath = normalizeWorkspacePath(path);
+    if (!normalizedPath) {
+      return;
+    }
+    setWorkspaceError("");
+    setWorkspacePreview({
+      path: normalizedPath,
+      mode: statusCode ? "diff" : "file",
+      status: statusCode,
+      loading: true,
+      content: "",
+      diff: "",
+      previewAvailable: true,
+      error: "",
+      truncated: false,
+      isBinary: false,
+    });
+    try {
+      if (statusCode) {
+        const diffResult = await api(`/api/workspace/diff?path=${encodeURIComponent(normalizedPath)}`);
+        if (diffResult.has_diff && diffResult.diff) {
+          setWorkspacePreview({
+            path: normalizedPath,
+            mode: "diff",
+            status: diffResult.status || statusCode,
+            loading: false,
+            content: "",
+            diff: diffResult.diff,
+            previewAvailable: true,
+            error: "",
+            truncated: false,
+            isBinary: false,
+          });
+          return;
+        }
+      }
+      const fileResult = await api(`/api/workspace/file?path=${encodeURIComponent(normalizedPath)}`);
+      setWorkspacePreview({
+        path: normalizedPath,
+        mode: "file",
+        status: statusCode,
+        loading: false,
+        content: fileResult.content || "",
+        diff: "",
+        previewAvailable: !!fileResult.preview_available,
+        error: "",
+        truncated: !!fileResult.truncated,
+        isBinary: !!fileResult.is_binary,
+      });
+    } catch (err) {
+      setWorkspacePreview({
+        path: normalizedPath,
+        mode: statusCode ? "diff" : "file",
+        status: statusCode,
+        loading: false,
+        content: "",
+        diff: "",
+        previewAvailable: false,
+        error: err.message || "Failed to load file preview.",
+        truncated: false,
+        isBinary: false,
+      });
+    } finally {
+    }
+  };
+
+  const toggleWorkspaceDirectory = (path) => {
+    const normalizedPath = normalizeWorkspacePath(path);
+    const isExpanded = !!expandedWorkspaceDirs[normalizedPath];
+    if (isExpanded) {
+      setExpandedWorkspaceDirs((prev) => ({ ...prev, [normalizedPath]: false }));
+      return;
+    }
+    setExpandedWorkspaceDirs((prev) => ({ ...prev, [normalizedPath]: true }));
+    if (!workspaceTree[normalizedPath]) {
+      loadWorkspaceTree(normalizedPath).catch((err) => {
+        setWorkspaceError(err.message || "Failed to load workspace tree.");
+      });
+    }
   };
 
   const submitApproval = async (requestId, decision) => {
@@ -1088,6 +1272,7 @@ function App() {
       setMessages((prev) => prev.map((m) => ({ ...m, streaming: false })));
       loadThreads().catch(() => {});
       loadSessionSummary().catch(() => {});
+      loadWorkspaceStatus().catch(() => {});
     });
     es.addEventListener("turn_failed", (ev) => {
       const data = JSON.parse(ev.data);
@@ -1123,6 +1308,7 @@ function App() {
         },
       ]);
       loadSessionSummary().catch(() => {});
+      loadWorkspaceStatus().catch(() => {});
     });
     es.addEventListener("file_change", (ev) => {
       const data = JSON.parse(ev.data);
@@ -1203,6 +1389,22 @@ function App() {
     }
     active.scrollIntoView({ block: "nearest" });
   }, [paletteOpen, paletteSelectedIndex, visiblePaletteItems.length]);
+  useEffect(() => {
+    const workspacePath = sessionSummary?.workspace || "";
+    if (!workspacePath) {
+      setWorkspaceTree({});
+      setWorkspaceStatus({ is_git: false, items: {} });
+      setWorkspacePreview(null);
+      setWorkspaceError("");
+      return;
+    }
+    setExpandedWorkspaceDirs({ "": true });
+    loadWorkspaceTree("", { force: true }).catch((err) => {
+      setWorkspaceTree({});
+      setWorkspaceError(err.message || "Failed to load workspace tree.");
+    });
+    loadWorkspaceStatus().catch(() => {});
+  }, [sessionSummary?.workspace]);
   useEffect(() => {
     if (typeof window === "undefined") {
       return undefined;
@@ -1461,6 +1663,53 @@ function App() {
   const settingsBusy = !!agentConfigLoading || !!agentConfigSaving;
   const interactionBusy = status === "running";
   const composerLocked = interactionBusy;
+  const workspaceRootLabel = basename(sessionSummary?.workspace || "") || "Workspace";
+  const workspaceStatusItems =
+    workspaceStatus && typeof workspaceStatus.items === "object" ? workspaceStatus.items : {};
+  const deletedWorkspaceEntries = Object.entries(workspaceStatusItems)
+    .filter(([path, value]) => value?.code === "D" && !workspaceTree[""]?.some((item) => item.path === path))
+    .sort((a, b) => a[0].localeCompare(b[0]));
+
+  const renderWorkspaceTree = (path = "", depth = 0) => {
+    const normalizedPath = normalizeWorkspacePath(path);
+    const items = Array.isArray(workspaceTree[normalizedPath]) ? workspaceTree[normalizedPath] : [];
+    if (!items.length && normalizedPath) {
+      return null;
+    }
+    return items.map((item) => {
+      const itemPath = normalizeWorkspacePath(item.path);
+      const isDirectory = item.type === "directory";
+      const isExpanded = !!expandedWorkspaceDirs[itemPath];
+      const statusCode = workspaceStatusItems[itemPath]?.code || "";
+      const isSelected = workspacePreview?.path === itemPath;
+      return (
+        <div key={itemPath} className="workspace-tree-node">
+          <button
+            type="button"
+            className={`workspace-tree-item ${isDirectory ? "directory" : "file"} ${isSelected ? "selected" : ""} ${statusClassName(statusCode)}`}
+            style={{ paddingLeft: `${12 + depth * 16}px` }}
+            onClick={() => {
+              if (isDirectory) {
+                toggleWorkspaceDirectory(itemPath);
+                return;
+              }
+              openWorkspaceFile(itemPath, statusCode).catch(() => {});
+            }}
+          >
+            <span className="workspace-tree-icon caret">
+              {isDirectory && item.has_children ? <ChevronIcon expanded={isExpanded} /> : null}
+            </span>
+            <span className="workspace-tree-icon glyph">
+              {isDirectory ? <FolderIcon open={isExpanded} /> : <FileIcon />}
+            </span>
+            <span className="workspace-tree-label">{item.name}</span>
+            {statusCode ? <span className="workspace-tree-badge">{statusCode}</span> : null}
+          </button>
+          {isDirectory && isExpanded ? renderWorkspaceTree(itemPath, depth + 1) : null}
+        </div>
+      );
+    });
+  };
 
   const sidebarStyle = isMobileLayout ? undefined : { width: sidebarWidth };
 
@@ -1762,102 +2011,144 @@ function App() {
             </div>
           </div>
         ) : null}
-        <div className="chat" ref={chatRef}>
-          {approvalItems.length ? (
-            <div className="approval-stack">
-              {approvalItems.map((item) => (
-                <div key={item.id} className="approval">
-                  <div className="approval-title">Approval required</div>
-                  <div>Method: {item.method || "-"}</div>
-                  <div>Request ID: {item.id}</div>
-                  {item.policy_rule ? <div>Policy: {item.policy_rule}</div> : null}
-                  {item.reason ? <div>Reason: {item.reason}</div> : null}
-                  {item.question ? <div>Question: {item.question}</div> : null}
-                  <div className="approval-actions">
-                    <button
-                      className="secondary"
-                      type="button"
-                      disabled={approvalBusyId === item.id}
-                      onClick={() => submitApproval(item.id, "approve")}
-                    >
-                      Approve
-                    </button>
-                    <button
-                      className="secondary"
-                      type="button"
-                      disabled={approvalBusyId === item.id}
-                      onClick={() => submitApproval(item.id, "session")}
-                    >
-                      Session
-                    </button>
-                    <button
-                      className="danger"
-                      type="button"
-                      disabled={approvalBusyId === item.id}
-                      onClick={() => submitApproval(item.id, "deny")}
-                    >
-                      Deny
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : null}
-          {renderItems.map((item, idx) => {
-            if (item.type === "event_panel") {
-              return (
-                <div key={`file-panel:${idx}`} className="msg-row file-panel">
-                  <div className="file-change-panel">
-                    <div className="file-change-panel-scroll">
-                      {item.entries.map((entry, entryIdx) => (
-                        <div
-                          key={`file-entry:${idx}:${entryIdx}`}
-                          className={`file-change-entry kind-${entry.kind || "event"}`}
-                        >
-                          {entry.kind !== "file_change" ? (
-                            <div className="file-change-label">{formatEventPanelTitle(entry.kind)}</div>
-                          ) : null}
-                          <div className="file-change-summary">{entry.text}</div>
-                          {entry.detail ? <div className="file-change-files">{entry.detail}</div> : null}
-                          {Array.isArray(entry.files) && entry.files.length ? (
-                            <div className="file-change-files">
-                              {entry.files.map((file, fileIdx) => (
-                                <div key={`${file.path || "file"}:${fileIdx}`}>
-                                  {(file.change_type || "M")} {file.path || "-"} (+{Number(file.additions || 0)} -{Number(file.deletions || 0)})
-                                </div>
-                              ))}
-                            </div>
-                          ) : null}
-                          {entry.rawReasoning ? (
-                            <details className="event-panel-details">
-                              <summary>Raw reasoning</summary>
-                              <div className="file-change-files">{entry.rawReasoning}</div>
-                            </details>
-                          ) : null}
-                          {entry.diff ? <FileChangeDiff diff={entry.diff} /> : null}
-                        </div>
-                      ))}
+        <div className="workspace-layout">
+          <div className="center-pane">
+            {workspacePreview ? (
+              <div className="workspace-preview-panel">
+                <div className="workspace-preview-head">
+                  <div className="workspace-preview-copy">
+                    <div className="workspace-preview-title">
+                      {workspacePreview.mode === "diff" ? "Diff Preview" : "File Preview"}
+                    </div>
+                    <div className="workspace-preview-path">
+                      {workspacePreview.status ? `[${workspacePreview.status}] ` : ""}
+                      {workspacePreview.path}
                     </div>
                   </div>
+                  <button
+                    className="workspace-preview-close"
+                    type="button"
+                    onClick={() => setWorkspacePreview(null)}
+                  >
+                    Close
+                  </button>
                 </div>
-              );
-            }
-            const m = item.message;
-            return (
-              <div key={idx} className={`msg-row ${m.role}`}>
-                <div className={`msg ${m.role}${m.variant ? ` ${m.variant}` : ""}${m.kind ? ` kind-${m.kind}` : ""}`}>
-                  {m.kind === "plan" ? <div className="msg-label">Plan</div> : null}
-                  {m.kind === "plan_checklist" ? <div className="msg-label">Plan Checklist</div> : null}
-                  <div className="msg-body">{m.text}</div>
-                  {m.threadId ? <div className="msg-meta">threadId: {m.threadId}</div> : null}
-                </div>
+                {workspacePreview.loading ? (
+                  <div className="workspace-preview-empty">Loading preview...</div>
+                ) : workspacePreview.error ? (
+                  <div className="workspace-preview-empty">{workspacePreview.error}</div>
+                ) : workspacePreview.mode === "diff" && workspacePreview.diff ? (
+                  <FileChangeDiff diff={workspacePreview.diff} />
+                ) : !workspacePreview.previewAvailable ? (
+                  <div className="workspace-preview-empty">
+                    {workspacePreview.isBinary ? "Binary file preview is unavailable." : "Preview is unavailable."}
+                  </div>
+                ) : (
+                  <>
+                    {workspacePreview.truncated ? (
+                      <div className="workspace-preview-note">Showing the first part of the file.</div>
+                    ) : null}
+                    <FileCodePreview content={workspacePreview.content} />
+                  </>
+                )}
               </div>
-            );
-          })}
-        </div>
-        <div className="composer">
-          <div className="composer-inner">
-            <div className="input-wrap">
+            ) : null}
+            <div className="chat" ref={chatRef}>
+              {approvalItems.length ? (
+                <div className="approval-stack">
+                  {approvalItems.map((item) => (
+                    <div key={item.id} className="approval">
+                      <div className="approval-title">Approval required</div>
+                      <div>Method: {item.method || "-"}</div>
+                      <div>Request ID: {item.id}</div>
+                      {item.policy_rule ? <div>Policy: {item.policy_rule}</div> : null}
+                      {item.reason ? <div>Reason: {item.reason}</div> : null}
+                      {item.question ? <div>Question: {item.question}</div> : null}
+                      <div className="approval-actions">
+                        <button
+                          className="secondary"
+                          type="button"
+                          disabled={approvalBusyId === item.id}
+                          onClick={() => submitApproval(item.id, "approve")}
+                        >
+                          Approve
+                        </button>
+                        <button
+                          className="secondary"
+                          type="button"
+                          disabled={approvalBusyId === item.id}
+                          onClick={() => submitApproval(item.id, "session")}
+                        >
+                          Session
+                        </button>
+                        <button
+                          className="danger"
+                          type="button"
+                          disabled={approvalBusyId === item.id}
+                          onClick={() => submitApproval(item.id, "deny")}
+                        >
+                          Deny
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              {renderItems.map((item, idx) => {
+                if (item.type === "event_panel") {
+                  return (
+                    <div key={`file-panel:${idx}`} className="msg-row file-panel">
+                      <div className="file-change-panel">
+                        <div className="file-change-panel-scroll">
+                          {item.entries.map((entry, entryIdx) => (
+                            <div
+                              key={`file-entry:${idx}:${entryIdx}`}
+                              className={`file-change-entry kind-${entry.kind || "event"}`}
+                            >
+                              {entry.kind !== "file_change" ? (
+                                <div className="file-change-label">{formatEventPanelTitle(entry.kind)}</div>
+                              ) : null}
+                              <div className="file-change-summary">{entry.text}</div>
+                              {entry.detail ? <div className="file-change-files">{entry.detail}</div> : null}
+                              {Array.isArray(entry.files) && entry.files.length ? (
+                                <div className="file-change-files">
+                                  {entry.files.map((file, fileIdx) => (
+                                    <div key={`${file.path || "file"}:${fileIdx}`}>
+                                      {(file.change_type || "M")} {file.path || "-"} (+{Number(file.additions || 0)} -{Number(file.deletions || 0)})
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : null}
+                              {entry.rawReasoning ? (
+                                <details className="event-panel-details">
+                                  <summary>Raw reasoning</summary>
+                                  <div className="file-change-files">{entry.rawReasoning}</div>
+                                </details>
+                              ) : null}
+                              {entry.diff ? <FileChangeDiff diff={entry.diff} /> : null}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+                const m = item.message;
+                return (
+                  <div key={idx} className={`msg-row ${m.role}`}>
+                    <div className={`msg ${m.role}${m.variant ? ` ${m.variant}` : ""}${m.kind ? ` kind-${m.kind}` : ""}`}>
+                      {m.kind === "plan" ? <div className="msg-label">Plan</div> : null}
+                      {m.kind === "plan_checklist" ? <div className="msg-label">Plan Checklist</div> : null}
+                      <div className="msg-body">{m.text}</div>
+                      {m.threadId ? <div className="msg-meta">threadId: {m.threadId}</div> : null}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="composer">
+              <div className="composer-inner">
+                <div className="input-wrap">
               {paletteOpen ? (
                 <div className="slash-panel" ref={paletteRef}>
                   {visiblePaletteItems.map((item, idx) => {
@@ -1974,6 +2265,60 @@ function App() {
               <NewChatIcon />
             </button>
           </div>
+            </div>
+          </div>
+          <aside className="workspace-panel">
+            <div className="workspace-panel-head">
+              <div>
+                <div className="workspace-panel-title">Workspace Files</div>
+                <div className="workspace-panel-subtitle">{workspaceRootLabel}</div>
+              </div>
+              <button
+                className="workspace-refresh"
+                type="button"
+                onClick={() => {
+                  loadWorkspaceTree("", { force: true }).catch((err) => {
+                    setWorkspaceError(err.message || "Failed to refresh workspace tree.");
+                  });
+                  loadWorkspaceStatus().catch(() => {});
+                }}
+                aria-label="Refresh workspace browser"
+                title="Refresh workspace browser"
+              >
+                <RefreshIcon />
+              </button>
+            </div>
+            {workspaceError ? <div className="workspace-panel-state">{workspaceError}</div> : null}
+            {!sessionSummary?.workspace ? (
+              <div className="workspace-panel-state">Select a workspace to browse files.</div>
+            ) : null}
+            {sessionSummary?.workspace ? (
+              <div className="workspace-tree">
+                {deletedWorkspaceEntries.length ? (
+                  <div className="workspace-tree-group">
+                    <div className="workspace-tree-group-label">Deleted</div>
+                    {deletedWorkspaceEntries.map(([path, value]) => (
+                      <button
+                        key={`deleted:${path}`}
+                        type="button"
+                        className="workspace-tree-item file deleted"
+                        onClick={() => openWorkspaceFile(path, value?.code || "D").catch(() => {})}
+                      >
+                        <span className="workspace-tree-icon caret" />
+                        <span className="workspace-tree-icon glyph"><FileIcon /></span>
+                        <span className="workspace-tree-label">{path}</span>
+                        <span className="workspace-tree-badge">{value?.code || "D"}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                {renderWorkspaceTree("", 0)}
+                {Array.isArray(workspaceTree[""]) && workspaceTree[""].length ? null : (
+                  <div className="workspace-panel-state">No files available.</div>
+                )}
+              </div>
+            ) : null}
+          </aside>
         </div>
       </main>
     </div>

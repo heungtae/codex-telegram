@@ -1,5 +1,8 @@
 import unittest
 import asyncio
+import os
+import subprocess
+import tempfile
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -681,6 +684,69 @@ path_glob_any = ["helm/**"]
         self.assertEqual("Thread started: thread-new", body["text"])
         self.assertEqual({"thread_id": "thread-new"}, body["meta"])
         state.command_router.route.assert_awaited_once_with("/start", [], self.session.user_id)
+
+    def test_workspace_tree_status_file_and_diff_endpoints(self):
+        with tempfile.TemporaryDirectory(prefix="codex-web-workspace-") as workspace:
+            subprocess.run(["git", "init"], cwd=workspace, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(["git", "config", "user.email", "web@test.local"], cwd=workspace, check=True)
+            subprocess.run(["git", "config", "user.name", "Codex Web"], cwd=workspace, check=True)
+            os.makedirs(os.path.join(workspace, "src"), exist_ok=True)
+            with open(os.path.join(workspace, "src", "tracked.txt"), "w", encoding="utf-8") as handle:
+                handle.write("before\n")
+            subprocess.run(["git", "add", "."], cwd=workspace, check=True)
+            subprocess.run(["git", "commit", "-m", "init"], cwd=workspace, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+            with open(os.path.join(workspace, "src", "tracked.txt"), "w", encoding="utf-8") as handle:
+                handle.write("after\n")
+            with open(os.path.join(workspace, "src", "new.txt"), "w", encoding="utf-8") as handle:
+                handle.write("hello\n")
+
+            state.command_router.projects = SimpleNamespace(
+                resolve_effective_project=lambda user_id: {"path": workspace, "key": "default"}
+            )
+            app = create_web_app()
+            request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+
+            tree_endpoint = next(route.endpoint for route in app.routes if getattr(route, "path", None) == "/api/workspace/tree")
+            status_endpoint = next(route.endpoint for route in app.routes if getattr(route, "path", None) == "/api/workspace/status")
+            file_endpoint = next(route.endpoint for route in app.routes if getattr(route, "path", None) == "/api/workspace/file")
+            diff_endpoint = next(route.endpoint for route in app.routes if getattr(route, "path", None) == "/api/workspace/diff")
+
+            tree_body = asyncio.run(tree_endpoint(request, path="src", depth=1))
+            status_body = asyncio.run(status_endpoint(request))
+            file_body = asyncio.run(file_endpoint(request, path="src/tracked.txt"))
+            diff_body = asyncio.run(diff_endpoint(request, path="src/tracked.txt"))
+
+            self.assertEqual("src", tree_body["path"])
+            self.assertEqual(["new.txt", "tracked.txt"], [item["name"] for item in tree_body["items"]])
+            self.assertTrue(status_body["is_git"])
+            self.assertEqual("M", status_body["items"]["src/tracked.txt"]["code"])
+            self.assertEqual("??", status_body["items"]["src/new.txt"]["code"])
+            self.assertTrue(file_body["preview_available"])
+            self.assertEqual("after\n", file_body["content"])
+            self.assertTrue(diff_body["has_diff"])
+            self.assertEqual("M", diff_body["status"])
+            self.assertIn("-before", diff_body["diff"])
+            self.assertIn("+after", diff_body["diff"])
+
+    def test_workspace_file_endpoint_rejects_parent_escape(self):
+        with tempfile.TemporaryDirectory(prefix="codex-web-workspace-") as workspace:
+            state.command_router.projects = SimpleNamespace(
+                resolve_effective_project=lambda user_id: {"path": workspace, "key": "default"}
+            )
+            app = create_web_app()
+            endpoint = next(
+                route.endpoint
+                for route in app.routes
+                if getattr(route, "path", None) == "/api/workspace/file"
+            )
+            request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+
+            with self.assertRaises(HTTPException) as ctx:
+                asyncio.run(endpoint(request, path="../secrets.txt"))
+
+            self.assertEqual(400, ctx.exception.status_code)
+            self.assertIn("inside the workspace", ctx.exception.detail)
 
 
 if __name__ == "__main__":
