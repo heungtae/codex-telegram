@@ -82,11 +82,29 @@ select {
   z-index: 4;
 }
 
+.sidebar-content {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.sidebar.collapsed {
+  padding: 12px 8px;
+  overflow: hidden;
+}
+
 .sidebar-resizer {
   width: 6px;
   cursor: col-resize;
   background: transparent;
   border-right: 1px solid transparent;
+}
+
+.sidebar-resizer-collapsed {
+  width: 0;
+  border-right: 0;
+  pointer-events: none;
 }
 
 .sidebar-resizer:hover,
@@ -128,6 +146,10 @@ select {
   box-shadow: var(--shadow-sm);
 }
 
+.sidebar-content > .panel:last-child {
+  margin-bottom: 0;
+}
+
 .panel h3 {
   margin: 0 0 10px;
   font-size: 13px;
@@ -153,6 +175,55 @@ select {
   flex: 1;
   max-height: none;
   min-height: 0;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding-top: 12px;
+}
+
+.sidebar-collapse-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  background: #f1f6ff;
+  color: var(--text);
+  border-radius: 999px;
+  font: inherit;
+  cursor: pointer;
+  line-height: 1;
+  transition: transform 0.12s ease, background 0.16s ease, border-color 0.16s ease, opacity 0.16s ease;
+}
+
+.sidebar-collapse-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+  flex: 0 0 auto;
+}
+
+.sidebar.collapsed .sidebar-footer {
+  padding-top: 0;
+}
+
+.sidebar.collapsed .sidebar-collapse-btn {
+  min-width: 28px;
+  padding: 0;
+}
+
+.sidebar-collapse-btn:hover:not(:disabled) {
+  background: #eaf2ff;
+  border-color: #b8c7de;
+  transform: translateY(-1px);
+}
+
+.sidebar-collapse-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .thread-item {
@@ -1701,7 +1772,8 @@ select {
 :root[data-theme="dark"] .agent-floating-settings-close,
 :root[data-theme="dark"] .composer-new-chat,
 :root[data-theme="dark"] .secondary,
-:root[data-theme="dark"] .theme-toggle {
+:root[data-theme="dark"] .theme-toggle,
+:root[data-theme="dark"] .sidebar-collapse-btn {
   background: #172538;
   border-color: #2b3f54;
 }
@@ -1712,7 +1784,8 @@ select {
 :root[data-theme="dark"] .agent-floating-settings-close:hover:not(:disabled),
 :root[data-theme="dark"] .composer-new-chat:hover,
 :root[data-theme="dark"] .secondary:hover,
-:root[data-theme="dark"] .theme-toggle:hover {
+:root[data-theme="dark"] .theme-toggle:hover,
+:root[data-theme="dark"] .sidebar-collapse-btn:hover:not(:disabled) {
   background: #1c3048;
   border-color: #496581;
 }
@@ -2045,6 +2118,19 @@ select {
 
   .sidebar.open {
     transform: translateX(0);
+  }
+
+  .sidebar.collapsed {
+    padding: 16px;
+    overflow: auto;
+  }
+
+  .sidebar.collapsed .sidebar-collapse-btn {
+    padding: 10px 12px;
+  }
+
+  .sidebar-footer {
+    padding-bottom: 4px;
   }
 
   .sidebar-backdrop {

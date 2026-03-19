@@ -89,6 +89,18 @@ function ThemeIcon({ theme }) {
   );
 }
 
+function SidebarChevronIcon({ collapsed }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      {collapsed ? (
+        <path d="M8.59 7.41 10 6l6 6-6 6-1.41-1.41L13.17 12 8.59 7.41Zm-4 0L6 6l6 6-6 6-1.41-1.41L9.17 12 4.59 7.41Z" />
+      ) : (
+        <path d="m15.41 7.41-1.41-1.41-6 6 6 6 1.41-1.41L10.83 12l4.58-4.59Zm4 0L18 6l-6 6 6 6 1.41-1.41L14.83 12l4.58-4.59Z" />
+      )}
+    </svg>
+  );
+}
+
 function Login({ onLoggedIn, theme, onToggleTheme }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -535,6 +547,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   const PALETTE_LIMIT = 10;
   const SIDEBAR_MIN = 260;
   const SIDEBAR_MAX = 620;
+  const SIDEBAR_COLLAPSED_WIDTH = 44;
   const WORKSPACE_PANEL_MIN = 280;
   const WORKSPACE_PANEL_MAX = 720;
   const MOBILE_BREAKPOINT = 900;
@@ -568,6 +581,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   const [paletteSelectedIndex, setPaletteSelectedIndex] = useState(0);
   const [sidebarWidth, setSidebarWidth] = useState(340);
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [workspacePanelWidth, setWorkspacePanelWidth] = useState(320);
   const [isResizingWorkspacePanel, setIsResizingWorkspacePanel] = useState(false);
   const [isMobileLayout, setIsMobileLayout] = useState(() =>
@@ -1862,179 +1876,203 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     </aside>
   );
 
-  const sidebarStyle = isMobileLayout ? undefined : { width: sidebarWidth };
+  const isDesktopSidebarCollapsed = !isMobileLayout && isSidebarCollapsed;
+  const sidebarStyle = isMobileLayout
+    ? undefined
+    : { width: isDesktopSidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : sidebarWidth };
 
   return (
     <div className={`app ${isMobileLayout ? "mobile-layout" : ""}`}>
       <aside
         id="app-sidebar"
-        className={`sidebar ${isMobileLayout ? "mobile" : "desktop"} ${isSidebarOpen ? "open" : ""}`}
+        className={`sidebar ${isMobileLayout ? "mobile" : "desktop"} ${isSidebarOpen ? "open" : ""} ${isDesktopSidebarCollapsed ? "collapsed" : ""}`}
         style={sidebarStyle}
         aria-hidden={isMobileLayout ? !isSidebarOpen : undefined}
       >
-        <div className="brand">Codex Web</div>
-        <div className="panel">
-          <h3>Current Thread</h3>
-          <div className="meta-line"><b>ThreadId</b></div>
-          <div className="meta-value">{activeThread || sessionSummary?.active_thread_id || "-"}</div>
-          <div className="meta-line"><b>Workspace</b></div>
-          <div className="meta-value">{sessionSummary?.workspace || "-"}</div>
-        </div>
-        <div className="panel">
-          <h3>Enabled Agents</h3>
-          <div className="thread-list agent-list">
-            {(sessionSummary?.agents || []).map((agent) => (
-              <div key={agent.name} className="agent-row">
-                <button
-                  className={`agent-item ${agent.enabled ? "on" : "off"} ${AGENT_CONFIG_DEFS[agent.name] ? "clickable" : "static"}`}
-                  onClick={() => toggleAgent(agent.name)}
-                  disabled={!AGENT_CONFIG_DEFS[agent.name] || !!agentConfigLoading || !!agentConfigSaving}
-                  type="button"
-                >
-                  <span>{agent.name}</span>
-                  <span>{agent.enabled ? "enabled" : "disabled"}</span>
-                </button>
-                {AGENT_CONFIG_DEFS[agent.name] ? (
-                  <button
-                    className="agent-settings-btn"
-                    onClick={() => openAgentSettings(agent.name)}
-                    disabled={!!agentConfigLoading || !!agentConfigSaving}
-                    aria-label={`${agent.name} 설정`}
-                    title={`${agent.name} 설정`}
-                    type="button"
-                  >
-                    <SettingsIcon />
-                  </button>
-                ) : null}
-              </div>
-            ))}
-          </div>
-          {agentConfigError ? <div className="agent-error">{agentConfigError}</div> : null}
-          {activeAgentDef ? (
-            <div className="agent-settings-card">
-              <div className="agent-settings-head">
-                <strong>{activeAgentDef.title}</strong>
-                <span className={`agent-status-chip ${(activeAgentConfig?.enabled ?? false) ? "on" : "off"}`}>
-                  {(activeAgentConfig?.enabled ?? false) ? "enabled" : "disabled"}
-                </span>
-              </div>
-              {activeAgentConfig ? (
-                <div className="agent-settings-form">
-                  {activeAgentDef.fields.map((field) => (
-                    <label key={field.key} className="agent-field">
-                      <span>{field.label}</span>
-                      <select
-                        value={String(activeAgentConfig[field.key] ?? "")}
-                        onChange={(e) => {
-                          const raw = e.target.value;
-                          const nextValue = typeof field.options[0] === "number" ? Number(raw) : raw;
-                          updateAgentDraft(activeAgentSettings, field.key, nextValue);
-                        }}
-                        disabled={settingsBusy}
+        {!isDesktopSidebarCollapsed ? (
+          <div className="sidebar-content">
+            <div className="brand">Codex Web</div>
+            <div className="panel">
+              <h3>Current Thread</h3>
+              <div className="meta-line"><b>ThreadId</b></div>
+              <div className="meta-value">{activeThread || sessionSummary?.active_thread_id || "-"}</div>
+              <div className="meta-line"><b>Workspace</b></div>
+              <div className="meta-value">{sessionSummary?.workspace || "-"}</div>
+            </div>
+            <div className="panel">
+              <h3>Enabled Agents</h3>
+              <div className="thread-list agent-list">
+                {(sessionSummary?.agents || []).map((agent) => (
+                  <div key={agent.name} className="agent-row">
+                    <button
+                      className={`agent-item ${agent.enabled ? "on" : "off"} ${AGENT_CONFIG_DEFS[agent.name] ? "clickable" : "static"}`}
+                      onClick={() => toggleAgent(agent.name)}
+                      disabled={!AGENT_CONFIG_DEFS[agent.name] || !!agentConfigLoading || !!agentConfigSaving}
+                      type="button"
+                    >
+                      <span>{agent.name}</span>
+                      <span>{agent.enabled ? "enabled" : "disabled"}</span>
+                    </button>
+                    {AGENT_CONFIG_DEFS[agent.name] ? (
+                      <button
+                        className="agent-settings-btn"
+                        onClick={() => openAgentSettings(agent.name)}
+                        disabled={!!agentConfigLoading || !!agentConfigSaving}
+                        aria-label={`${agent.name} 설정`}
+                        title={`${agent.name} 설정`}
+                        type="button"
                       >
-                        {field.options.map((option) => (
-                          <option key={String(option)} value={String(option)}>
-                            {String(option)}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  ))}
-                  {activeAgentSettings === "guardian" ? (
-                    <div className="agent-settings-summary">
-                      <div className="agent-settings-summary-title">
-                        Rules: {guardianRuleSummary.enabled || 0}/{guardianRuleSummary.total || 0} enabled
-                      </div>
-                      {guardianRuleSummary.action_counts ? (
-                        <div className="agent-settings-summary-actions">
-                          {["approve", "session", "deny", "manual_fallback"].map((action) => (
-                            <span key={action}>
-                              {action}: {guardianRuleSummary.action_counts[action] || 0}
-                            </span>
-                          ))}
+                        <SettingsIcon />
+                      </button>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+              {agentConfigError ? <div className="agent-error">{agentConfigError}</div> : null}
+              {activeAgentDef ? (
+                <div className="agent-settings-card">
+                  <div className="agent-settings-head">
+                    <strong>{activeAgentDef.title}</strong>
+                    <span className={`agent-status-chip ${(activeAgentConfig?.enabled ?? false) ? "on" : "off"}`}>
+                      {(activeAgentConfig?.enabled ?? false) ? "enabled" : "disabled"}
+                    </span>
+                  </div>
+                  {activeAgentConfig ? (
+                    <div className="agent-settings-form">
+                      {activeAgentDef.fields.map((field) => (
+                        <label key={field.key} className="agent-field">
+                          <span>{field.label}</span>
+                          <select
+                            value={String(activeAgentConfig[field.key] ?? "")}
+                            onChange={(e) => {
+                              const raw = e.target.value;
+                              const nextValue = typeof field.options[0] === "number" ? Number(raw) : raw;
+                              updateAgentDraft(activeAgentSettings, field.key, nextValue);
+                            }}
+                            disabled={settingsBusy}
+                          >
+                            {field.options.map((option) => (
+                              <option key={String(option)} value={String(option)}>
+                                {String(option)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ))}
+                      {activeAgentSettings === "guardian" ? (
+                        <div className="agent-settings-summary">
+                          <div className="agent-settings-summary-title">
+                            Rules: {guardianRuleSummary.enabled || 0}/{guardianRuleSummary.total || 0} enabled
+                          </div>
+                          {guardianRuleSummary.action_counts ? (
+                            <div className="agent-settings-summary-actions">
+                              {["approve", "session", "deny", "manual_fallback"].map((action) => (
+                                <span key={action}>
+                                  {action}: {guardianRuleSummary.action_counts[action] || 0}
+                                </span>
+                              ))}
+                            </div>
+                          ) : null}
+                          {Array.isArray(guardianRuleSummary.top) && guardianRuleSummary.top.length ? (
+                            <div className="agent-settings-summary-list">
+                              {guardianRuleSummary.top.slice(0, 3).map((rule, index) => (
+                                <div key={`${rule.name || "rule"}:${index}`} className="agent-settings-summary-item">
+                                  <span>{rule.name || "unnamed-rule"}</span>
+                                  <span>{`${rule.action || "deny"} · p${rule.priority || 0}`}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="agent-settings-empty">No guardian policy rules configured.</div>
+                          )}
+                          <div className="agent-settings-summary-footer">
+                            <button
+                              className={`agent-settings-inline-btn ${floatingAgentSettings === "guardian" ? "active" : ""}`}
+                              type="button"
+                              onClick={() => toggleFloatingAgentSettings("guardian")}
+                              disabled={settingsBusy}
+                              aria-label="Rules TOML"
+                              title="Rules TOML"
+                            >
+                              <SettingsIcon />
+                              <span>Settings</span>
+                            </button>
+                          </div>
                         </div>
                       ) : null}
-                      {Array.isArray(guardianRuleSummary.top) && guardianRuleSummary.top.length ? (
-                        <div className="agent-settings-summary-list">
-                          {guardianRuleSummary.top.slice(0, 3).map((rule, index) => (
-                            <div key={`${rule.name || "rule"}:${index}`} className="agent-settings-summary-item">
-                              <span>{rule.name || "unnamed-rule"}</span>
-                              <span>{`${rule.action || "deny"} · p${rule.priority || 0}`}</span>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="agent-settings-empty">No guardian policy rules configured.</div>
-                      )}
-                      <div className="agent-settings-summary-footer">
+                      <div className="agent-settings-actions">
                         <button
-                          className={`agent-settings-inline-btn ${floatingAgentSettings === "guardian" ? "active" : ""}`}
+                          className="agent-settings-action"
                           type="button"
-                          onClick={() => toggleFloatingAgentSettings("guardian")}
+                          onClick={() =>
+                            loadAgentConfig(activeAgentSettings, {
+                              syncRulesEditor: activeAgentSettings !== "guardian",
+                            }).catch((err) => {
+                              setAgentConfigError(err.message || "Failed to refresh settings.");
+                            })
+                          }
                           disabled={settingsBusy}
-                          aria-label="Rules TOML"
-                          title="Rules TOML"
+                          aria-label="새로고침"
+                          title="새로고침"
                         >
-                          <SettingsIcon />
-                          <span>Settings</span>
+                          <RefreshIcon />
+                        </button>
+                        <button
+                          className="agent-settings-action agent-settings-action-primary"
+                          type="button"
+                          onClick={() =>
+                            saveAgentSettings(activeAgentSettings, {
+                              includeRules: false,
+                            })
+                          }
+                          disabled={settingsBusy}
+                          aria-label="저장"
+                          title="저장"
+                        >
+                          <SaveIcon />
                         </button>
                       </div>
                     </div>
-                  ) : null}
-                  <div className="agent-settings-actions">
-                    <button
-                      className="agent-settings-action"
-                      type="button"
-                      onClick={() =>
-                        loadAgentConfig(activeAgentSettings, {
-                          syncRulesEditor: activeAgentSettings !== "guardian",
-                        }).catch((err) => {
-                          setAgentConfigError(err.message || "Failed to refresh settings.");
-                        })
-                      }
-                      disabled={settingsBusy}
-                      aria-label="새로고침"
-                      title="새로고침"
-                    >
-                      <RefreshIcon />
-                    </button>
-                    <button
-                      className="agent-settings-action agent-settings-action-primary"
-                      type="button"
-                      onClick={() =>
-                        saveAgentSettings(activeAgentSettings, {
-                          includeRules: false,
-                        })
-                      }
-                      disabled={settingsBusy}
-                      aria-label="저장"
-                      title="저장"
-                    >
-                      <SaveIcon />
-                    </button>
-                  </div>
+                  ) : (
+                    <div className="agent-settings-empty">설정을 불러오는 중입니다.</div>
+                  )}
                 </div>
-              ) : (
-                <div className="agent-settings-empty">설정을 불러오는 중입니다.</div>
-              )}
+              ) : null}
             </div>
-          ) : null}
-        </div>
-        <div className="panel threads-panel">
-          <h3>Threads</h3>
-          <div className="thread-list">
-            {threadItems.map((item) => (
-              <button
-                key={item.id}
-                className="thread-item"
-                onClick={() => viewThread(item.id)}
-                disabled={interactionBusy}
-              >
-                <div className="thread-title">{item.title || "Untitled"}</div>
-                <div className="thread-sub">{item.id}</div>
-              </button>
-            ))}
+            <div className="panel threads-panel">
+              <h3>Threads</h3>
+              <div className="thread-list">
+                {threadItems.map((item) => (
+                  <button
+                    key={item.id}
+                    className="thread-item"
+                    onClick={() => viewThread(item.id)}
+                    disabled={interactionBusy}
+                  >
+                    <div className="thread-title">{item.title || "Untitled"}</div>
+                    <div className="thread-sub">{item.id}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
+        ) : null}
+        <div className="sidebar-footer">
+          <button
+            className="sidebar-collapse-btn"
+            type="button"
+            onClick={() => {
+              if (isMobileLayout) {
+                setIsSidebarOpen(false);
+                return;
+              }
+              setIsSidebarCollapsed((current) => !current);
+            }}
+            aria-label={isMobileLayout ? "Collapse left panel" : isDesktopSidebarCollapsed ? "Expand left panel" : "Collapse left panel"}
+            title={isMobileLayout ? "Collapse left panel" : isDesktopSidebarCollapsed ? "Expand left panel" : "Collapse left panel"}
+          >
+            <SidebarChevronIcon collapsed={isMobileLayout ? false : isDesktopSidebarCollapsed} />
+          </button>
         </div>
       </aside>
       {isMobileLayout ? (
@@ -2044,7 +2082,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
           onClick={() => setIsSidebarOpen(false)}
           aria-label="Close navigation menu"
         />
-      ) : (
+      ) : !isDesktopSidebarCollapsed ? (
         <div
           className={`sidebar-resizer ${isResizingSidebar ? "active" : ""}`}
           onMouseDown={() => setIsResizingSidebar(true)}
@@ -2052,6 +2090,8 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
           aria-orientation="vertical"
           aria-label="Resize sidebar"
         />
+      ) : (
+        <div className="sidebar-resizer sidebar-resizer-collapsed" aria-hidden="true" />
       )}
       <main className="main">
         <div className="topbar">
