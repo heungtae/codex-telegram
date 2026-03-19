@@ -113,7 +113,7 @@ function Login({ onLoggedIn, theme, onToggleTheme }) {
       <form className="login-card" onSubmit={submit}>
         <div className="login-card-head">
           <div className="login-copy">
-            <h2>Codex Telegram</h2>
+            <h2>Codex Web</h2>
             <p>Sign in with your allowlisted account.</p>
           </div>
           <button
@@ -535,6 +535,8 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   const PALETTE_LIMIT = 10;
   const SIDEBAR_MIN = 260;
   const SIDEBAR_MAX = 620;
+  const WORKSPACE_PANEL_MIN = 280;
+  const WORKSPACE_PANEL_MAX = 720;
   const MOBILE_BREAKPOINT = 900;
   const WORKSPACE_PANEL_BREAKPOINT = 1200;
   const [messages, setMessages] = useState([]);
@@ -562,9 +564,12 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   const reasoningStateRef = useRef({});
   const pendingComposerFocusRef = useRef(false);
   const paletteRef = useRef(null);
+  const workspaceResizeRef = useRef({ startX: 0, startWidth: 320 });
   const [paletteSelectedIndex, setPaletteSelectedIndex] = useState(0);
   const [sidebarWidth, setSidebarWidth] = useState(340);
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
+  const [workspacePanelWidth, setWorkspacePanelWidth] = useState(320);
+  const [isResizingWorkspacePanel, setIsResizingWorkspacePanel] = useState(false);
   const [isMobileLayout, setIsMobileLayout] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth <= MOBILE_BREAKPOINT : false
   );
@@ -1473,7 +1478,9 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   useEffect(() => {
     if (!isCompactWorkspaceLayout) {
       setIsWorkspacePanelOpen(false);
+      return;
     }
+    setIsResizingWorkspacePanel(false);
   }, [isCompactWorkspaceLayout]);
   useEffect(() => {
     if (!isMobileLayout || typeof document === "undefined") {
@@ -1519,6 +1526,25 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       window.removeEventListener("mouseup", onUp);
     };
   }, [isResizingSidebar]);
+  useEffect(() => {
+    if (!isResizingWorkspacePanel) {
+      return;
+    }
+    const onMove = (event) => {
+      const delta = workspaceResizeRef.current.startX - event.clientX;
+      const next = workspaceResizeRef.current.startWidth + delta;
+      setWorkspacePanelWidth(
+        Math.max(WORKSPACE_PANEL_MIN, Math.min(WORKSPACE_PANEL_MAX, next))
+      );
+    };
+    const onUp = () => setIsResizingWorkspacePanel(false);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [isResizingWorkspacePanel]);
   useEffect(() => {
     if (!activeToken || activeToken.type !== "project") {
       setProjectSuggestions([]);
@@ -1777,8 +1803,12 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       );
     });
   };
+  const workspacePanelStyle = isCompactWorkspaceLayout ? undefined : { width: workspacePanelWidth };
   const workspacePanel = (
-    <aside className={`workspace-panel ${isCompactWorkspaceLayout ? "compact" : "desktop"} ${isWorkspacePanelOpen ? "open" : ""}`}>
+    <aside
+      className={`workspace-panel ${isCompactWorkspaceLayout ? "compact" : "desktop"} ${isWorkspacePanelOpen ? "open" : ""}`}
+      style={workspacePanelStyle}
+    >
       <div className="workspace-panel-head">
         <div>
           <div className="workspace-panel-title">Workspace Files</div>
@@ -1842,7 +1872,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
         style={sidebarStyle}
         aria-hidden={isMobileLayout ? !isSidebarOpen : undefined}
       >
-        <div className="brand">Codex Telegram</div>
+        <div className="brand">Codex Web</div>
         <div className="panel">
           <h3>Current Thread</h3>
           <div className="meta-line"><b>ThreadId</b></div>
@@ -2048,23 +2078,23 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
               </div>
             ) : null}
           </div>
-          <div className="topbar-actions">
-            <button
-              className="theme-toggle"
-              type="button"
-              onClick={onToggleTheme}
-              aria-label="Toggle theme"
-              title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
-            >
-              <ThemeIcon theme={theme} />
-              <span>{theme === "dark" ? "Dark" : "Light"}</span>
-            </button>
-            {!isMobileLayout ? (
+          {!isMobileLayout ? (
+            <div className="topbar-actions">
+              <button
+                className="theme-toggle"
+                type="button"
+                onClick={onToggleTheme}
+                aria-label="Toggle theme"
+                title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+              >
+                <ThemeIcon theme={theme} />
+                <span>{theme === "dark" ? "Dark" : "Light"}</span>
+              </button>
               <span className={`status-pill ${interactionBusy ? "running" : "idle"}`}>
                 {interactionBusy ? "Running" : "Ready"}
               </span>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
         </div>
         {activityDetail ? <div className="activity-indicator">{activityDetail}</div> : null}
         {floatingAgentSettings === "guardian" ? (
@@ -2404,7 +2434,24 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
             </div>
             {isCompactWorkspaceLayout && isWorkspacePanelOpen ? workspacePanel : null}
           </div>
-          {!isCompactWorkspaceLayout ? workspacePanel : null}
+          {!isCompactWorkspaceLayout ? (
+            <div className="workspace-panel-shell">
+              <div
+                className={`workspace-panel-resizer ${isResizingWorkspacePanel ? "active" : ""}`}
+                onMouseDown={(event) => {
+                  workspaceResizeRef.current = {
+                    startX: event.clientX,
+                    startWidth: workspacePanelWidth,
+                  };
+                  setIsResizingWorkspacePanel(true);
+                }}
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="Resize workspace files panel"
+              />
+              {workspacePanel}
+            </div>
+          ) : null}
         </div>
       </main>
     </div>
