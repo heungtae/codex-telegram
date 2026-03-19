@@ -351,6 +351,89 @@ function groupMessagesForRender(messages) {
   return groups;
 }
 
+function dedupeNamedPathItems(items) {
+  const seen = new Set();
+  const next = [];
+  for (const item of Array.isArray(items) ? items : []) {
+    if (!item || typeof item !== "object") {
+      continue;
+    }
+    const name = typeof item.name === "string" ? item.name.trim() : "";
+    const path = typeof item.path === "string" ? item.path.trim() : "";
+    if (!name || !path) {
+      continue;
+    }
+    const key = `${name}\u0000${path}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    next.push({ name, path });
+  }
+  return next;
+}
+
+function dedupeStringItems(items) {
+  const seen = new Set();
+  const next = [];
+  for (const item of Array.isArray(items) ? items : []) {
+    const value = typeof item === "string" ? item.trim() : "";
+    if (!value || seen.has(value)) {
+      continue;
+    }
+    seen.add(value);
+    next.push(value);
+  }
+  return next;
+}
+
+function buildComposerItems(text, selectedSkills, selectedMentions, remoteImageUrls, localImagePaths) {
+  const items = [];
+  for (const imageUrl of dedupeStringItems(remoteImageUrls)) {
+    items.push({ type: "image", image_url: imageUrl });
+  }
+  for (const path of dedupeStringItems(localImagePaths)) {
+    items.push({ type: "local_image", path });
+  }
+  const normalizedText = typeof text === "string" ? text.trim() : "";
+  if (normalizedText) {
+    items.push({ type: "text", text: normalizedText });
+  }
+  for (const skill of dedupeNamedPathItems(selectedSkills)) {
+    items.push({ type: "skill", name: skill.name, path: skill.path });
+  }
+  for (const mention of dedupeNamedPathItems(selectedMentions)) {
+    items.push({ type: "mention", name: mention.name, path: mention.path });
+  }
+  return items;
+}
+
+function normalizeStructuredNamedPathList(value) {
+  return dedupeNamedPathItems(Array.isArray(value) ? value : []);
+}
+
+function normalizeStructuredStringList(value) {
+  return dedupeStringItems(Array.isArray(value) ? value : []);
+}
+
+function normalizeChatMessage(item, fallbackThreadId = "") {
+  if (!item || typeof item !== "object") {
+    return null;
+  }
+  return {
+    role: item.role === "user" ? "user" : item.role === "assistant" ? "assistant" : "system",
+    text: typeof item.text === "string" ? item.text : "",
+    variant: item.variant === "subagent" ? "subagent" : "",
+    kind: item.kind === "plan" ? "plan" : item.kind === "plan_checklist" ? "plan_checklist" : "",
+    threadId: normalizeThreadId(item.thread_id) || normalizeThreadId(fallbackThreadId),
+    streaming: false,
+    images: normalizeStructuredStringList(item.images),
+    localImages: normalizeStructuredStringList(item.local_images),
+    skills: normalizeStructuredNamedPathList(item.skills),
+    mentions: normalizeStructuredNamedPathList(item.mentions),
+  };
+}
+
 function App() {
   const PALETTE_LIMIT = 10;
   const SIDEBAR_MIN = 260;
@@ -361,7 +444,13 @@ function App() {
   const [activeThread, setActiveThread] = useState("");
   const [threadItems, setThreadItems] = useState([]);
   const [projectSuggestions, setProjectSuggestions] = useState([]);
-  const [skillSuggestions, setSkillSuggestions] = useState([]);
+  const [skillCatalog, setSkillCatalog] = useState([]);
+  const [appCatalog, setAppCatalog] = useState([]);
+  const [selectedSkills, setSelectedSkills] = useState([]);
+  const [selectedMentions, setSelectedMentions] = useState([]);
+  const [remoteImageUrls, setRemoteImageUrls] = useState([]);
+  const [localImagePaths, setLocalImagePaths] = useState([]);
+  const [manualPaletteMode, setManualPaletteMode] = useState("");
   const [sessionSummary, setSessionSummary] = useState(null);
   const [status, setStatus] = useState("idle");
   const [collaborationMode, setCollaborationMode] = useState("build");
@@ -443,25 +532,32 @@ function App() {
       end,
     };
   }, [input]);
+  const paletteToken = manualPaletteMode
+    ? { type: manualPaletteMode, query: "", start: input.length, end: input.length }
+    : activeToken;
   const paletteItems = useMemo(() => {
-    if (!activeToken) {
+    if (!paletteToken) {
       return [];
     }
-    const query = activeToken.query;
-    if (activeToken.type === "slash") {
+    const query = paletteToken.query;
+    if (paletteToken.type === "slash") {
       if (!query) {
         return slashCommands;
       }
       return slashCommands.filter((cmd) => cmd.toLowerCase().includes(`/${query}`));
     }
-    if (activeToken.type === "project") {
+    if (paletteToken.type === "project") {
       return projectSuggestions;
     }
-    if (!query) {
-      return skillSuggestions;
+    if (paletteToken.type === "app") {
+      return appCatalog.map((item) => item.name);
     }
-    return skillSuggestions.filter((name) => name.toLowerCase().includes(query));
-  }, [activeToken, projectSuggestions, skillSuggestions, slashCommands]);
+    const skillNames = skillCatalog.map((item) => item.name);
+    if (!query) {
+      return skillNames;
+    }
+    return skillNames.filter((name) => name.toLowerCase().includes(query));
+  }, [appCatalog, paletteToken, projectSuggestions, skillCatalog, slashCommands]);
   const paletteOpen = paletteItems.length > 0;
   const paletteWindowStart = useMemo(
     () => Math.floor(paletteSelectedIndex / PALETTE_LIMIT) * PALETTE_LIMIT,
@@ -491,10 +587,13 @@ function App() {
     }
   };
 
-  const loadSkillSuggestions = async () => {
-    const skillsResult = await api("/api/skills");
-    const skills = Array.isArray(skillsResult.meta?.skill_names) ? skillsResult.meta.skill_names : [];
-    setSkillSuggestions([...new Set(skills.filter((v) => typeof v === "string" && v))]);
+  const loadSkillCatalog = async () => {
+    const result = await api("/api/skills/catalog");
+    setSkillCatalog(dedupeNamedPathItems(Array.isArray(result.items) ? result.items : []));
+  };
+  const loadAppCatalog = async () => {
+    const result = await api("/api/apps/catalog");
+    setAppCatalog(dedupeNamedPathItems(Array.isArray(result.items) ? result.items : []));
   };
   const loadSessionSummary = async () => {
     const summary = await api("/api/session/summary");
@@ -703,23 +802,61 @@ function App() {
   };
 
   const sendMessage = async () => {
-    if (!input.trim()) {
+    const text = input.trim();
+    const items = buildComposerItems(
+      text,
+      selectedSkills,
+      selectedMentions,
+      remoteImageUrls,
+      localImagePaths
+    );
+    if (!items.length) {
       return;
     }
-    const text = input.trim();
-    pendingComposerFocusRef.current = true;
-    setInput("");
-    if (text.startsWith("/")) {
+    if (
+      text.startsWith("/") &&
+      selectedSkills.length === 0 &&
+      selectedMentions.length === 0 &&
+      remoteImageUrls.length === 0 &&
+      localImagePaths.length === 0
+    ) {
+      pendingComposerFocusRef.current = true;
+      setInput("");
       await runCommand(text);
       return;
     }
+    const previousDraft = {
+      input,
+      selectedSkills,
+      selectedMentions,
+      remoteImageUrls,
+      localImagePaths,
+    };
+    pendingComposerFocusRef.current = true;
+    setInput("");
+    setSelectedSkills([]);
+    setSelectedMentions([]);
+    setRemoteImageUrls([]);
+    setLocalImagePaths([]);
+    setManualPaletteMode("");
     const messageThreadId = normalizeThreadId(activeThread);
-    setMessages((prev) => [...prev, { role: "user", text, threadId: messageThreadId }]);
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "user",
+        text,
+        threadId: messageThreadId,
+        images: normalizeStructuredStringList(remoteImageUrls),
+        localImages: normalizeStructuredStringList(localImagePaths),
+        skills: normalizeStructuredNamedPathList(selectedSkills),
+        mentions: normalizeStructuredNamedPathList(selectedMentions),
+      },
+    ]);
     setStatus("running");
     try {
       const result = await api("/api/chat/messages", {
         method: "POST",
-        body: JSON.stringify({ text, thread_id: activeThread || undefined }),
+        body: JSON.stringify({ items, thread_id: activeThread || undefined }),
       });
       if (result.local_command) {
         setMessages((prev) => [
@@ -735,6 +872,11 @@ function App() {
       }
     } catch (err) {
       setStatus("idle");
+      setInput(previousDraft.input);
+      setSelectedSkills(previousDraft.selectedSkills);
+      setSelectedMentions(previousDraft.selectedMentions);
+      setRemoteImageUrls(previousDraft.remoteImageUrls);
+      setLocalImagePaths(previousDraft.localImagePaths);
       setMessages((prev) => [
         ...prev,
         {
@@ -818,15 +960,19 @@ function App() {
     if (Array.isArray(result.messages) && result.messages.length > 0) {
       setMessages(
         result.messages
-          .filter((item) => item && typeof item.text === "string" && item.text.trim())
-          .map((item) => ({
-            role: item.role === "user" ? "user" : item.role === "assistant" ? "assistant" : "system",
-            text: item.text,
-            variant: item.variant === "subagent" ? "subagent" : "",
-            kind: item.kind === "plan" ? "plan" : "",
-            threadId: normalizeThreadId(item.thread_id) || normalizeThreadId(threadId),
-            streaming: false,
-          }))
+          .filter(
+            (item) =>
+              item &&
+              (
+                (typeof item.text === "string" && item.text.trim()) ||
+                (Array.isArray(item.images) && item.images.length > 0) ||
+                (Array.isArray(item.local_images) && item.local_images.length > 0) ||
+                (Array.isArray(item.skills) && item.skills.length > 0) ||
+                (Array.isArray(item.mentions) && item.mentions.length > 0)
+              )
+          )
+          .map((item) => normalizeChatMessage(item, threadId))
+          .filter(Boolean)
       );
       return;
     }
@@ -891,7 +1037,8 @@ function App() {
       return;
     }
     loadThreads().catch(() => {});
-    loadSkillSuggestions().catch(() => {});
+    loadSkillCatalog().catch(() => {});
+    loadAppCatalog().catch(() => {});
     loadSessionSummary().catch(() => {});
     loadApprovals().catch(() => {});
 
@@ -1105,21 +1252,76 @@ function App() {
     }
   }, [activeAgentSettings, floatingAgentSettings]);
 
+  const addSelectedSkill = (name) => {
+    const matched = skillCatalog.find((item) => item.name === name);
+    if (!matched) {
+      return;
+    }
+    setSelectedSkills((prev) => dedupeNamedPathItems([...prev, matched]));
+  };
+
+  const addSelectedMention = (name) => {
+    const matched = appCatalog.find((item) => item.name === name);
+    if (!matched) {
+      return;
+    }
+    setSelectedMentions((prev) => dedupeNamedPathItems([...prev, matched]));
+  };
+
+  const removeSelectedSkill = (path) => {
+    setSelectedSkills((prev) => prev.filter((item) => item.path !== path));
+  };
+
+  const removeSelectedMention = (path) => {
+    setSelectedMentions((prev) => prev.filter((item) => item.path !== path));
+  };
+
+  const removeRemoteImageUrl = (value) => {
+    setRemoteImageUrls((prev) => prev.filter((item) => item !== value));
+  };
+
+  const removeLocalImagePath = (value) => {
+    setLocalImagePaths((prev) => prev.filter((item) => item !== value));
+  };
+
+  const promptRemoteImageUrl = () => {
+    const value = typeof window !== "undefined" ? window.prompt("Remote image URL") : "";
+    if (!value || !value.trim()) {
+      return;
+    }
+    setRemoteImageUrls((prev) => dedupeStringItems([...prev, value]));
+  };
+
+  const promptLocalImagePath = () => {
+    const value =
+      typeof window !== "undefined"
+        ? window.prompt("Local image path (absolute path or workspace-relative path)")
+        : "";
+    if (!value || !value.trim()) {
+      return;
+    }
+    setLocalImagePaths((prev) => dedupeStringItems([...prev, value]));
+  };
+
   const applyPaletteItem = (item) => {
-    if (!activeToken) {
+    if (!paletteToken) {
       return;
     }
     let next = input;
     let cursor = input.length;
-    if (activeToken.type === "slash") {
+    if (paletteToken.type === "slash") {
       next = `${item} `;
       cursor = next.length;
-    } else if (activeToken.type === "project") {
-      next = `${input.slice(0, activeToken.start)}@${item}${input.slice(activeToken.end)}`;
-      cursor = activeToken.start + item.length + 1;
+    } else if (paletteToken.type === "project") {
+      next = `${input.slice(0, paletteToken.start)}@${item}${input.slice(paletteToken.end)}`;
+      cursor = paletteToken.start + item.length + 1;
+    } else if (paletteToken.type === "skill") {
+      addSelectedSkill(item);
+      next = `${input.slice(0, paletteToken.start)}${input.slice(paletteToken.end)}`.replace(/\s{2,}/g, " ");
+      cursor = Math.max(0, paletteToken.start);
     } else {
-      next = `${input.slice(0, activeToken.start)}$${item}${input.slice(activeToken.end)}`;
-      cursor = activeToken.start + item.length + 1;
+      addSelectedMention(item);
+      setManualPaletteMode("");
     }
     setInput(next);
     focusComposer(cursor);
@@ -1558,6 +1760,24 @@ function App() {
                   {m.kind === "plan" ? <div className="msg-label">Plan</div> : null}
                   {m.kind === "plan_checklist" ? <div className="msg-label">Plan Checklist</div> : null}
                   <div className="msg-body">{m.text}</div>
+                  {(m.skills?.length || m.mentions?.length || m.images?.length || m.localImages?.length) ? (
+                    <div className="msg-attachments">
+                      {m.skills?.map((entry) => (
+                        <span key={`skill:${entry.path}`} className="msg-chip">${entry.name}</span>
+                      ))}
+                      {m.mentions?.map((entry) => (
+                        <span key={`mention:${entry.path}`} className="msg-chip">{entry.name}</span>
+                      ))}
+                      {m.images?.map((entry, entryIdx) => (
+                        <span key={`image:${entryIdx}:${entry}`} className="msg-chip msg-chip-image">Image URL</span>
+                      ))}
+                      {m.localImages?.map((entry, entryIdx) => (
+                        <span key={`local-image:${entryIdx}:${entry}`} className="msg-chip msg-chip-image">
+                          {entry.split("/").pop() || entry}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
                   {m.threadId ? <div className="msg-meta">threadId: {m.threadId}</div> : null}
                 </div>
               </div>
@@ -1573,14 +1793,14 @@ function App() {
                     const absoluteIndex = paletteWindowStart + idx;
                     return (
                     <button
-                      key={`${activeToken?.type || "t"}:${item}`}
+                      key={`${paletteToken?.type || "t"}:${item}`}
                       className={`slash-item ${absoluteIndex === paletteSelectedIndex ? "active" : ""}`}
                       onMouseDown={(e) => {
                         e.preventDefault();
                         applyPaletteItem(item);
                       }}
                     >
-                      {activeToken?.type === "project" ? "@" : activeToken?.type === "skill" ? "$" : ""}
+                      {paletteToken?.type === "project" ? "@" : paletteToken?.type === "skill" ? "$" : ""}
                       {item}
                     </button>
                     );
@@ -1605,69 +1825,112 @@ function App() {
                   <span className="composer-mode-label">{collaborationMode.toUpperCase()}</span>
                   <span className="composer-mode-key">TAB</span>
                 </button>
-                <textarea
-                  ref={inputRef}
-                  rows={1}
-                  value={input}
-                  disabled={composerLocked}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (composerLocked) {
-                      return;
-                    }
-                    if (e.isComposing) {
-                      return;
-                    }
-                    if (e.key === "Tab" && !e.altKey && !e.ctrlKey && !e.metaKey) {
+                <div className="composer-stack">
+                  {(selectedSkills.length || selectedMentions.length || remoteImageUrls.length || localImagePaths.length) ? (
+                    <div className="composer-chips">
+                      {selectedSkills.map((entry) => (
+                        <button key={`skill:${entry.path}`} type="button" className="composer-chip" onClick={() => removeSelectedSkill(entry.path)}>
+                          ${entry.name}
+                        </button>
+                      ))}
+                      {selectedMentions.map((entry) => (
+                        <button key={`mention:${entry.path}`} type="button" className="composer-chip" onClick={() => removeSelectedMention(entry.path)}>
+                          {entry.name}
+                        </button>
+                      ))}
+                      {remoteImageUrls.map((entry) => (
+                        <button key={`remote:${entry}`} type="button" className="composer-chip composer-chip-image" onClick={() => removeRemoteImageUrl(entry)}>
+                          Image URL
+                        </button>
+                      ))}
+                      {localImagePaths.map((entry) => (
+                        <button key={`local:${entry}`} type="button" className="composer-chip composer-chip-image" onClick={() => removeLocalImagePath(entry)}>
+                          {entry.split("/").pop() || entry}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                  <div className="composer-tools">
+                    <button type="button" className="composer-mini-action" onClick={() => setManualPaletteMode((current) => current === "app" ? "" : "app")} disabled={composerLocked}>
+                      Apps
+                    </button>
+                    <button type="button" className="composer-mini-action" onClick={promptRemoteImageUrl} disabled={composerLocked}>
+                      URL
+                    </button>
+                    <button type="button" className="composer-mini-action" onClick={promptLocalImagePath} disabled={composerLocked}>
+                      Path
+                    </button>
+                  </div>
+                  <textarea
+                    ref={inputRef}
+                    rows={1}
+                    value={input}
+                    disabled={composerLocked}
+                    onChange={(e) => {
+                      setInput(e.target.value);
+                      if (manualPaletteMode) {
+                        setManualPaletteMode("");
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (composerLocked) {
+                        return;
+                      }
+                      if (e.isComposing) {
+                        return;
+                      }
+                      if (e.key === "Tab" && !e.altKey && !e.ctrlKey && !e.metaKey) {
+                        e.preventDefault();
+                        toggleComposerMode().catch(() => {});
+                        return;
+                      }
+                      if (paletteOpen && e.key === "ArrowDown") {
+                        e.preventDefault();
+                        setPaletteSelectedIndex((prev) => (prev + 1) % paletteItems.length);
+                        return;
+                      }
+                      if (paletteOpen && e.key === "ArrowUp") {
+                        e.preventDefault();
+                        setPaletteSelectedIndex((prev) =>
+                          (prev - 1 + paletteItems.length) % paletteItems.length
+                        );
+                        return;
+                      }
+                      if (paletteOpen && e.key === "Escape") {
+                        e.preventDefault();
+                        setManualPaletteMode("");
+                        return;
+                      }
+                      if (e.key !== "Enter") {
+                        return;
+                      }
+                      if (e.altKey || e.shiftKey) {
+                        e.preventDefault();
+                        const el = e.currentTarget;
+                        const start = el.selectionStart ?? input.length;
+                        const end = el.selectionEnd ?? input.length;
+                        const next = `${input.slice(0, start)}\n${input.slice(end)}`;
+                        setInput(next);
+                        queueMicrotask(() => {
+                          const pos = start + 1;
+                          if (inputRef.current) {
+                            inputRef.current.selectionStart = pos;
+                            inputRef.current.selectionEnd = pos;
+                          }
+                        });
+                        return;
+                      }
+                      if (paletteOpen) {
+                        e.preventDefault();
+                        applyPaletteItem(paletteItems[paletteSelectedIndex]);
+                        return;
+                      }
                       e.preventDefault();
-                      toggleComposerMode().catch(() => {});
-                      return;
-                    }
-                    if (paletteOpen && e.key === "ArrowDown") {
-                      e.preventDefault();
-                      setPaletteSelectedIndex((prev) => (prev + 1) % paletteItems.length);
-                      return;
-                    }
-                    if (paletteOpen && e.key === "ArrowUp") {
-                      e.preventDefault();
-                      setPaletteSelectedIndex((prev) =>
-                        (prev - 1 + paletteItems.length) % paletteItems.length
-                      );
-                      return;
-                    }
-                    if (paletteOpen && e.key === "Escape") {
-                      e.preventDefault();
-                      return;
-                    }
-                    if (e.key !== "Enter") {
-                      return;
-                    }
-                    if (e.altKey || e.shiftKey) {
-                      e.preventDefault();
-                      const el = e.currentTarget;
-                      const start = el.selectionStart ?? input.length;
-                      const end = el.selectionEnd ?? input.length;
-                      const next = `${input.slice(0, start)}\n${input.slice(end)}`;
-                      setInput(next);
-                      queueMicrotask(() => {
-                        const pos = start + 1;
-                        if (inputRef.current) {
-                          inputRef.current.selectionStart = pos;
-                          inputRef.current.selectionEnd = pos;
-                        }
-                      });
-                      return;
-                    }
-                    if (paletteOpen) {
-                      e.preventDefault();
-                      applyPaletteItem(paletteItems[paletteSelectedIndex]);
-                      return;
-                    }
-                    e.preventDefault();
-                    sendMessage().catch(() => {});
-                  }}
-                  placeholder="Message..."
-                />
+                      sendMessage().catch(() => {});
+                    }}
+                    placeholder="Message..."
+                  />
+                </div>
               </div>
             </div>
             {status === "running" ? (

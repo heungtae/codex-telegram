@@ -184,9 +184,220 @@ def _thread_turns(result: dict[str, Any], thread: dict[str, Any]) -> list[dict[s
     return to_turn_list(thread.get("turns"))
 
 
+def _normalized_item_type(value: Any) -> str:
+    return str(value or "").strip().lower().replace("_", "").replace("-", "")
+
+
+def _normalize_text_elements(value: Any, text: str) -> list[dict[str, int | str]]:
+    if not isinstance(value, list):
+        return []
+    items: list[dict[str, int | str]] = []
+    for entry in value:
+        if not isinstance(entry, dict):
+            continue
+        byte_range = entry.get("byte_range") or entry.get("byteRange")
+        if not isinstance(byte_range, dict):
+            continue
+        start = byte_range.get("start")
+        end = byte_range.get("end")
+        if not isinstance(start, int) or not isinstance(end, int):
+            continue
+        if start < 0 or end < start or end > len(text):
+            continue
+        normalized: dict[str, int | str] = {
+            "byte_range": {"start": start, "end": end},
+        }
+        placeholder = entry.get("placeholder")
+        if isinstance(placeholder, str) and placeholder:
+            normalized["placeholder"] = placeholder
+        items.append(normalized)
+    return items
+
+
+def _normalize_structured_input_item(item: Any) -> dict[str, Any]:
+    if not isinstance(item, dict):
+        raise HTTPException(status_code=400, detail="items must contain objects")
+    item_type = _normalized_item_type(item.get("type"))
+    if item_type in {"text", "inputtext"}:
+        text = item.get("text")
+        if not isinstance(text, str):
+            raise HTTPException(status_code=400, detail="text item requires string text")
+        normalized: dict[str, Any] = {"type": "text", "text": text}
+        text_elements = _normalize_text_elements(item.get("text_elements") or item.get("textElements"), text)
+        if text_elements:
+            normalized["text_elements"] = text_elements
+        return normalized
+    if item_type in {"image", "inputimage"}:
+        image_url = item.get("image_url") or item.get("imageUrl")
+        if not isinstance(image_url, str) or not image_url.strip():
+            raise HTTPException(status_code=400, detail="image item requires image_url")
+        return {"type": "image", "image_url": image_url.strip()}
+    if item_type == "localimage":
+        path = item.get("path")
+        if not isinstance(path, str) or not path.strip():
+            raise HTTPException(status_code=400, detail="local_image item requires path")
+        return {"type": "local_image", "path": path.strip()}
+    if item_type == "skill":
+        name = item.get("name")
+        path = item.get("path")
+        if not isinstance(name, str) or not name.strip() or not isinstance(path, str) or not path.strip():
+            raise HTTPException(status_code=400, detail="skill item requires name and path")
+        return {"type": "skill", "name": name.strip(), "path": path.strip()}
+    if item_type == "mention":
+        name = item.get("name")
+        path = item.get("path")
+        if not isinstance(name, str) or not name.strip() or not isinstance(path, str) or not path.strip():
+            raise HTTPException(status_code=400, detail="mention item requires name and path")
+        return {"type": "mention", "name": name.strip(), "path": path.strip()}
+    raise HTTPException(status_code=400, detail=f"unsupported input item type: {item.get('type')!r}")
+
+
+def _normalize_chat_input(payload: dict[str, Any]) -> tuple[list[dict[str, Any]], str]:
+    raw_items = payload.get("items")
+    if isinstance(raw_items, list):
+        items = [_normalize_structured_input_item(item) for item in raw_items]
+        if not items:
+            raise HTTPException(status_code=400, detail="items must not be empty")
+        text_parts: list[str] = []
+        for item in items:
+            if item.get("type") == "text":
+                text_parts.append(str(item.get("text") or ""))
+        return items, "".join(text_parts).strip()
+    text = str(payload.get("text", ""))
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="text is required")
+    return [{"type": "text", "text": text.strip()}], text.strip()
+
+
+def _extract_structured_user_message(value: Any) -> dict[str, Any] | None:
+    items: list[dict[str, Any]] = []
+
+    def collect(node: Any) -> None:
+        if isinstance(node, list):
+            for entry in node:
+                collect(entry)
+            return
+        if isinstance(node, str):
+            if node:
+                items.append({"type": "text", "text": node})
+            return
+        if not isinstance(node, dict):
+            return
+
+        item_type = _normalized_item_type(node.get("type"))
+        if item_type in {"text", "inputtext"}:
+            text = node.get("text")
+            if isinstance(text, str):
+                normalized: dict[str, Any] = {"type": "text", "text": text}
+                text_elements = _normalize_text_elements(node.get("text_elements") or node.get("textElements"), text)
+                if text_elements:
+                    normalized["text_elements"] = text_elements
+                items.append(normalized)
+            return
+        if item_type in {"image", "inputimage"}:
+            image_url = node.get("image_url") or node.get("imageUrl")
+            if isinstance(image_url, str) and image_url.strip():
+                items.append({"type": "image", "image_url": image_url.strip()})
+            return
+        if item_type == "localimage":
+            path = node.get("path")
+            if isinstance(path, str) and path.strip():
+                items.append({"type": "local_image", "path": path.strip()})
+            return
+        if item_type == "skill":
+            name = node.get("name")
+            path = node.get("path")
+            if isinstance(name, str) and name.strip() and isinstance(path, str) and path.strip():
+                items.append({"type": "skill", "name": name.strip(), "path": path.strip()})
+            return
+        if item_type == "mention":
+            name = node.get("name")
+            path = node.get("path")
+            if isinstance(name, str) and name.strip() and isinstance(path, str) and path.strip():
+                items.append({"type": "mention", "name": name.strip(), "path": path.strip()})
+            return
+        if item_type in {"usercontent", "usermessage", "user"}:
+            collect(node.get("content"))
+            return
+        if "content" in node and isinstance(node.get("content"), list):
+            collect(node.get("content"))
+            return
+
+    collect(value)
+    if not items:
+        return None
+
+    text_parts: list[str] = []
+    text_elements: list[dict[str, int | str]] = []
+    images: list[str] = []
+    local_images: list[str] = []
+    skills: list[dict[str, str]] = []
+    mentions: list[dict[str, str]] = []
+    offset = 0
+
+    for item in items:
+        item_type = item.get("type")
+        if item_type == "text":
+            text = str(item.get("text") or "")
+            text_parts.append(text)
+            for text_element in item.get("text_elements", []):
+                if not isinstance(text_element, dict):
+                    continue
+                byte_range = text_element.get("byte_range")
+                if not isinstance(byte_range, dict):
+                    continue
+                start = byte_range.get("start")
+                end = byte_range.get("end")
+                if not isinstance(start, int) or not isinstance(end, int):
+                    continue
+                normalized: dict[str, Any] = {
+                    "byte_range": {"start": offset + start, "end": offset + end},
+                }
+                placeholder = text_element.get("placeholder")
+                if isinstance(placeholder, str) and placeholder:
+                    normalized["placeholder"] = placeholder
+                text_elements.append(normalized)
+            offset += len(text)
+            continue
+        if item_type == "image":
+            image_url = item.get("image_url")
+            if isinstance(image_url, str) and image_url:
+                images.append(image_url)
+            continue
+        if item_type == "local_image":
+            path = item.get("path")
+            if isinstance(path, str) and path:
+                local_images.append(path)
+            continue
+        if item_type == "skill":
+            name = item.get("name")
+            path = item.get("path")
+            if isinstance(name, str) and isinstance(path, str):
+                skills.append({"name": name, "path": path})
+            continue
+        if item_type == "mention":
+            name = item.get("name")
+            path = item.get("path")
+            if isinstance(name, str) and isinstance(path, str):
+                mentions.append({"name": name, "path": path})
+
+    result: dict[str, Any] = {"text": "".join(text_parts).strip()}
+    if text_elements:
+        result["text_elements"] = text_elements
+    if images:
+        result["images"] = images
+    if local_images:
+        result["local_images"] = local_images
+    if skills:
+        result["skills"] = skills
+    if mentions:
+        result["mentions"] = mentions
+    return result
+
+
 def _thread_turn_messages(turns: list[dict[str, Any]], default_thread_id: str | None = None) -> list[dict[str, str]]:
     messages: list[dict[str, str]] = []
-    seen: set[tuple[str, str, str, str, str]] = set()
+    seen: set[tuple[str, str, str, str, str, str]] = set()
 
     def add_message(
         role: str,
@@ -194,14 +405,17 @@ def _thread_turn_messages(turns: list[dict[str, Any]], default_thread_id: str | 
         variant: str | None = None,
         kind: str | None = None,
         thread_id: str | None = None,
+        extra: dict[str, Any] | None = None,
     ) -> None:
         cleaned = str(text or "").strip()
-        if not cleaned:
+        normalized_extra = extra if isinstance(extra, dict) else {}
+        if not cleaned and not normalized_extra:
             return
         normalized_variant = variant if isinstance(variant, str) and variant else ""
         normalized_kind = kind if isinstance(kind, str) and kind else ""
         normalized_thread_id = thread_id if isinstance(thread_id, str) and thread_id else ""
-        key = (role, normalized_variant, normalized_kind, normalized_thread_id, cleaned)
+        extra_signature = json.dumps(normalized_extra, sort_keys=True, ensure_ascii=False) if normalized_extra else ""
+        key = (role, normalized_variant, normalized_kind, normalized_thread_id, cleaned, extra_signature)
         if key in seen:
             return
         seen.add(key)
@@ -212,6 +426,9 @@ def _thread_turn_messages(turns: list[dict[str, Any]], default_thread_id: str | 
             message["kind"] = normalized_kind
         if normalized_thread_id:
             message["thread_id"] = normalized_thread_id
+        for extra_key, extra_value in normalized_extra.items():
+            if extra_value:
+                message[extra_key] = extra_value
         messages.append(message)
 
     def infer_role(value: dict[str, Any], default_role: str) -> str:
@@ -247,6 +464,12 @@ def _thread_turn_messages(turns: list[dict[str, Any]], default_thread_id: str | 
             add_message(default_role, value, default_variant, None, thread_id)
             return
         if isinstance(value, list):
+            if default_role == "user":
+                structured = _extract_structured_user_message(value)
+                if structured is not None:
+                    text = str(structured.pop("text", "") or "")
+                    add_message("user", text, None, None, thread_id, structured)
+                    return
             for item in value:
                 walk(item, default_role, default_variant, thread_id)
             return
@@ -257,6 +480,12 @@ def _thread_turn_messages(turns: list[dict[str, Any]], default_thread_id: str | 
         variant = infer_variant(value, role, default_variant)
         item_type = str(value.get("type") or "").strip().lower()
         kind = "plan" if item_type == "plan" and role == "assistant" else None
+        if role == "user" and _normalized_item_type(value.get("type")) in {"usermessage", "user"}:
+            structured = _extract_structured_user_message(value)
+            if structured is not None:
+                text = str(structured.pop("text", "") or "")
+                add_message("user", text, None, None, thread_id, structured)
+                return
         direct = value.get("text")
         if isinstance(direct, str) and direct.strip():
             add_message(role, direct, variant, kind, thread_id)
@@ -738,13 +967,11 @@ def create_web_app() -> FastAPI:
     @app.post("/api/chat/messages")
     async def send_message(payload: dict[str, Any], request: Request) -> dict[str, Any]:
         session = await _session_from_request(request)
-        text = str(payload.get("text", "")).strip()
-        if not text:
-            raise HTTPException(status_code=400, detail="text is required")
-
         await _wait_for_codex()
         state_user = user_manager.get(session.user_id)
-        if text.startswith("!"):
+        items, text = _normalize_chat_input(payload)
+
+        if text.startswith("!") and all(item.get("type") == "text" for item in items):
             workspace = state_user.selected_project_path
             if not workspace and state.command_router is not None:
                 effective = state.command_router.projects.resolve_effective_project(session.user_id)
@@ -776,10 +1003,13 @@ def create_web_app() -> FastAPI:
         if state_user.active_turn_id:
             raise HTTPException(status_code=409, detail="a turn is already running")
 
+        if any(item.get("type") != "text" for item in items) and text.startswith("!"):
+            raise HTTPException(status_code=400, detail="structured input does not support local ! commands")
+
         try:
             params = {
                 "threadId": thread_id,
-                "input": [{"type": "text", "text": text}],
+                "input": items,
             }
             collaboration_mode = await _require_turn_collaboration_mode(state_user)
             params["collaborationMode"] = collaboration_mode
@@ -805,6 +1035,7 @@ def create_web_app() -> FastAPI:
                 "type": "user_message",
                 "thread_id": thread_id,
                 "text": text,
+                **(_extract_structured_user_message(items) or {}),
             },
         )
         return {
@@ -917,10 +1148,51 @@ def create_web_app() -> FastAPI:
         session = await _session_from_request(request)
         return await _route("/skills", [], session.user_id)
 
+    @app.get("/api/skills/catalog")
+    async def skills_catalog(request: Request) -> dict[str, Any]:
+        await _session_from_request(request)
+        await _wait_for_codex()
+        result = await state.codex_client.call("skills/list", {})
+        groups = result.get("data", []) if isinstance(result, dict) else []
+        items: list[dict[str, Any]] = []
+        if isinstance(groups, list):
+            for group in groups:
+                if not isinstance(group, dict):
+                    continue
+                for skill in group.get("skills", []):
+                    if not isinstance(skill, dict):
+                        continue
+                    name = skill.get("displayName") or skill.get("name") or skill.get("id") or skill.get("slug")
+                    path = skill.get("pathToSkillsMd") or skill.get("path_to_skills_md") or skill.get("path")
+                    if not isinstance(name, str) or not name.strip() or not isinstance(path, str) or not path.strip():
+                        continue
+                    items.append({"name": name.strip(), "path": path.strip()})
+        return {"items": items}
+
     @app.get("/api/apps")
     async def apps(request: Request) -> dict[str, Any]:
         session = await _session_from_request(request)
         return await _route("/apps", [], session.user_id)
+
+    @app.get("/api/apps/catalog")
+    async def apps_catalog(request: Request) -> dict[str, Any]:
+        await _session_from_request(request)
+        await _wait_for_codex()
+        result = await state.codex_client.call("app/list", {"limit": 100})
+        rows = result.get("data", []) if isinstance(result, dict) else []
+        items: list[dict[str, Any]] = []
+        if isinstance(rows, list):
+            for app in rows:
+                if not isinstance(app, dict):
+                    continue
+                app_id = app.get("id")
+                name = app.get("displayName") or app.get("name") or app_id
+                if not isinstance(app_id, str) or not app_id.strip() or not isinstance(name, str) or not name.strip():
+                    continue
+                if app.get("enabled") is False:
+                    continue
+                items.append({"name": name.strip(), "path": f"app://{app_id.strip()}"})
+        return {"items": items}
 
     @app.get("/api/mcp")
     async def mcp(request: Request) -> dict[str, Any]:
