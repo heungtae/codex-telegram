@@ -333,6 +333,25 @@ function statusClassName(code) {
   return `status-${String(code).toLowerCase()}`;
 }
 
+function statusPriority(code) {
+  if (code === "??") {
+    return 5;
+  }
+  if (code === "A") {
+    return 4;
+  }
+  if (code === "M") {
+    return 3;
+  }
+  if (code === "R") {
+    return 2;
+  }
+  if (code === "D") {
+    return 1;
+  }
+  return 0;
+}
+
 function parseDiffLineNumber(value) {
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -475,6 +494,7 @@ function App() {
   const SIDEBAR_MIN = 260;
   const SIDEBAR_MAX = 620;
   const MOBILE_BREAKPOINT = 900;
+  const WORKSPACE_PANEL_BREAKPOINT = 1200;
   const [me, setMe] = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -509,6 +529,10 @@ function App() {
     typeof window !== "undefined" ? window.innerWidth <= MOBILE_BREAKPOINT : false
   );
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isCompactWorkspaceLayout, setIsCompactWorkspaceLayout] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth <= WORKSPACE_PANEL_BREAKPOINT : false
+  );
+  const [isWorkspacePanelOpen, setIsWorkspacePanelOpen] = useState(false);
   const [workspaceTree, setWorkspaceTree] = useState({});
   const [expandedWorkspaceDirs, setExpandedWorkspaceDirs] = useState({ "": true });
   const [workspaceStatus, setWorkspaceStatus] = useState({ is_git: false, items: {} });
@@ -1411,6 +1435,7 @@ function App() {
     }
     const syncViewport = () => {
       setIsMobileLayout(window.innerWidth <= MOBILE_BREAKPOINT);
+      setIsCompactWorkspaceLayout(window.innerWidth <= WORKSPACE_PANEL_BREAKPOINT);
     };
     syncViewport();
     window.addEventListener("resize", syncViewport);
@@ -1423,6 +1448,11 @@ function App() {
     }
     setIsResizingSidebar(false);
   }, [isMobileLayout]);
+  useEffect(() => {
+    if (!isCompactWorkspaceLayout) {
+      setIsWorkspacePanelOpen(false);
+    }
+  }, [isCompactWorkspaceLayout]);
   useEffect(() => {
     if (!isMobileLayout || typeof document === "undefined") {
       return undefined;
@@ -1666,6 +1696,27 @@ function App() {
   const workspaceRootLabel = basename(sessionSummary?.workspace || "") || "Workspace";
   const workspaceStatusItems =
     workspaceStatus && typeof workspaceStatus.items === "object" ? workspaceStatus.items : {};
+  const workspaceDirectoryStatus = useMemo(() => {
+    const next = {};
+    for (const [path, value] of Object.entries(workspaceStatusItems)) {
+      const normalizedPath = normalizeWorkspacePath(path);
+      const code = value?.code || "";
+      if (!normalizedPath || !code) {
+        continue;
+      }
+      const parts = normalizedPath.split("/");
+      parts.pop();
+      let current = "";
+      for (const part of parts) {
+        current = current ? `${current}/${part}` : part;
+        const existing = next[current] || "";
+        if (statusPriority(code) > statusPriority(existing)) {
+          next[current] = code;
+        }
+      }
+    }
+    return next;
+  }, [workspaceStatusItems]);
   const deletedWorkspaceEntries = Object.entries(workspaceStatusItems)
     .filter(([path, value]) => value?.code === "D" && !workspaceTree[""]?.some((item) => item.path === path))
     .sort((a, b) => a[0].localeCompare(b[0]));
@@ -1680,7 +1731,9 @@ function App() {
       const itemPath = normalizeWorkspacePath(item.path);
       const isDirectory = item.type === "directory";
       const isExpanded = !!expandedWorkspaceDirs[itemPath];
-      const statusCode = workspaceStatusItems[itemPath]?.code || "";
+      const statusCode = isDirectory
+        ? (workspaceDirectoryStatus[itemPath] || workspaceStatusItems[itemPath]?.code || "")
+        : (workspaceStatusItems[itemPath]?.code || "");
       const isSelected = workspacePreview?.path === itemPath;
       return (
         <div key={itemPath} className="workspace-tree-node">
@@ -1710,6 +1763,60 @@ function App() {
       );
     });
   };
+  const workspacePanel = (
+    <aside className={`workspace-panel ${isCompactWorkspaceLayout ? "compact" : "desktop"} ${isWorkspacePanelOpen ? "open" : ""}`}>
+      <div className="workspace-panel-head">
+        <div>
+          <div className="workspace-panel-title">Workspace Files</div>
+          <div className="workspace-panel-subtitle">{workspaceRootLabel}</div>
+        </div>
+        <button
+          className="workspace-refresh"
+          type="button"
+          onClick={() => {
+            loadWorkspaceTree("", { force: true }).catch((err) => {
+              setWorkspaceError(err.message || "Failed to refresh workspace tree.");
+            });
+            loadWorkspaceStatus().catch(() => {});
+          }}
+          aria-label="Refresh workspace browser"
+          title="Refresh workspace browser"
+        >
+          <RefreshIcon />
+        </button>
+      </div>
+      {workspaceError ? <div className="workspace-panel-state">{workspaceError}</div> : null}
+      {!sessionSummary?.workspace ? (
+        <div className="workspace-panel-state">Select a workspace to browse files.</div>
+      ) : null}
+      {sessionSummary?.workspace ? (
+        <div className="workspace-tree">
+          {deletedWorkspaceEntries.length ? (
+            <div className="workspace-tree-group">
+              <div className="workspace-tree-group-label">Deleted</div>
+              {deletedWorkspaceEntries.map(([path, value]) => (
+                <button
+                  key={`deleted:${path}`}
+                  type="button"
+                  className="workspace-tree-item file deleted"
+                  onClick={() => openWorkspaceFile(path, value?.code || "D").catch(() => {})}
+                >
+                  <span className="workspace-tree-icon caret" />
+                  <span className="workspace-tree-icon glyph"><FileIcon /></span>
+                  <span className="workspace-tree-label">{path}</span>
+                  <span className="workspace-tree-badge">{value?.code || "D"}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {renderWorkspaceTree("", 0)}
+          {Array.isArray(workspaceTree[""]) && workspaceTree[""].length ? null : (
+            <div className="workspace-panel-state">No files available.</div>
+          )}
+        </div>
+      ) : null}
+    </aside>
+  );
 
   const sidebarStyle = isMobileLayout ? undefined : { width: sidebarWidth };
 
@@ -1918,12 +2025,14 @@ function App() {
                 <span>Menu</span>
               </button>
             ) : null}
-            <div className="user-pill" aria-label={`User ${me.username}`}>
-              <svg className="user-pill-icon" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-3.33 0-6 1.79-6 4v1h12v-1c0-2.21-2.67-4-6-4Z" />
-              </svg>
-              <span>{me.username}</span>
-            </div>
+            {!isMobileLayout ? (
+              <div className="user-pill" aria-label={`User ${me.username}`}>
+                <svg className="user-pill-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-3.33 0-6 1.79-6 4v1h12v-1c0-2.21-2.67-4-6-4Z" />
+                </svg>
+                <span>{me.username}</span>
+              </div>
+            ) : null}
           </div>
           <div className="topbar-actions">
             <button
@@ -1936,9 +2045,11 @@ function App() {
               <ThemeIcon theme={theme} />
               <span>{theme === "dark" ? "Dark" : "Light"}</span>
             </button>
-            <span className={`status-pill ${interactionBusy ? "running" : "idle"}`}>
-              {interactionBusy ? "Running" : "Ready"}
-            </span>
+            {!isMobileLayout ? (
+              <span className={`status-pill ${interactionBusy ? "running" : "idle"}`}>
+                {interactionBusy ? "Running" : "Ready"}
+              </span>
+            ) : null}
           </div>
         </div>
         {activityDetail ? <div className="activity-indicator">{activityDetail}</div> : null}
@@ -2261,64 +2372,25 @@ function App() {
                 <SendIcon />
               </button>
             )}
+            {isCompactWorkspaceLayout ? (
+              <button
+                className={`composer-action composer-workspace-toggle ${isWorkspacePanelOpen ? "active" : ""}`}
+                onClick={() => setIsWorkspacePanelOpen((current) => !current)}
+                aria-label="Workspace files"
+                title="Workspace files"
+                type="button"
+              >
+                <FolderIcon open={isWorkspacePanelOpen} />
+              </button>
+            ) : null}
             <button className="composer-action composer-new-chat" onClick={startThread} aria-label="New chat" title="New chat" disabled={interactionBusy}>
               <NewChatIcon />
             </button>
           </div>
             </div>
+            {isCompactWorkspaceLayout && isWorkspacePanelOpen ? workspacePanel : null}
           </div>
-          <aside className="workspace-panel">
-            <div className="workspace-panel-head">
-              <div>
-                <div className="workspace-panel-title">Workspace Files</div>
-                <div className="workspace-panel-subtitle">{workspaceRootLabel}</div>
-              </div>
-              <button
-                className="workspace-refresh"
-                type="button"
-                onClick={() => {
-                  loadWorkspaceTree("", { force: true }).catch((err) => {
-                    setWorkspaceError(err.message || "Failed to refresh workspace tree.");
-                  });
-                  loadWorkspaceStatus().catch(() => {});
-                }}
-                aria-label="Refresh workspace browser"
-                title="Refresh workspace browser"
-              >
-                <RefreshIcon />
-              </button>
-            </div>
-            {workspaceError ? <div className="workspace-panel-state">{workspaceError}</div> : null}
-            {!sessionSummary?.workspace ? (
-              <div className="workspace-panel-state">Select a workspace to browse files.</div>
-            ) : null}
-            {sessionSummary?.workspace ? (
-              <div className="workspace-tree">
-                {deletedWorkspaceEntries.length ? (
-                  <div className="workspace-tree-group">
-                    <div className="workspace-tree-group-label">Deleted</div>
-                    {deletedWorkspaceEntries.map(([path, value]) => (
-                      <button
-                        key={`deleted:${path}`}
-                        type="button"
-                        className="workspace-tree-item file deleted"
-                        onClick={() => openWorkspaceFile(path, value?.code || "D").catch(() => {})}
-                      >
-                        <span className="workspace-tree-icon caret" />
-                        <span className="workspace-tree-icon glyph"><FileIcon /></span>
-                        <span className="workspace-tree-label">{path}</span>
-                        <span className="workspace-tree-badge">{value?.code || "D"}</span>
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-                {renderWorkspaceTree("", 0)}
-                {Array.isArray(workspaceTree[""]) && workspaceTree[""].length ? null : (
-                  <div className="workspace-panel-state">No files available.</div>
-                )}
-              </div>
-            ) : null}
-          </aside>
+          {!isCompactWorkspaceLayout ? workspacePanel : null}
         </div>
       </main>
     </div>
