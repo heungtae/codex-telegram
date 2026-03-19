@@ -4,6 +4,16 @@ A bridge that lets you control the Codex App Server from Telegram and Web UI.
 
 <img src="./docs/images/codex-telegram.png" alt="Codex Telegram Bot Integration" width="520" />
 
+## What's New Beyond 0.3.4
+
+- Web workspace browser for the active project, including directory tree, file preview, and Git diff preview
+- Structured patch/file-change events in Web chat, with diff rendering for `apply_patch` results
+- Message-level `threadId` display in Web chat so streamed output and loaded history stay traceable
+- Web settings panels for Guardian, Models, Modes, Skills, Apps, MCP, and App Config
+- Interactive project profile add/select flows in both Telegram and Web
+- More resilient turn completion routing so completion/progress messages reach the correct Telegram/Web user session
+- Responsive Web UI refinements including sidebar toggle, mobile layout, and workspace panel controls
+
 ## What You Can Do
 
 - Run Codex commands in Telegram and view results
@@ -12,6 +22,10 @@ A bridge that lets you control the Codex App Server from Telegram and Web UI.
 - Control user access with `allowed_ids`
 - Manage conversation lifecycle: start/resume/list/archive threads
 - Receive approval requests and progress events in real time via Telegram and Web (SSE)
+- Browse the active workspace in Web UI and inspect file contents or Git diffs without leaving the chat
+- Review applied patches and file-change summaries directly in the Web timeline
+- Track each Web message with its `threadId` and keep thread context visible while reading history
+- Manage Guardian configuration and project profiles from the Web UI
 
 ## Requirements
 
@@ -274,6 +288,8 @@ Tip: Use `<command> --help` for detailed usage.
 
 UI note:
 - `Settings` includes `Features`, `Apps`, `Project Select`, `Guardian`, `Models`, `Modes`, `MCP`, and `App Config`.
+- Web chat includes a workspace side panel for file browsing and a preview panel for file/diff inspection.
+- Patch/file-change events are rendered as structured cards in the Web timeline instead of plain log text.
 
 ## Security Notes
 

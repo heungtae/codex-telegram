@@ -2,3 +2,4 @@ include README.md
 include LICENSE
 include conf.toml.example
 recursive-include web/static *
+prune codex_source
