@@ -425,6 +425,130 @@ async def post_init(app: Application | None):
             "plan": steps,
         }
 
+    def _extract_string_list(value: Any) -> list[str]:
+        items: list[str] = []
+        if not isinstance(value, list):
+            return items
+        for entry in value:
+            if isinstance(entry, str) and entry:
+                items.append(entry)
+            elif isinstance(entry, dict):
+                text = entry.get("text")
+                if isinstance(text, str) and text:
+                    items.append(text)
+        return items
+
+    def _normalize_item_type(value: Any) -> str:
+        if not isinstance(value, str):
+            return ""
+        return value.strip().lower()
+
+    def _extract_reasoning_payload(method: str, params: dict | None) -> dict[str, Any] | None:
+        p = params or {}
+        if method == "item/reasoning/summaryTextDelta":
+            delta = p.get("delta")
+            if isinstance(delta, str) and delta:
+                return {
+                    "type": "reasoning_status",
+                    "thread_id": _extract_thread_id(method, p),
+                    "turn_id": _extract_turn_id(method, p),
+                    "item_id": str(p.get("itemId") or ""),
+                    "delta": delta,
+                    "summary_index": p.get("summaryIndex", 0),
+                }
+            return None
+        if method == "item/reasoning/summaryPartAdded":
+            return {
+                "type": "reasoning_status",
+                "thread_id": _extract_thread_id(method, p),
+                "turn_id": _extract_turn_id(method, p),
+                "item_id": str(p.get("itemId") or ""),
+                "delta": "",
+                "summary_index": p.get("summaryIndex", 0),
+                "section_break": True,
+            }
+        if method == "item/reasoning/textDelta":
+            delta = p.get("delta")
+            if isinstance(delta, str) and delta:
+                return {
+                    "type": "reasoning_status",
+                    "thread_id": _extract_thread_id(method, p),
+                    "turn_id": _extract_turn_id(method, p),
+                    "item_id": str(p.get("itemId") or ""),
+                    "delta": delta,
+                    "content_index": p.get("contentIndex", 0),
+                    "raw": True,
+                }
+            return None
+        if method != "item/completed":
+            return None
+        item = p.get("item")
+        if not isinstance(item, dict) or _normalize_item_type(item.get("type")) != "reasoning":
+            return None
+        return {
+            "type": "reasoning_completed",
+            "thread_id": _extract_thread_id(method, p),
+            "turn_id": _extract_turn_id(method, p),
+            "item_id": str(item.get("id") or ""),
+            "summary_text": _extract_string_list(item.get("summary_text") or item.get("summaryText")),
+            "raw_content": _extract_string_list(item.get("raw_content") or item.get("rawContent")),
+        }
+
+    def _extract_web_search_payload(method: str, params: dict | None) -> dict[str, Any] | None:
+        if method != "item/completed":
+            return None
+        p = params or {}
+        item = p.get("item")
+        if not isinstance(item, dict) or _normalize_item_type(item.get("type")) != "web_search":
+            return None
+        return {
+            "type": "web_search_item",
+            "thread_id": _extract_thread_id(method, p),
+            "turn_id": _extract_turn_id(method, p),
+            "item_id": str(item.get("id") or ""),
+            "query": str(item.get("query") or ""),
+            "action": item.get("action"),
+        }
+
+    def _extract_image_generation_payload(method: str, params: dict | None) -> dict[str, Any] | None:
+        if method != "item/completed":
+            return None
+        p = params or {}
+        item = p.get("item")
+        if not isinstance(item, dict) or _normalize_item_type(item.get("type")) != "image_generation":
+            return None
+        return {
+            "type": "image_generation_item",
+            "thread_id": _extract_thread_id(method, p),
+            "turn_id": _extract_turn_id(method, p),
+            "item_id": str(item.get("id") or ""),
+            "status": str(item.get("status") or ""),
+            "result": str(item.get("result") or ""),
+            "revised_prompt": str(item.get("revised_prompt") or item.get("revisedPrompt") or ""),
+            "saved_path": str(item.get("saved_path") or item.get("savedPath") or ""),
+        }
+
+    def _extract_context_compaction_payload(method: str, params: dict | None) -> dict[str, Any] | None:
+        p = params or {}
+        if method == "thread/compacted":
+            return {
+                "type": "context_compacted_item",
+                "thread_id": _extract_thread_id(method, p),
+                "turn_id": _extract_turn_id(method, p),
+                "text": "Context compacted",
+            }
+        if method != "item/completed":
+            return None
+        item = p.get("item")
+        if not isinstance(item, dict) or _normalize_item_type(item.get("type")) != "context_compaction":
+            return None
+        return {
+            "type": "context_compacted_item",
+            "thread_id": _extract_thread_id(method, p),
+            "turn_id": _extract_turn_id(method, p),
+            "text": "Context compacted",
+        }
+
     def _get_path_value(payload: dict[str, Any], path: str) -> Any:
         current: Any = payload
         for part in path.split("."):
@@ -728,6 +852,34 @@ async def post_init(app: Application | None):
                         "plan": plan_checklist.get("plan") or [],
                     },
                 )
+            return
+
+        reasoning_payload = _extract_reasoning_payload(method, params)
+        if reasoning_payload is not None:
+            target_user_id = owner_id if owner_id is not None else user_id_by_thread
+            if target_user_id is not None:
+                await event_hub.publish_event(target_user_id, reasoning_payload)
+            return
+
+        web_search_payload = _extract_web_search_payload(method, params)
+        if web_search_payload is not None:
+            target_user_id = owner_id if owner_id is not None else user_id_by_thread
+            if target_user_id is not None:
+                await event_hub.publish_event(target_user_id, web_search_payload)
+            return
+
+        image_generation_payload = _extract_image_generation_payload(method, params)
+        if image_generation_payload is not None:
+            target_user_id = owner_id if owner_id is not None else user_id_by_thread
+            if target_user_id is not None:
+                await event_hub.publish_event(target_user_id, image_generation_payload)
+            return
+
+        context_compaction_payload = _extract_context_compaction_payload(method, params)
+        if context_compaction_payload is not None:
+            target_user_id = owner_id if owner_id is not None else user_id_by_thread
+            if target_user_id is not None:
+                await event_hub.publish_event(target_user_id, context_compaction_payload)
             return
 
         if user_id_by_thread is not None:

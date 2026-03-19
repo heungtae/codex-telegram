@@ -25,6 +25,7 @@ const AGENT_CONFIG_DEFS = {
 const THEME_STORAGE_KEY = "codex-web-theme";
 const DEFAULT_THEME = "dark";
 const GUARDIAN_RULES_TOML_FALLBACK = "# Loading Guardian rules...\n";
+const EVENT_PANEL_KINDS = new Set(["file_change", "reasoning", "web_search", "image_generation"]);
 
 function formatGuardianRulesEditor(config) {
   const raw = typeof config?.rules_toml === "string" ? config.rules_toml : "";
@@ -228,6 +229,47 @@ function formatPlanChecklistText(explanation, plan) {
   return lines.join("\n").trim();
 }
 
+function summarizeReasoningStatus(text) {
+  const normalized = typeof text === "string" ? text.replace(/\s+/g, " ").trim() : "";
+  if (!normalized) {
+    return "";
+  }
+  return normalized.length > 96 ? `${normalized.slice(0, 93)}...` : normalized;
+}
+
+function formatEventPanelTitle(kind) {
+  if (kind === "reasoning") {
+    return "Reasoning";
+  }
+  if (kind === "web_search") {
+    return "Web Search";
+  }
+  if (kind === "image_generation") {
+    return "Image Generation";
+  }
+  return "";
+}
+
+function formatWebSearchAction(action) {
+  if (!action || typeof action !== "object") {
+    return "";
+  }
+  const keys = Object.keys(action);
+  if (!keys.length) {
+    return "";
+  }
+  const key = keys[0];
+  const value = action[key];
+  if (value && typeof value === "object") {
+    const query = typeof value.query === "string" ? value.query : "";
+    const url = typeof value.url === "string" ? value.url : "";
+    const pattern = typeof value.pattern === "string" ? value.pattern : "";
+    const parts = [query, url, pattern].filter(Boolean);
+    return parts.length ? `${key}: ${parts.join(" | ")}` : key;
+  }
+  return key;
+}
+
 function normalizeThreadId(value) {
   return typeof value === "string" && value.trim() ? value.trim() : "";
 }
@@ -335,17 +377,17 @@ function FileChangeDiff({ diff }) {
 
 function groupMessagesForRender(messages) {
   const groups = [];
-  let filePanel = null;
+  let panel = null;
   for (const message of Array.isArray(messages) ? messages : []) {
-    if (message?.kind === "file_change") {
-      if (!filePanel) {
-        filePanel = { type: "file_panel", entries: [] };
-        groups.push(filePanel);
+    if (EVENT_PANEL_KINDS.has(message?.kind)) {
+      if (!panel) {
+        panel = { type: "event_panel", entries: [] };
+        groups.push(panel);
       }
-      filePanel.entries.push(message);
+      panel.entries.push(message);
       continue;
     }
-    filePanel = null;
+    panel = null;
     groups.push({ type: "message", message });
   }
   return groups;
@@ -364,6 +406,7 @@ function App() {
   const [skillSuggestions, setSkillSuggestions] = useState([]);
   const [sessionSummary, setSessionSummary] = useState(null);
   const [status, setStatus] = useState("idle");
+  const [activityDetail, setActivityDetail] = useState("");
   const [collaborationMode, setCollaborationMode] = useState("build");
   const [modeSwitchBusy, setModeSwitchBusy] = useState(false);
   const [approvalItems, setApprovalItems] = useState([]);
@@ -377,6 +420,7 @@ function App() {
   const [agentConfigError, setAgentConfigError] = useState("");
   const chatRef = useRef(null);
   const inputRef = useRef(null);
+  const reasoningStateRef = useRef({});
   const pendingComposerFocusRef = useRef(false);
   const paletteRef = useRef(null);
   const [theme, setTheme] = useState(() => readDocumentTheme());
@@ -941,17 +985,90 @@ function App() {
       const data = JSON.parse(ev.data);
       upsertPlanChecklist(data);
     });
+    es.addEventListener("reasoning_status", (ev) => {
+      const data = JSON.parse(ev.data);
+      appendReasoningStatus(data);
+    });
+    es.addEventListener("reasoning_completed", (ev) => {
+      const data = JSON.parse(ev.data);
+      completeReasoning(data);
+    });
+    es.addEventListener("web_search_item", (ev) => {
+      const data = JSON.parse(ev.data);
+      const query = typeof data?.query === "string" ? data.query.trim() : "";
+      const actionText = formatWebSearchAction(data?.action);
+      if (!query && !actionText) {
+        return;
+      }
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "system",
+          kind: "web_search",
+          threadId: normalizeThreadId(data?.thread_id),
+          turnId: typeof data?.turn_id === "string" ? data.turn_id : "",
+          itemId: typeof data?.item_id === "string" ? data.item_id : "",
+          text: query || "Web search",
+          detail: actionText,
+          streaming: false,
+        },
+      ]);
+    });
+    es.addEventListener("image_generation_item", (ev) => {
+      const data = JSON.parse(ev.data);
+      const detailLines = [];
+      const revisedPrompt = typeof data?.revised_prompt === "string" ? data.revised_prompt.trim() : "";
+      const savedPath = typeof data?.saved_path === "string" ? data.saved_path.trim() : "";
+      const statusText = typeof data?.status === "string" ? data.status.trim() : "";
+      if (statusText) {
+        detailLines.push(`Status: ${statusText}`);
+      }
+      if (savedPath) {
+        detailLines.push(`Saved to: ${savedPath}`);
+      }
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "system",
+          kind: "image_generation",
+          threadId: normalizeThreadId(data?.thread_id),
+          turnId: typeof data?.turn_id === "string" ? data.turn_id : "",
+          itemId: typeof data?.item_id === "string" ? data.item_id : "",
+          text: revisedPrompt || "Generated image",
+          detail: detailLines.join("\n"),
+          streaming: false,
+        },
+      ]);
+    });
+    es.addEventListener("context_compacted_item", (ev) => {
+      const data = JSON.parse(ev.data);
+      const text = typeof data?.text === "string" && data.text.trim() ? data.text.trim() : "Context compacted";
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "system",
+          text,
+          threadId: normalizeThreadId(data?.thread_id),
+          turnId: typeof data?.turn_id === "string" ? data.turn_id : "",
+          streaming: false,
+        },
+      ]);
+    });
     es.addEventListener("turn_started", (ev) => {
       const data = JSON.parse(ev.data);
       const actualMode = data?.params?.collaboration_mode_kind || data?.params?.collaborationModeKind;
       if (typeof actualMode === "string") {
         setCollaborationMode(normalizeCollaborationMode(actualMode));
       }
+      reasoningStateRef.current = {};
+      setActivityDetail("");
       setMessages((prev) => prev.map((m) => (m.streaming ? { ...m, streaming: false } : m)));
       setStatus("running");
     });
     es.addEventListener("turn_completed", () => {
       setStatus("idle");
+      reasoningStateRef.current = {};
+      setActivityDetail("");
       setMessages((prev) => prev.map((m) => ({ ...m, streaming: false })));
       loadThreads().catch(() => {});
       loadSessionSummary().catch(() => {});
@@ -961,6 +1078,8 @@ function App() {
       const text = data.text || "Turn failed.";
       const threadId = normalizeThreadId(data.thread_id);
       setStatus("idle");
+      reasoningStateRef.current = {};
+      setActivityDetail("");
       setMessages((prev) => [...prev, { role: "system", text, threadId, streaming: false }]);
       loadSessionSummary().catch(() => {});
     });
@@ -1196,6 +1315,71 @@ function App() {
     });
   };
 
+  const appendReasoningStatus = (payload) => {
+    const itemId = typeof payload?.item_id === "string" ? payload.item_id : "";
+    if (!itemId) {
+      return;
+    }
+    const existing = reasoningStateRef.current[itemId] || {
+      itemId,
+      turnId: typeof payload?.turn_id === "string" ? payload.turn_id : "",
+      threadId: normalizeThreadId(payload?.thread_id),
+      summary: "",
+      raw: "",
+    };
+    if (payload?.section_break && existing.summary && !existing.summary.endsWith("\n\n")) {
+      existing.summary += "\n\n";
+    }
+    if (payload?.raw) {
+      if (typeof payload?.delta === "string" && payload.delta) {
+        existing.raw += payload.delta;
+      }
+    } else if (typeof payload?.delta === "string" && payload.delta) {
+      existing.summary += payload.delta;
+    }
+    if (!existing.turnId && typeof payload?.turn_id === "string") {
+      existing.turnId = payload.turn_id;
+    }
+    if (!existing.threadId) {
+      existing.threadId = normalizeThreadId(payload?.thread_id);
+    }
+    reasoningStateRef.current[itemId] = existing;
+    setActivityDetail(summarizeReasoningStatus(existing.summary) || "Reasoning");
+  };
+
+  const completeReasoning = (payload) => {
+    const itemId = typeof payload?.item_id === "string" ? payload.item_id : "";
+    const existing = (itemId && reasoningStateRef.current[itemId]) || null;
+    const summaryText = Array.isArray(payload?.summary_text)
+      ? payload.summary_text.filter((entry) => typeof entry === "string" && entry.trim())
+      : [];
+    const rawContent = Array.isArray(payload?.raw_content)
+      ? payload.raw_content.filter((entry) => typeof entry === "string" && entry.trim())
+      : [];
+    const summary = (summaryText.length ? summaryText.join("\n\n") : existing?.summary || "").trim();
+    const raw = (rawContent.length ? rawContent.join("\n\n") : existing?.raw || "").trim();
+    if (itemId) {
+      delete reasoningStateRef.current[itemId];
+    }
+    setActivityDetail("");
+    if (!summary) {
+      return;
+    }
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "system",
+        kind: "reasoning",
+        threadId: normalizeThreadId(payload?.thread_id) || existing?.threadId || "",
+        turnId: typeof payload?.turn_id === "string" ? payload.turn_id : existing?.turnId || "",
+        itemId,
+        text: summary,
+        rawReasoning: raw,
+        streaming: false,
+      },
+    ]);
+  };
+
   if (!me) {
     return <Login onLoggedIn={loadSession} theme={theme} onToggleTheme={toggleTheme} />;
   }
@@ -1415,6 +1599,7 @@ function App() {
             </span>
           </div>
         </div>
+        {activityDetail ? <div className="activity-indicator">{activityDetail}</div> : null}
         {floatingAgentSettings === "guardian" ? (
           <div className="agent-floating-settings">
             <div className="agent-floating-settings-card">
@@ -1526,14 +1711,21 @@ function App() {
             </div>
           ) : null}
           {renderItems.map((item, idx) => {
-            if (item.type === "file_panel") {
+            if (item.type === "event_panel") {
               return (
                 <div key={`file-panel:${idx}`} className="msg-row file-panel">
                   <div className="file-change-panel">
                     <div className="file-change-panel-scroll">
                       {item.entries.map((entry, entryIdx) => (
-                        <div key={`file-entry:${idx}:${entryIdx}`} className="file-change-entry">
+                        <div
+                          key={`file-entry:${idx}:${entryIdx}`}
+                          className={`file-change-entry kind-${entry.kind || "event"}`}
+                        >
+                          {entry.kind !== "file_change" ? (
+                            <div className="file-change-label">{formatEventPanelTitle(entry.kind)}</div>
+                          ) : null}
                           <div className="file-change-summary">{entry.text}</div>
+                          {entry.detail ? <div className="file-change-files">{entry.detail}</div> : null}
                           {Array.isArray(entry.files) && entry.files.length ? (
                             <div className="file-change-files">
                               {entry.files.map((file, fileIdx) => (
@@ -1542,6 +1734,12 @@ function App() {
                                 </div>
                               ))}
                             </div>
+                          ) : null}
+                          {entry.rawReasoning ? (
+                            <details className="event-panel-details">
+                              <summary>Raw reasoning</summary>
+                              <div className="file-change-files">{entry.rawReasoning}</div>
+                            </details>
                           ) : null}
                           {entry.diff ? <FileChangeDiff diff={entry.diff} /> : null}
                         </div>

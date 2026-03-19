@@ -829,12 +829,44 @@ select {
   color: #183556;
 }
 
+.file-change-label {
+  margin-bottom: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #4f6f93;
+}
+
 .file-change-files {
   margin-top: 10px;
   font-size: 12px;
   line-height: 1.5;
   color: #45637f;
   white-space: pre-wrap;
+}
+
+.event-panel-details {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #45637f;
+}
+
+.event-panel-details summary {
+  cursor: pointer;
+  user-select: none;
+}
+
+.file-change-entry.kind-reasoning {
+  background: linear-gradient(180deg, rgba(249, 248, 236, 0.92) 0%, rgba(244, 241, 219, 0.98) 100%);
+}
+
+.file-change-entry.kind-web_search {
+  background: linear-gradient(180deg, rgba(239, 247, 255, 0.92) 0%, rgba(232, 243, 255, 0.98) 100%);
+}
+
+.file-change-entry.kind-image_generation {
+  background: linear-gradient(180deg, rgba(240, 251, 248, 0.92) 0%, rgba(231, 247, 242, 0.98) 100%);
 }
 
 .file-change-code {
@@ -1176,6 +1208,17 @@ select {
   background: #f6f8fb;
 }
 
+.activity-indicator {
+  max-width: 860px;
+  margin: 0 auto 12px;
+  padding: 0 6px;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .login {
   display: flex;
   min-height: 100vh;
@@ -1447,8 +1490,28 @@ select {
   color: #d6e6ff;
 }
 
+:root[data-theme="dark"] .file-change-label {
+  color: #9bbef0;
+}
+
 :root[data-theme="dark"] .file-change-files {
   color: #8ca8c9;
+}
+
+:root[data-theme="dark"] .event-panel-details {
+  color: #8ca8c9;
+}
+
+:root[data-theme="dark"] .file-change-entry.kind-reasoning {
+  background: linear-gradient(180deg, rgba(53, 48, 22, 0.36) 0%, rgba(44, 40, 19, 0.52) 100%);
+}
+
+:root[data-theme="dark"] .file-change-entry.kind-web_search {
+  background: linear-gradient(180deg, rgba(16, 34, 56, 0.58) 0%, rgba(17, 31, 48, 0.72) 100%);
+}
+
+:root[data-theme="dark"] .file-change-entry.kind-image_generation {
+  background: linear-gradient(180deg, rgba(15, 45, 41, 0.54) 0%, rgba(16, 36, 33, 0.68) 100%);
 }
 
 :root[data-theme="dark"] .file-change-code {

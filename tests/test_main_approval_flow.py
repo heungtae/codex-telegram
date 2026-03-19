@@ -403,6 +403,202 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
         )
         bot.send_message.assert_not_awaited()
 
+    async def test_reasoning_events_are_forwarded_to_web_only(self):
+        client = _DummyCodexClient(submit_result=True)
+        router = SimpleNamespace(projects=SimpleNamespace(resolve_effective_project=Mock(return_value=None)))
+        guardian = SimpleNamespace(stop=AsyncMock())
+        bot = SimpleNamespace(send_message=AsyncMock())
+        telegram_app = SimpleNamespace(bot=bot)
+        guardian_settings = {
+            "enabled": False,
+            "apply_to_methods": ["*"],
+            "failure_policy": "manual_fallback",
+            "explainability": "decision_only",
+            "timeout_seconds": 5,
+            "rules": [],
+        }
+
+        with patch("main.setup_codex", new=AsyncMock(return_value=client)), \
+             patch("main.CommandRouter", return_value=router), \
+             patch("main.ApprovalGuardianService", return_value=guardian), \
+             patch("main.get", side_effect=lambda key, default=None: default), \
+             patch("main.get_guardian_settings", return_value=guardian_settings):
+            await app_main.post_init(telegram_app)
+            user_manager.bind_thread_owner(1, "thread-1")
+            queue = await event_hub.subscribe(1)
+            try:
+                await client._any_handler(
+                    "item/reasoning/summaryTextDelta",
+                    {
+                        "threadId": "thread-1",
+                        "turnId": "turn-1",
+                        "itemId": "reason-1",
+                        "delta": "**Inspecting** ",
+                        "summaryIndex": 0,
+                    },
+                )
+                first = await queue.get()
+                await client._any_handler(
+                    "item/completed",
+                    {
+                        "threadId": "thread-1",
+                        "turnId": "turn-1",
+                        "item": {
+                            "type": "reasoning",
+                            "id": "reason-1",
+                            "summary_text": ["Inspecting files", "Preparing answer"],
+                            "raw_content": ["private notes"],
+                        },
+                    },
+                )
+                second = await queue.get()
+            finally:
+                await event_hub.unsubscribe(1, queue)
+
+        self.assertEqual("reasoning_status", first["type"])
+        self.assertEqual("reason-1", first["item_id"])
+        self.assertEqual("**Inspecting** ", first["delta"])
+        self.assertEqual("reasoning_completed", second["type"])
+        self.assertEqual(["Inspecting files", "Preparing answer"], second["summary_text"])
+        self.assertEqual(["private notes"], second["raw_content"])
+        bot.send_message.assert_not_awaited()
+
+    async def test_web_search_completed_is_forwarded_to_web_only(self):
+        client = _DummyCodexClient(submit_result=True)
+        router = SimpleNamespace(projects=SimpleNamespace(resolve_effective_project=Mock(return_value=None)))
+        guardian = SimpleNamespace(stop=AsyncMock())
+        bot = SimpleNamespace(send_message=AsyncMock())
+        telegram_app = SimpleNamespace(bot=bot)
+        guardian_settings = {
+            "enabled": False,
+            "apply_to_methods": ["*"],
+            "failure_policy": "manual_fallback",
+            "explainability": "decision_only",
+            "timeout_seconds": 5,
+            "rules": [],
+        }
+
+        with patch("main.setup_codex", new=AsyncMock(return_value=client)), \
+             patch("main.CommandRouter", return_value=router), \
+             patch("main.ApprovalGuardianService", return_value=guardian), \
+             patch("main.get", side_effect=lambda key, default=None: default), \
+             patch("main.get_guardian_settings", return_value=guardian_settings):
+            await app_main.post_init(telegram_app)
+            user_manager.bind_thread_owner(1, "thread-1")
+            queue = await event_hub.subscribe(1)
+            try:
+                await client._any_handler(
+                    "item/completed",
+                    {
+                        "threadId": "thread-1",
+                        "turnId": "turn-1",
+                        "item": {
+                            "type": "web_search",
+                            "id": "search-1",
+                            "query": "find docs",
+                            "action": {"search": {"query": "find docs"}},
+                        },
+                    },
+                )
+                event = await queue.get()
+            finally:
+                await event_hub.unsubscribe(1, queue)
+
+        self.assertEqual("web_search_item", event["type"])
+        self.assertEqual("search-1", event["item_id"])
+        self.assertEqual("find docs", event["query"])
+        self.assertEqual({"search": {"query": "find docs"}}, event["action"])
+        bot.send_message.assert_not_awaited()
+
+    async def test_image_generation_completed_is_forwarded_to_web_only(self):
+        client = _DummyCodexClient(submit_result=True)
+        router = SimpleNamespace(projects=SimpleNamespace(resolve_effective_project=Mock(return_value=None)))
+        guardian = SimpleNamespace(stop=AsyncMock())
+        bot = SimpleNamespace(send_message=AsyncMock())
+        telegram_app = SimpleNamespace(bot=bot)
+        guardian_settings = {
+            "enabled": False,
+            "apply_to_methods": ["*"],
+            "failure_policy": "manual_fallback",
+            "explainability": "decision_only",
+            "timeout_seconds": 5,
+            "rules": [],
+        }
+
+        with patch("main.setup_codex", new=AsyncMock(return_value=client)), \
+             patch("main.CommandRouter", return_value=router), \
+             patch("main.ApprovalGuardianService", return_value=guardian), \
+             patch("main.get", side_effect=lambda key, default=None: default), \
+             patch("main.get_guardian_settings", return_value=guardian_settings):
+            await app_main.post_init(telegram_app)
+            user_manager.bind_thread_owner(1, "thread-1")
+            queue = await event_hub.subscribe(1)
+            try:
+                await client._any_handler(
+                    "item/completed",
+                    {
+                        "threadId": "thread-1",
+                        "turnId": "turn-1",
+                        "item": {
+                            "type": "image_generation",
+                            "id": "ig-1",
+                            "status": "completed",
+                            "revised_prompt": "A tiny blue square",
+                            "result": "Zm9v",
+                            "saved_path": "/tmp/ig-1.png",
+                        },
+                    },
+                )
+                event = await queue.get()
+            finally:
+                await event_hub.unsubscribe(1, queue)
+
+        self.assertEqual("image_generation_item", event["type"])
+        self.assertEqual("ig-1", event["item_id"])
+        self.assertEqual("completed", event["status"])
+        self.assertEqual("A tiny blue square", event["revised_prompt"])
+        self.assertEqual("/tmp/ig-1.png", event["saved_path"])
+        bot.send_message.assert_not_awaited()
+
+    async def test_context_compacted_is_forwarded_to_web_only(self):
+        client = _DummyCodexClient(submit_result=True)
+        router = SimpleNamespace(projects=SimpleNamespace(resolve_effective_project=Mock(return_value=None)))
+        guardian = SimpleNamespace(stop=AsyncMock())
+        bot = SimpleNamespace(send_message=AsyncMock())
+        telegram_app = SimpleNamespace(bot=bot)
+        guardian_settings = {
+            "enabled": False,
+            "apply_to_methods": ["*"],
+            "failure_policy": "manual_fallback",
+            "explainability": "decision_only",
+            "timeout_seconds": 5,
+            "rules": [],
+        }
+
+        with patch("main.setup_codex", new=AsyncMock(return_value=client)), \
+             patch("main.CommandRouter", return_value=router), \
+             patch("main.ApprovalGuardianService", return_value=guardian), \
+             patch("main.get", side_effect=lambda key, default=None: default), \
+             patch("main.get_guardian_settings", return_value=guardian_settings):
+            await app_main.post_init(telegram_app)
+            user_manager.bind_thread_owner(1, "thread-1")
+            queue = await event_hub.subscribe(1)
+            try:
+                await client._any_handler(
+                    "thread/compacted",
+                    {
+                        "threadId": "thread-1",
+                        "turnId": "turn-1",
+                    },
+                )
+                event = await queue.get()
+            finally:
+                await event_hub.unsubscribe(1, queue)
+
+        self.assertEqual("context_compacted_item", event["type"])
+        self.assertEqual("Context compacted", event["text"])
+        bot.send_message.assert_not_awaited()
+
 
 if __name__ == "__main__":
     unittest.main()
