@@ -145,5 +145,11 @@ class UserManager:
                 return uid
         return None
 
+    def find_single_active_turn_owner(self) -> int | None:
+        owners = [uid for uid, user in self._users.items() if user.active_turn_id]
+        if len(owners) == 1:
+            return owners[0]
+        return None
+
 
 user_manager = UserManager()

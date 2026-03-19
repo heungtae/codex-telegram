@@ -779,6 +779,8 @@ async def post_init(app: Application | None):
         turn_id = _extract_turn_id(method, params)
         user_id_by_thread = user_manager.find_user_id_by_thread(thread_id)
         owner_id = user_manager.find_user_id_by_turn(turn_id)
+        if owner_id is None and method in ("turn/completed", "turn/failed", "turn/cancelled"):
+            owner_id = user_manager.find_single_active_turn_owner()
         target_user_id = owner_id if owner_id is not None else user_id_by_thread
         if owner_id is None:
             owner_id = user_id_by_thread

@@ -299,6 +299,50 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Turn completed", kwargs["text"])
         self.assertIn("reply_markup", kwargs)
 
+    async def test_turn_completed_without_ids_uses_single_active_turn_owner_for_telegram(self):
+        client = _DummyCodexClient(submit_result=True)
+        router = SimpleNamespace(projects=SimpleNamespace(resolve_effective_project=Mock(return_value=None)))
+        guardian = SimpleNamespace(stop=AsyncMock())
+        bot = SimpleNamespace(send_message=AsyncMock())
+        telegram_app = SimpleNamespace(bot=bot)
+        guardian_settings = {
+            "enabled": False,
+            "apply_to_methods": ["*"],
+            "failure_policy": "manual_fallback",
+            "explainability": "decision_only",
+            "timeout_seconds": 5,
+            "rules": [],
+        }
+
+        with patch("main.setup_codex", new=AsyncMock(return_value=client)), \
+             patch("main.CommandRouter", return_value=router), \
+             patch("main.ApprovalGuardianService", return_value=guardian), \
+             patch("main.get", side_effect=lambda key, default=None: default), \
+             patch("main.get_guardian_settings", return_value=guardian_settings):
+            await app_main.post_init(telegram_app)
+            user_manager.get(1).set_turn("turn-1")
+            queue = await event_hub.subscribe(1)
+            try:
+                await client._any_handler(
+                    "turn/completed",
+                    {
+                        "collaboration_mode_kind": "plan",
+                    },
+                )
+                first = await queue.get()
+                second = await queue.get()
+            finally:
+                await event_hub.unsubscribe(1, queue)
+
+        self.assertEqual("turn_completed", first["type"])
+        self.assertEqual("system_message", second["type"])
+        self.assertEqual("Turn completed. Mode: PLAN.", second["text"])
+        bot.send_message.assert_awaited()
+        kwargs = bot.send_message.await_args.kwargs
+        self.assertEqual(1, kwargs["chat_id"])
+        self.assertIn("Turn completed", kwargs["text"])
+        self.assertIn("reply_markup", kwargs)
+
     async def test_plan_delta_is_forwarded_to_web_only(self):
         client = _DummyCodexClient(submit_result=True)
         router = SimpleNamespace(projects=SimpleNamespace(resolve_effective_project=Mock(return_value=None)))
