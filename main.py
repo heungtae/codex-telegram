@@ -779,6 +779,7 @@ async def post_init(app: Application | None):
         turn_id = _extract_turn_id(method, params)
         user_id_by_thread = user_manager.find_user_id_by_thread(thread_id)
         owner_id = user_manager.find_user_id_by_turn(turn_id)
+        target_user_id = owner_id if owner_id is not None else user_id_by_thread
         if owner_id is None:
             owner_id = user_id_by_thread
 
@@ -883,7 +884,7 @@ async def post_init(app: Application | None):
                 await event_hub.publish_event(target_user_id, context_compaction_payload)
             return
 
-        if user_id_by_thread is not None:
+        if target_user_id is not None:
             event_type = "app_event"
             if method == "item/agentMessage/delta":
                 event_type = "turn_delta"
@@ -894,7 +895,7 @@ async def post_init(app: Application | None):
             elif method == "turn/failed":
                 event_type = "turn_failed"
             await event_hub.publish_event(
-                user_id_by_thread,
+                target_user_id,
                 {
                     "type": event_type,
                     "method": method,
@@ -909,7 +910,7 @@ async def post_init(app: Application | None):
                 actual_mode = _normalize_mode_kind((params or {}).get("collaboration_mode_kind") or (params or {}).get("collaborationModeKind"))
                 mode_suffix = f" Mode: {actual_mode.upper()}." if actual_mode else ""
                 await _publish_system_message(
-                    user_id_by_thread,
+                    target_user_id,
                     thread_id,
                     turn_id,
                     f"Turn completed.{mode_suffix}",
@@ -921,7 +922,7 @@ async def post_init(app: Application | None):
             return
         if _event_level(method, params) < forward_threshold:
             return
-        user_id = user_id_by_thread
+        user_id = target_user_id
         if user_id is None:
             return
         if user_id <= 0 or app is None:
