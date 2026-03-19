@@ -576,6 +576,9 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   const inputRef = useRef(null);
   const reasoningStateRef = useRef({});
   const pendingComposerFocusRef = useRef(false);
+  const composerFocusWantedRef = useRef(false);
+  const composerSelectionRef = useRef({ start: null, end: null });
+  const recentBackspaceAtRef = useRef(0);
   const paletteRef = useRef(null);
   const workspaceResizeRef = useRef({ startX: 0, startWidth: 320 });
   const [paletteSelectedIndex, setPaletteSelectedIndex] = useState(0);
@@ -1107,8 +1110,19 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       if (typeof cursor === "number") {
         el.selectionStart = cursor;
         el.selectionEnd = cursor;
+        composerSelectionRef.current = { start: cursor, end: cursor };
       }
     });
+  };
+
+  const rememberComposerSelection = (el) => {
+    if (!el) {
+      return;
+    }
+    composerSelectionRef.current = {
+      start: typeof el.selectionStart === "number" ? el.selectionStart : null,
+      end: typeof el.selectionEnd === "number" ? el.selectionEnd : null,
+    };
   };
 
   const autoResizeInput = () => {
@@ -1433,6 +1447,35 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   useEffect(() => {
     autoResizeInput();
   }, [input]);
+  useEffect(() => {
+    if (!composerFocusWantedRef.current || typeof window === "undefined") {
+      return undefined;
+    }
+    const el = inputRef.current;
+    if (!el || el.disabled) {
+      return undefined;
+    }
+    if (document.activeElement === el) {
+      rememberComposerSelection(el);
+      return undefined;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      if (!composerFocusWantedRef.current) {
+        return;
+      }
+      const current = inputRef.current;
+      if (!current || current.disabled || document.activeElement === current) {
+        return;
+      }
+      current.focus();
+      const { start, end } = composerSelectionRef.current;
+      if (typeof start === "number" && typeof end === "number") {
+        current.selectionStart = start;
+        current.selectionEnd = end;
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [input, paletteOpen, paletteSelectedIndex]);
 
   useEffect(() => {
     setPaletteSelectedIndex(0);
@@ -2208,7 +2251,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
         <div className="workspace-layout">
           <div className="center-pane">
             {workspacePreview ? (
-              <div className="workspace-preview-panel">
+              <div className={`workspace-preview-panel ${workspacePreview.mode === "diff" ? "diff-mode" : "file-mode"}`}>
                 <div className="workspace-preview-head">
                   <div className="workspace-preview-copy">
                     <div className="workspace-preview-title">
@@ -2232,7 +2275,9 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
                 ) : workspacePreview.error ? (
                   <div className="workspace-preview-empty">{workspacePreview.error}</div>
                 ) : workspacePreview.mode === "diff" && workspacePreview.diff ? (
-                  <FileChangeDiff diff={workspacePreview.diff} />
+                  <div className="workspace-preview-body">
+                    <FileChangeDiff diff={workspacePreview.diff} />
+                  </div>
                 ) : !workspacePreview.previewAvailable ? (
                   <div className="workspace-preview-empty">
                     {workspacePreview.isBinary ? "Binary file preview is unavailable." : "Preview is unavailable."}
@@ -2242,7 +2287,9 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
                     {workspacePreview.truncated ? (
                       <div className="workspace-preview-note">Showing the first part of the file.</div>
                     ) : null}
-                    <FileCodePreview content={workspacePreview.content} />
+                    <div className="workspace-preview-body">
+                      <FileCodePreview content={workspacePreview.content} />
+                    </div>
                   </>
                 )}
               </div>
@@ -2389,13 +2436,44 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
                   rows={1}
                   value={input}
                   disabled={composerLocked}
-                  onChange={(e) => setInput(e.target.value)}
+                  onChange={(e) => {
+                    composerFocusWantedRef.current = true;
+                    rememberComposerSelection(e.currentTarget);
+                    setInput(e.target.value);
+                  }}
+                  onFocus={(e) => {
+                    composerFocusWantedRef.current = true;
+                    rememberComposerSelection(e.currentTarget);
+                  }}
+                  onBlur={(e) => {
+                    const now =
+                      typeof performance !== "undefined" && typeof performance.now === "function"
+                        ? performance.now()
+                        : Date.now();
+                    if (now - recentBackspaceAtRef.current <= 250) {
+                      composerFocusWantedRef.current = true;
+                      return;
+                    }
+                    composerFocusWantedRef.current = false;
+                    rememberComposerSelection(e.currentTarget);
+                  }}
+                  onSelect={(e) => {
+                    rememberComposerSelection(e.currentTarget);
+                  }}
                   onKeyDown={(e) => {
                     if (composerLocked) {
                       return;
                     }
                     if (e.isComposing) {
                       return;
+                    }
+                    composerFocusWantedRef.current = true;
+                    rememberComposerSelection(e.currentTarget);
+                    if (e.key === "Backspace") {
+                      recentBackspaceAtRef.current =
+                        typeof performance !== "undefined" && typeof performance.now === "function"
+                          ? performance.now()
+                          : Date.now();
                     }
                     if (e.key === "Tab" && !e.altKey && !e.ctrlKey && !e.metaKey) {
                       e.preventDefault();
