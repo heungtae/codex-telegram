@@ -187,7 +187,6 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             update,
             (
                 "A turn is already running.\n"
-                f"threadId: {state_user.active_thread_id}\n"
                 f"turnId: {state_user.active_turn_id}\n"
                 "Use /interrupt (or the Interrupt button) to stop it first."
             ),

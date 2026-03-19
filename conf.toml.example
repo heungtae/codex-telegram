@@ -140,7 +140,7 @@ level = "INFO"
 
 [forwarding]
 app_server_event_level = "DEBUG"
-app_server_event_allowlist = ["item/completed"]
+app_server_event_allowlist = ["item/completed", "turn/completed", "turn/failed", "turn/cancelled"]
 app_server_event_denylist = ["item/agentMessage/delta"]
 
 # Example rule:

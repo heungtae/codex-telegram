@@ -688,10 +688,10 @@ async def post_init(app: Application | None):
             return 20
         return 10
 
-    async def _send_telegram_message(user_id: int, text: str, thread_id: str | None):
+    async def _send_telegram_message(user_id: int, text: str, turn_id: str | None):
         if user_id <= 0 or app is None or not text.strip():
             return
-        footer = f"\n\nthreadId: {thread_id or 'unknown'}"
+        footer = f"\n\nturnId: {turn_id or 'unknown'}"
         max_body_len = 3900 - len(footer)
         body = text
         if len(body) > max_body_len:
@@ -744,7 +744,7 @@ async def post_init(app: Application | None):
     async def _send_telegram_file_change(user_id: int, payload: dict[str, Any]) -> None:
         if user_id <= 0 or app is None:
             return
-        thread_id = payload.get("thread_id")
+        turn_id = payload.get("turn_id")
         summary = str(payload.get("summary") or "").strip()
         if not summary:
             return
@@ -754,7 +754,7 @@ async def post_init(app: Application | None):
         try:
             last_index = len(lines) - 1
             for index, line in enumerate(lines):
-                footer = f"\n\nthreadId: {thread_id or 'unknown'}" if index == last_index else ""
+                footer = f"\n\nturnId: {turn_id or 'unknown'}" if index == last_index else ""
                 max_body_len = 3900 - len(footer)
                 body = line
                 if len(body) > max_body_len:
@@ -772,7 +772,7 @@ async def post_init(app: Application | None):
         if not plan_text:
             return
         summary = f"Plan proposal\n\n{plan_text}"
-        await _send_telegram_message(user_id, summary, payload.get("thread_id"))
+        await _send_telegram_message(user_id, summary, payload.get("turn_id"))
 
     async def forward_event(method: str, params: dict | None):
         thread_id = _extract_thread_id(method, params)
@@ -935,7 +935,7 @@ async def post_init(app: Application | None):
             return
         if not msg.strip():
             return
-        footer = f"\n\nthreadId: {thread_id or 'unknown'}"
+        footer = f"\n\nturnId: {turn_id or 'unknown'}"
         max_body_len = 3900 - len(footer)
         if max_body_len < 1:
             max_body_len = 1

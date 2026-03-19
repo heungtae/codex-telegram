@@ -1032,7 +1032,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       return;
     }
     const messageThreadId = normalizeThreadId(activeThread);
-    setMessages((prev) => [...prev, { role: "user", text, threadId: messageThreadId }]);
+    setMessages((prev) => [...prev, { role: "user", text, turnId: "" }]);
     setStatus("running");
     try {
       const result = await api("/api/chat/messages", {
@@ -1046,6 +1046,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
             role: "assistant",
             text: result.output || "",
             threadId: normalizeThreadId(result.thread_id) || messageThreadId,
+            turnId: typeof result.turn_id === "string" ? result.turn_id : "",
           },
         ]);
         setStatus("idle");
@@ -1059,6 +1060,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
           role: "system",
           text: err.message || "Request failed.",
           threadId: messageThreadId,
+          turnId: "",
           streaming: false,
         },
       ]);
@@ -1092,6 +1094,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
           role: "system",
           text: err.message || "Failed to switch mode.",
           threadId: normalizeThreadId(activeThread),
+          turnId: "",
           streaming: false,
         },
       ]);
@@ -1157,6 +1160,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
             variant: item.variant === "subagent" ? "subagent" : "",
             kind: item.kind === "plan" ? "plan" : "",
             threadId: normalizeThreadId(item.thread_id) || normalizeThreadId(threadId),
+            turnId: typeof item.turn_id === "string" ? item.turn_id : "",
             streaming: false,
           }))
       );
@@ -1167,6 +1171,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
         role: "assistant",
         text: result.text,
         threadId: normalizeThreadId(result.thread_id) || normalizeThreadId(threadId),
+        turnId: typeof result.turn_id === "string" ? result.turn_id : "",
         streaming: false,
       },
     ]);
@@ -1179,7 +1184,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     }
     setMessages((prev) => [
       ...prev,
-      { role: "user", text: cmd, threadId: normalizeThreadId(activeThread) },
+      { role: "user", text: cmd, turnId: "" },
     ]);
     setStatus("running");
     const result = await api("/api/command", {
@@ -1195,6 +1200,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
         role: "assistant",
         text: result.text,
         threadId: normalizeThreadId(result?.meta?.thread_id) || normalizeThreadId(activeThread),
+        turnId: typeof result?.meta?.turn_id === "string" ? result.meta.turn_id : "",
       },
     ]);
     setStatus("idle");
@@ -1357,10 +1363,11 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       const data = JSON.parse(ev.data);
       const text = data.text || "Turn failed.";
       const threadId = normalizeThreadId(data.thread_id);
+      const turnId = typeof data.turn_id === "string" ? data.turn_id : "";
       setStatus("idle");
       reasoningStateRef.current = {};
       setActivityDetail("");
-      setMessages((prev) => [...prev, { role: "system", text, threadId, streaming: false }]);
+      setMessages((prev) => [...prev, { role: "system", text, threadId, turnId, streaming: false }]);
       loadSessionSummary().catch(() => {});
     });
     es.addEventListener("approval_required", (ev) => {
@@ -1383,6 +1390,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
           role: "system",
           text,
           threadId: normalizeThreadId(data.thread_id),
+          turnId: typeof data.turn_id === "string" ? data.turn_id : "",
           streaming: false,
         },
       ]);
@@ -1395,6 +1403,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       const files = Array.isArray(data.files) ? data.files : [];
       const diff = typeof data.diff === "string" ? data.diff : "";
       const threadId = normalizeThreadId(data.thread_id);
+      const turnId = typeof data.turn_id === "string" ? data.turn_id : "";
       if (!summary && files.length === 0 && !diff) {
         return;
       }
@@ -1406,6 +1415,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
           files,
           diff,
           threadId,
+          turnId,
           kind: "file_change",
           streaming: false,
         },
@@ -1663,6 +1673,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
           kind: "plan",
           itemId,
           threadId: normalizeThreadId(payload?.thread_id),
+          turnId: typeof payload?.turn_id === "string" ? payload.turn_id : existing?.turnId || "",
           text: mode === "append" ? `${existing.text || ""}${text}` : text,
           streaming,
         };
@@ -1673,6 +1684,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
         kind: "plan",
         itemId,
         threadId: normalizeThreadId(payload?.thread_id),
+        turnId: typeof payload?.turn_id === "string" ? payload.turn_id : "",
         text,
         streaming,
       });
@@ -2381,7 +2393,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
                       {m.kind === "plan" ? <div className="msg-label">Plan</div> : null}
                       {m.kind === "plan_checklist" ? <div className="msg-label">Plan Checklist</div> : null}
                       <div className="msg-body">{m.text}</div>
-                      {m.threadId ? <div className="msg-meta">threadId: {m.threadId}</div> : null}
+                      {m.turnId ? <div className="msg-meta">turnId: {m.turnId}</div> : null}
                     </div>
                   </div>
                 );

@@ -186,7 +186,7 @@ def _thread_turns(result: dict[str, Any], thread: dict[str, Any]) -> list[dict[s
 
 def _thread_turn_messages(turns: list[dict[str, Any]], default_thread_id: str | None = None) -> list[dict[str, str]]:
     messages: list[dict[str, str]] = []
-    seen: set[tuple[str, str, str, str, str]] = set()
+    seen: set[tuple[str, str, str, str, str, str]] = set()
 
     def add_message(
         role: str,
@@ -194,6 +194,7 @@ def _thread_turn_messages(turns: list[dict[str, Any]], default_thread_id: str | 
         variant: str | None = None,
         kind: str | None = None,
         thread_id: str | None = None,
+        turn_id: str | None = None,
     ) -> None:
         cleaned = str(text or "").strip()
         if not cleaned:
@@ -201,7 +202,8 @@ def _thread_turn_messages(turns: list[dict[str, Any]], default_thread_id: str | 
         normalized_variant = variant if isinstance(variant, str) and variant else ""
         normalized_kind = kind if isinstance(kind, str) and kind else ""
         normalized_thread_id = thread_id if isinstance(thread_id, str) and thread_id else ""
-        key = (role, normalized_variant, normalized_kind, normalized_thread_id, cleaned)
+        normalized_turn_id = turn_id if isinstance(turn_id, str) and turn_id else ""
+        key = (role, normalized_variant, normalized_kind, normalized_thread_id, normalized_turn_id, cleaned)
         if key in seen:
             return
         seen.add(key)
@@ -212,6 +214,8 @@ def _thread_turn_messages(turns: list[dict[str, Any]], default_thread_id: str | 
             message["kind"] = normalized_kind
         if normalized_thread_id:
             message["thread_id"] = normalized_thread_id
+        if normalized_turn_id:
+            message["turn_id"] = normalized_turn_id
         messages.append(message)
 
     def infer_role(value: dict[str, Any], default_role: str) -> str:
@@ -242,13 +246,19 @@ def _thread_turn_messages(turns: list[dict[str, Any]], default_thread_id: str | 
             return "subagent"
         return default_variant
 
-    def walk(value: Any, default_role: str, default_variant: str | None = None, thread_id: str | None = None) -> None:
+    def walk(
+        value: Any,
+        default_role: str,
+        default_variant: str | None = None,
+        thread_id: str | None = None,
+        turn_id: str | None = None,
+    ) -> None:
         if isinstance(value, str):
-            add_message(default_role, value, default_variant, None, thread_id)
+            add_message(default_role, value, default_variant, None, thread_id, turn_id)
             return
         if isinstance(value, list):
             for item in value:
-                walk(item, default_role, default_variant, thread_id)
+                walk(item, default_role, default_variant, thread_id, turn_id)
             return
         if not isinstance(value, dict):
             return
@@ -259,21 +269,21 @@ def _thread_turn_messages(turns: list[dict[str, Any]], default_thread_id: str | 
         kind = "plan" if item_type == "plan" and role == "assistant" else None
         direct = value.get("text")
         if isinstance(direct, str) and direct.strip():
-            add_message(role, direct, variant, kind, thread_id)
+            add_message(role, direct, variant, kind, thread_id, turn_id)
 
         content = value.get("content")
         if isinstance(content, str) and content.strip():
-            add_message(role, content, variant, kind, thread_id)
+            add_message(role, content, variant, kind, thread_id, turn_id)
         elif isinstance(content, list):
             for item in content:
                 if isinstance(item, dict):
                     text = item.get("text")
                     if isinstance(text, str) and text.strip():
-                        add_message(role, text, variant, kind, thread_id)
+                        add_message(role, text, variant, kind, thread_id, turn_id)
                     else:
-                        walk(item, role, variant, thread_id)
+                        walk(item, role, variant, thread_id, turn_id)
                 else:
-                    walk(item, role, variant, thread_id)
+                    walk(item, role, variant, thread_id, turn_id)
 
         for key in ("input", "userInput", "prompt", "output", "items", "messages"):
             nested = value.get(key)
@@ -283,21 +293,26 @@ def _thread_turn_messages(turns: list[dict[str, Any]], default_thread_id: str | 
             if key in {"output", "items", "messages"} and role == "user":
                 next_role = "assistant"
             next_variant = variant if next_role == "assistant" else None
-            walk(nested, next_role, next_variant, thread_id)
+            walk(nested, next_role, next_variant, thread_id, turn_id)
 
     for turn in turns:
         turn_thread_id = default_thread_id
+        turn_turn_id = ""
         if isinstance(turn.get("threadId"), str) and turn.get("threadId"):
             turn_thread_id = turn.get("threadId")
         elif isinstance(turn.get("thread_id"), str) and turn.get("thread_id"):
             turn_thread_id = turn.get("thread_id")
+        if isinstance(turn.get("turnId"), str) and turn.get("turnId"):
+            turn_turn_id = turn.get("turnId")
+        elif isinstance(turn.get("turn_id"), str) and turn.get("turn_id"):
+            turn_turn_id = turn.get("turn_id")
         before_count = len(messages)
-        walk(turn.get("input"), "user", None, turn_thread_id)
-        walk(turn.get("userInput"), "user", None, turn_thread_id)
-        walk(turn.get("prompt"), "user", None, turn_thread_id)
-        walk(turn.get("output"), "assistant", None, turn_thread_id)
-        walk(turn.get("items"), "assistant", None, turn_thread_id)
-        walk(turn.get("messages"), "assistant", None, turn_thread_id)
+        walk(turn.get("input"), "user", None, turn_thread_id, turn_turn_id)
+        walk(turn.get("userInput"), "user", None, turn_thread_id, turn_turn_id)
+        walk(turn.get("prompt"), "user", None, turn_thread_id, turn_turn_id)
+        walk(turn.get("output"), "assistant", None, turn_thread_id, turn_turn_id)
+        walk(turn.get("items"), "assistant", None, turn_thread_id, turn_turn_id)
+        walk(turn.get("messages"), "assistant", None, turn_thread_id, turn_turn_id)
 
         # Fallback when turns only expose a single text-like field.
         if len(messages) == before_count:
@@ -310,9 +325,9 @@ def _thread_turn_messages(turns: list[dict[str, Any]], default_thread_id: str | 
                 or first_text(turn.get("preview"))
             )
             if user_text:
-                add_message("user", user_text, None, None, turn_thread_id)
+                add_message("user", user_text, None, None, turn_thread_id, turn_turn_id)
             if assistant_text:
-                add_message("assistant", assistant_text, None, None, turn_thread_id)
+                add_message("assistant", assistant_text, None, None, turn_thread_id, turn_turn_id)
     return messages
 
 
