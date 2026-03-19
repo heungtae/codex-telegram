@@ -98,11 +98,11 @@ function Login({ onLoggedIn, theme, onToggleTheme }) {
     e.preventDefault();
     setError("");
     try {
-      await api("/api/auth/login", {
+      const who = await api("/api/auth/login", {
         method: "POST",
         body: JSON.stringify({ username, password }),
       });
-      onLoggedIn();
+      onLoggedIn(who);
     } catch (err) {
       setError(err.message);
     }
@@ -635,6 +635,14 @@ function App() {
     } catch (_e) {
       setMe(null);
     }
+  };
+
+  const handleLoggedIn = (who) => {
+    if (who && typeof who === "object") {
+      setMe(who);
+      return;
+    }
+    loadSession().catch(() => {});
   };
 
   const loadThreads = async () => {
@@ -1675,7 +1683,7 @@ function App() {
   };
 
   if (!me) {
-    return <Login onLoggedIn={loadSession} theme={theme} onToggleTheme={toggleTheme} />;
+    return <Login onLoggedIn={handleLoggedIn} theme={theme} onToggleTheme={toggleTheme} />;
   }
 
   const activeAgentDef = activeAgentSettings ? AGENT_CONFIG_DEFS[activeAgentSettings] : null;
