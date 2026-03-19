@@ -195,6 +195,14 @@ function SettingsIcon() {
   );
 }
 
+function MenuIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 7h16v2H4zm0 5h16v2H4zm0 5h16v2H4z" />
+    </svg>
+  );
+}
+
 function normalizePlanStatus(raw) {
   const value = typeof raw === "string" ? raw.trim().toLowerCase() : "";
   if (value === "completed") {
@@ -397,6 +405,7 @@ function App() {
   const PALETTE_LIMIT = 10;
   const SIDEBAR_MIN = 260;
   const SIDEBAR_MAX = 620;
+  const MOBILE_BREAKPOINT = 900;
   const [me, setMe] = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -427,6 +436,10 @@ function App() {
   const [paletteSelectedIndex, setPaletteSelectedIndex] = useState(0);
   const [sidebarWidth, setSidebarWidth] = useState(340);
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
+  const [isMobileLayout, setIsMobileLayout] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth <= MOBILE_BREAKPOINT : false
+  );
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const slashCommands = useMemo(
     () => [
       "/commands",
@@ -856,6 +869,9 @@ function App() {
   };
 
   const viewThread = async (threadId) => {
+    if (isMobileLayout) {
+      setIsSidebarOpen(false);
+    }
     setActiveThread(threadId);
     setStatus("idle");
     const result = await api(`/api/threads/read?thread_id=${encodeURIComponent(threadId)}`);
@@ -1188,6 +1204,52 @@ function App() {
     active.scrollIntoView({ block: "nearest" });
   }, [paletteOpen, paletteSelectedIndex, visiblePaletteItems.length]);
   useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+    const syncViewport = () => {
+      setIsMobileLayout(window.innerWidth <= MOBILE_BREAKPOINT);
+    };
+    syncViewport();
+    window.addEventListener("resize", syncViewport);
+    return () => window.removeEventListener("resize", syncViewport);
+  }, []);
+  useEffect(() => {
+    if (!isMobileLayout) {
+      setIsSidebarOpen(false);
+      return;
+    }
+    setIsResizingSidebar(false);
+  }, [isMobileLayout]);
+  useEffect(() => {
+    if (!isMobileLayout || typeof document === "undefined") {
+      return undefined;
+    }
+    const { body } = document;
+    if (!body) {
+      return undefined;
+    }
+    const previousOverflow = body.style.overflow;
+    if (isSidebarOpen) {
+      body.style.overflow = "hidden";
+    }
+    return () => {
+      body.style.overflow = previousOverflow;
+    };
+  }, [isMobileLayout, isSidebarOpen]);
+  useEffect(() => {
+    if (!isMobileLayout || !isSidebarOpen || typeof window === "undefined") {
+      return undefined;
+    }
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setIsSidebarOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isMobileLayout, isSidebarOpen]);
+  useEffect(() => {
     if (!isResizingSidebar) {
       return;
     }
@@ -1400,9 +1462,16 @@ function App() {
   const interactionBusy = status === "running";
   const composerLocked = interactionBusy;
 
+  const sidebarStyle = isMobileLayout ? undefined : { width: sidebarWidth };
+
   return (
-    <div className="app">
-      <aside className="sidebar" style={{ width: sidebarWidth }}>
+    <div className={`app ${isMobileLayout ? "mobile-layout" : ""}`}>
+      <aside
+        id="app-sidebar"
+        className={`sidebar ${isMobileLayout ? "mobile" : "desktop"} ${isSidebarOpen ? "open" : ""}`}
+        style={sidebarStyle}
+        aria-hidden={isMobileLayout ? !isSidebarOpen : undefined}
+      >
         <div className="brand">Codex Telegram</div>
         <div className="panel">
           <h3>Current Thread</h3>
@@ -1568,20 +1637,44 @@ function App() {
           </div>
         </div>
       </aside>
-      <div
-        className={`sidebar-resizer ${isResizingSidebar ? "active" : ""}`}
-        onMouseDown={() => setIsResizingSidebar(true)}
-        role="separator"
-        aria-orientation="vertical"
-        aria-label="Resize sidebar"
-      />
+      {isMobileLayout ? (
+        <button
+          className={`sidebar-backdrop ${isSidebarOpen ? "open" : ""}`}
+          type="button"
+          onClick={() => setIsSidebarOpen(false)}
+          aria-label="Close navigation menu"
+        />
+      ) : (
+        <div
+          className={`sidebar-resizer ${isResizingSidebar ? "active" : ""}`}
+          onMouseDown={() => setIsResizingSidebar(true)}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize sidebar"
+        />
+      )}
       <main className="main">
         <div className="topbar">
-          <div className="user-pill" aria-label={`User ${me.username}`}>
-            <svg className="user-pill-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-3.33 0-6 1.79-6 4v1h12v-1c0-2.21-2.67-4-6-4Z" />
-            </svg>
-            <span>{me.username}</span>
+          <div className="topbar-leading">
+            {isMobileLayout ? (
+              <button
+                className="menu-toggle"
+                type="button"
+                onClick={() => setIsSidebarOpen((current) => !current)}
+                aria-label="Toggle navigation menu"
+                aria-expanded={isSidebarOpen}
+                aria-controls="app-sidebar"
+              >
+                <MenuIcon />
+                <span>Menu</span>
+              </button>
+            ) : null}
+            <div className="user-pill" aria-label={`User ${me.username}`}>
+              <svg className="user-pill-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-3.33 0-6 1.79-6 4v1h12v-1c0-2.21-2.67-4-6-4Z" />
+              </svg>
+              <span>{me.username}</span>
+            </div>
           </div>
           <div className="topbar-actions">
             <button
