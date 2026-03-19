@@ -490,12 +490,53 @@ function groupMessagesForRender(messages) {
 }
 
 function App() {
+  const [me, setMe] = useState(null);
+  const [theme, setTheme] = useState(() => readDocumentTheme());
+
+  const loadSession = async () => {
+    try {
+      const who = await api("/api/auth/me");
+      setMe(who);
+    } catch (_e) {
+      setMe(null);
+    }
+  };
+
+  const handleLoggedIn = (who) => {
+    if (who && typeof who === "object") {
+      setMe(who);
+      return;
+    }
+    loadSession().catch(() => {});
+  };
+
+  const toggleTheme = () => {
+    setTheme((current) => (current === "dark" ? "light" : "dark"));
+  };
+
+  useEffect(() => {
+    loadSession();
+  }, []);
+
+  useEffect(() => {
+    const nextTheme = normalizeTheme(theme);
+    applyDocumentTheme(nextTheme);
+    persistTheme(nextTheme);
+  }, [theme]);
+
+  if (!me) {
+    return <Login onLoggedIn={handleLoggedIn} theme={theme} onToggleTheme={toggleTheme} />;
+  }
+
+  return <AuthenticatedApp me={me} theme={theme} onToggleTheme={toggleTheme} />;
+}
+
+function AuthenticatedApp({ me, theme, onToggleTheme }) {
   const PALETTE_LIMIT = 10;
   const SIDEBAR_MIN = 260;
   const SIDEBAR_MAX = 620;
   const MOBILE_BREAKPOINT = 900;
   const WORKSPACE_PANEL_BREAKPOINT = 1200;
-  const [me, setMe] = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [activeThread, setActiveThread] = useState("");
@@ -521,7 +562,6 @@ function App() {
   const reasoningStateRef = useRef({});
   const pendingComposerFocusRef = useRef(false);
   const paletteRef = useRef(null);
-  const [theme, setTheme] = useState(() => readDocumentTheme());
   const [paletteSelectedIndex, setPaletteSelectedIndex] = useState(0);
   const [sidebarWidth, setSidebarWidth] = useState(340);
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
@@ -627,23 +667,6 @@ function App() {
     [paletteItems, paletteWindowStart]
   );
   const renderItems = useMemo(() => groupMessagesForRender(messages), [messages]);
-
-  const loadSession = async () => {
-    try {
-      const who = await api("/api/auth/me");
-      setMe(who);
-    } catch (_e) {
-      setMe(null);
-    }
-  };
-
-  const handleLoggedIn = (who) => {
-    if (who && typeof who === "object") {
-      setMe(who);
-      return;
-    }
-    loadSession().catch(() => {});
-  };
 
   const loadThreads = async () => {
     const summaries = await api("/api/threads/summaries?limit=20&offset=0");
@@ -1154,15 +1177,6 @@ function App() {
   };
 
   useEffect(() => {
-    loadSession();
-  }, []);
-  useEffect(() => {
-    const nextTheme = normalizeTheme(theme);
-    applyDocumentTheme(nextTheme);
-    persistTheme(nextTheme);
-  }, [theme]);
-
-  useEffect(() => {
     if (!me) {
       return;
     }
@@ -1546,10 +1560,6 @@ function App() {
     focusComposer(cursor);
   };
 
-  const toggleTheme = () => {
-    setTheme((current) => (current === "dark" ? "light" : "dark"));
-  };
-
   const upsertPlanMessage = (mode, payload) => {
     const itemId = typeof payload?.item_id === "string" ? payload.item_id : "";
     const text = typeof payload?.text === "string" ? payload.text : "";
@@ -1681,10 +1691,6 @@ function App() {
       },
     ]);
   };
-
-  if (!me) {
-    return <Login onLoggedIn={handleLoggedIn} theme={theme} onToggleTheme={toggleTheme} />;
-  }
 
   const activeAgentDef = activeAgentSettings ? AGENT_CONFIG_DEFS[activeAgentSettings] : null;
   const activeAgentConfig = activeAgentSettings ? agentConfigs[activeAgentSettings] : null;
@@ -2046,7 +2052,7 @@ function App() {
             <button
               className="theme-toggle"
               type="button"
-              onClick={toggleTheme}
+              onClick={onToggleTheme}
               aria-label="Toggle theme"
               title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
             >
