@@ -2136,7 +2136,6 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
             </div>
           ) : null}
         </div>
-        {activityDetail ? <div className="activity-indicator">{activityDetail}</div> : null}
         {floatingAgentSettings === "guardian" ? (
           <div className="agent-floating-settings">
             <div className="agent-floating-settings-card">
@@ -2342,6 +2341,9 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
               })}
             </div>
             <div className="composer">
+              {activityDetail ? (
+                <div className="activity-indicator composer-activity-indicator">{activityDetail}</div>
+              ) : null}
               <div className="composer-inner">
                 <div className="input-wrap">
               {paletteOpen ? (

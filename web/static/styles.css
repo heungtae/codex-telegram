@@ -1342,6 +1342,7 @@ select {
 }
 
 .composer {
+  position: relative;
   border: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.92);
   padding: 12px;
@@ -1630,6 +1631,22 @@ select {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.composer-activity-indicator {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: calc(100% + 8px);
+  z-index: 4;
+  margin: 0 auto;
+  padding: 8px 12px;
+  border: 1px solid rgba(210, 219, 232, 0.9);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 10px 24px rgba(16, 24, 40, 0.1);
+  backdrop-filter: blur(8px);
+  pointer-events: none;
 }
 
 .login {
@@ -1933,6 +1950,12 @@ select {
 
 :root[data-theme="dark"] .file-change-entry.kind-image_generation {
   background: linear-gradient(180deg, rgba(15, 45, 41, 0.54) 0%, rgba(16, 36, 33, 0.68) 100%);
+}
+
+:root[data-theme="dark"] .composer-activity-indicator {
+  border-color: rgba(43, 63, 84, 0.95);
+  background: rgba(10, 17, 28, 0.94);
+  box-shadow: 0 14px 28px rgba(2, 8, 18, 0.3);
 }
 
 :root[data-theme="dark"] .file-change-code {
