@@ -254,6 +254,13 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
                 result = await run_callback_command("/models", user_id)
                 await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=_settings_markup(user_id))
+            elif command == "mode_current":
+                logger.info("Executing callback action user_id=%s data=%s", user_id, data)
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=f"Current mode: {_mode_label(user_id)}",
+                    reply_markup=_main_menu_markup(user_id),
+                )
             elif command == "mode_quick_toggle":
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
                 next_command = "/build" if user_manager.get(user_id).collaboration_mode == "plan" else "/plan"

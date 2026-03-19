@@ -159,6 +159,25 @@ class CallbackResultTests(unittest.IsolatedAsyncioTestCase):
         kwargs = self.context.bot.send_message.await_args.kwargs
         self.assertIn("Current mode: BUILD", kwargs["text"])
 
+    async def test_callback_mode_current_shows_current_mode(self):
+        user_manager.get(1).set_collaboration_mode("plan")
+        query = SimpleNamespace(
+            data="cmd:mode_current",
+            answer=AsyncMock(),
+            edit_message_text=AsyncMock(),
+        )
+        update = SimpleNamespace(
+            callback_query=query,
+            effective_user=SimpleNamespace(id=1),
+            effective_chat=SimpleNamespace(id=100),
+        )
+
+        await callbacks.callback_handler(update, self.context)
+
+        kwargs = self.context.bot.send_message.await_args.kwargs
+        self.assertEqual("Current mode: PLAN", kwargs["text"])
+        self.assertIn("reply_markup", kwargs)
+
     async def test_callback_mode_quick_toggle_routes_to_build_when_current_is_plan(self):
         self.mock_router.route.return_value = CommandResult(
             kind="text",

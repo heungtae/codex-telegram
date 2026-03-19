@@ -32,7 +32,8 @@ def thread_keyboard(thread_id: str) -> InlineKeyboardMarkup:
 
 def main_menu_keyboard(collaboration_mode: str = "build") -> InlineKeyboardMarkup:
     current = _normalized_mode(collaboration_mode)
-    toggle_label = "🧭 Mode: PLAN → BUILD" if current == "plan" else "🧭 Mode: BUILD → PLAN"
+    current_label = f"🧭 {current.upper()}"
+    toggle_label = "🔁 BUILD" if current == "plan" else "🔁 PLAN"
     keyboard = [
         [
             InlineKeyboardButton("📝 New Thread", callback_data="cmd:start"),
@@ -44,6 +45,7 @@ def main_menu_keyboard(collaboration_mode: str = "build") -> InlineKeyboardMarku
         ],
         [
             InlineKeyboardButton("⚙️ Settings", callback_data="cmd:config"),
+            InlineKeyboardButton(current_label, callback_data="cmd:mode_current"),
             InlineKeyboardButton(toggle_label, callback_data="cmd:mode_quick_toggle"),
         ],
     ]

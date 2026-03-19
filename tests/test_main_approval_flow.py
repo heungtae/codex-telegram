@@ -153,7 +153,7 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([7], [item["id"] for item in approvals])
         client.submit_approval_decision.assert_any_call(6, "deny")
 
-    async def test_turn_diff_updated_is_forwarded_to_web_and_telegram(self):
+    async def test_turn_diff_updated_is_forwarded_to_web_only_for_apply_patch(self):
         client = _DummyCodexClient(submit_result=True)
         router = SimpleNamespace(projects=SimpleNamespace(resolve_effective_project=Mock(return_value=None)))
         guardian = SimpleNamespace(stop=AsyncMock())
@@ -205,15 +205,8 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("src/main.py", event["files"][0]["path"])
         self.assertIn("+new", event["diff"])
         self.assertIn("Applied patch changes", event["summary"])
-        self.assertEqual(2, bot.send_message.await_count)
-        first_call = bot.send_message.await_args_list[0].kwargs
-        second_call = bot.send_message.await_args_list[1].kwargs
-        self.assertEqual(1, first_call["chat_id"])
-        self.assertEqual("Applied patch changes", first_call["text"])
-        self.assertEqual(1, second_call["chat_id"])
-        self.assertIn("src/main.py (+12 -3)", second_call["text"])
-        self.assertIn("threadId: thread-1", second_call["text"])
-        sleep_mock.assert_awaited_once_with(app_main.FILE_CHANGE_LINE_DELAY_SECONDS)
+        bot.send_message.assert_not_awaited()
+        sleep_mock.assert_not_awaited()
 
     async def test_turn_completed_publishes_system_message_to_web(self):
         client = _DummyCodexClient(submit_result=True)

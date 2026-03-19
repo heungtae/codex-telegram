@@ -817,7 +817,8 @@ async def post_init(app: Application | None):
                         "diff": file_change.get("diff"),
                     },
                 )
-                await _send_telegram_file_change(target_user_id, file_change)
+                if str(file_change.get("source") or "").strip().lower() != "apply_patch":
+                    await _send_telegram_file_change(target_user_id, file_change)
             return
 
         plan_item = _extract_plan_item_payload(method, params)

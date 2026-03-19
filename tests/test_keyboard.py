@@ -13,9 +13,23 @@ class KeyboardTests(unittest.TestCase):
             if button.callback_data
         ]
         self.assertIn("cmd:config", callbacks)
+        self.assertIn("cmd:mode_current", callbacks)
         self.assertIn("cmd:mode_quick_toggle", callbacks)
         self.assertNotIn("cmd:features", callbacks)
         self.assertNotIn("cmd:apps", callbacks)
+
+    def test_main_menu_splits_current_mode_and_toggle_labels(self):
+        markup = main_menu_keyboard("build")
+        texts = [button.text for row in markup.inline_keyboard for button in row]
+        self.assertIn("🧭 BUILD", texts)
+        self.assertIn("🔁 PLAN", texts)
+        self.assertNotIn("🧭 Mode: BUILD → PLAN", texts)
+
+        markup = main_menu_keyboard("plan")
+        texts = [button.text for row in markup.inline_keyboard for button in row]
+        self.assertIn("🧭 PLAN", texts)
+        self.assertIn("🔁 BUILD", texts)
+        self.assertNotIn("🧭 Mode: PLAN → BUILD", texts)
 
     def test_settings_menu_exposes_all_settings_commands(self):
         markup = settings_keyboard()
