@@ -165,6 +165,10 @@ class ProjectCommands:
         if not args:
             return usage_result("Usage: /project <key|number|name>")
 
+        state = user_manager.get(user_id)
+        if state.active_turn_id:
+            return text_result("Cannot switch project while a turn is running. Wait for it to finish or interrupt it first.")
+
         profiles, _ = self.load_project_profiles()
         if not profiles:
             return CommandResult(kind="projects", text="No projects configured.", meta={"project_keys": []})
@@ -191,40 +195,9 @@ class ProjectCommands:
         if selected is None:
             return text_result("Project not found. Run /projects --list.")
 
-        state = user_manager.get(user_id)
         state.set_project(selected["key"], selected["name"], selected["path"])
         state.set_collaboration_mode("build")
         state.set_collaboration_mode_mask(None)
-
-        interrupt_message = ""
-        if state.active_thread_id and state.active_turn_id:
-            try:
-                await asyncio.wait_for(
-                    self.ctx.codex.call(
-                        "turn/interrupt",
-                        {"threadId": state.active_thread_id, "turnId": state.active_turn_id},
-                    ),
-                    timeout=5.0,
-                )
-                interrupt_message = "\nInterrupted running turn."
-            except asyncio.TimeoutError:
-                self.ctx.logger.warning(
-                    "Timeout interrupting running turn before project switch user_id=%s thread_id=%s turn_id=%s",
-                    user_id,
-                    state.active_thread_id,
-                    state.active_turn_id,
-                )
-                interrupt_message = "\nInterrupt timed out; proceeding with project switch."
-            except Exception:
-                self.ctx.logger.exception(
-                    "Failed to interrupt running turn before project switch user_id=%s thread_id=%s turn_id=%s",
-                    user_id,
-                    state.active_thread_id,
-                    state.active_turn_id,
-                )
-                interrupt_message = "\nFailed to interrupt previous running turn."
-            finally:
-                state.clear_turn()
 
         new_thread_id: str | None = None
         thread_start_note = ""
@@ -255,8 +228,9 @@ class ProjectCommands:
         return text_result(
             f"Project selected: {selected['key']} - {selected['name']}\n"
             f"Workspace: {selected['path']}\n"
-            f"Thread started: {new_thread_id or 'unknown'}{interrupt_message}{thread_start_note}",
+            f"Thread started: {new_thread_id or 'unknown'}{thread_start_note}",
             project_key=selected["key"],
+            thread_id=new_thread_id,
             workspace_changed=True,
             collaboration_mode="build",
         )

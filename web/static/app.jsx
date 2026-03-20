@@ -556,6 +556,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   const [input, setInput] = useState("");
   const [activeThread, setActiveThread] = useState("");
   const [threadItems, setThreadItems] = useState([]);
+  const [projectItems, setProjectItems] = useState([]);
   const [projectSuggestions, setProjectSuggestions] = useState([]);
   const [skillSuggestions, setSkillSuggestions] = useState([]);
   const [sessionSummary, setSessionSummary] = useState(null);
@@ -587,6 +588,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [workspacePanelWidth, setWorkspacePanelWidth] = useState(320);
   const [isResizingWorkspacePanel, setIsResizingWorkspacePanel] = useState(false);
+  const [showArchivedThreads, setShowArchivedThreads] = useState(false);
   const [isMobileLayout, setIsMobileLayout] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth <= MOBILE_BREAKPOINT : false
   );
@@ -690,13 +692,27 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   );
   const renderItems = useMemo(() => groupMessagesForRender(messages), [messages]);
 
-  const loadThreads = async () => {
-    const summaries = await api("/api/threads/summaries?limit=20&offset=0");
+  const loadThreads = async (options = {}) => {
+    const archived = typeof options.archived === "boolean" ? options.archived : showArchivedThreads;
+    const summaries = await api(`/api/threads/summaries?limit=20&offset=0&archived=${archived ? "true" : "false"}`);
     const items = Array.isArray(summaries.items) ? summaries.items : [];
     setThreadItems(items);
-    if (!activeThread && items.length > 0) {
-      setActiveThread(items[0].id);
+    const summaryActiveThread = normalizeThreadId(sessionSummary?.active_thread_id);
+    const hasActiveThread = items.some((item) => normalizeThreadId(item?.id) === activeThread);
+    const hasSummaryActiveThread = summaryActiveThread && items.some((item) => normalizeThreadId(item?.id) === summaryActiveThread);
+    if (!hasActiveThread) {
+      if (hasSummaryActiveThread) {
+        setActiveThread(summaryActiveThread);
+      } else if (!activeThread && items.length > 0) {
+        setActiveThread(items[0].id);
+      }
     }
+  };
+
+  const loadProjects = async () => {
+    const result = await api("/api/projects");
+    const items = Array.isArray(result.items) ? result.items : [];
+    setProjectItems(items);
   };
 
   const loadSkillSuggestions = async () => {
@@ -860,6 +876,46 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       await loadSessionSummary();
     }
     await loadThreads();
+  };
+
+  const selectProject = async (target) => {
+    if (!target || interactionBusy) {
+      return;
+    }
+    try {
+      const result = await api("/api/projects/select", {
+        method: "POST",
+        body: JSON.stringify({ target }),
+      });
+      const nextThreadId = normalizeThreadId(result?.meta?.thread_id);
+      setMessages([]);
+      setStatus("idle");
+      setWorkspacePreview(null);
+      setWorkspaceTree({});
+      setWorkspaceStatus({ is_git: false, items: {} });
+      setWorkspaceError("");
+      if (nextThreadId) {
+        setActiveThread(nextThreadId);
+      } else {
+        setActiveThread("");
+      }
+      pendingComposerFocusRef.current = true;
+      setShowArchivedThreads(false);
+      await loadSessionSummary();
+      await loadProjects();
+      await loadThreads({ archived: false });
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "system",
+          text: err.message || "Failed to switch project.",
+          threadId: normalizeThreadId(activeThread),
+          turnId: "",
+          streaming: false,
+        },
+      ]);
+    }
   };
 
   const patchSessionAgent = (agentName, enabled) => {
@@ -1212,6 +1268,9 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     ) {
       loadThreads().catch(() => {});
     }
+    if (cmd.startsWith("/projects") || cmd.startsWith("/project")) {
+      loadProjects().catch(() => {});
+    }
     loadSessionSummary().catch(() => {});
   };
 
@@ -1219,6 +1278,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     if (!me) {
       return;
     }
+    loadProjects().catch(() => {});
     loadThreads().catch(() => {});
     loadSkillSuggestions().catch(() => {});
     loadSessionSummary().catch(() => {});
@@ -1356,6 +1416,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       setActivityDetail("");
       setMessages((prev) => prev.map((m) => ({ ...m, streaming: false })));
       loadThreads().catch(() => {});
+      loadProjects().catch(() => {});
       loadSessionSummary().catch(() => {});
       loadWorkspaceStatus().catch(() => {});
     });
@@ -1368,6 +1429,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       reasoningStateRef.current = {};
       setActivityDetail("");
       setMessages((prev) => [...prev, { role: "system", text, threadId, turnId, streaming: false }]);
+      loadProjects().catch(() => {});
       loadSessionSummary().catch(() => {});
     });
     es.addEventListener("approval_required", (ev) => {
@@ -1490,6 +1552,9 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   useEffect(() => {
     setPaletteSelectedIndex(0);
   }, [activeToken?.type, activeToken?.query]);
+  useEffect(() => {
+    loadThreads().catch(() => {});
+  }, [showArchivedThreads]);
   useEffect(() => {
     if (paletteSelectedIndex < paletteItems.length) {
       return;
@@ -1802,6 +1867,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   const settingsBusy = !!agentConfigLoading || !!agentConfigSaving;
   const interactionBusy = status === "running";
   const composerLocked = interactionBusy;
+  const currentProjectLabel = sessionSummary?.project_name || sessionSummary?.project_key || "-";
   const workspaceRootLabel = basename(sessionSummary?.workspace || "") || "Workspace";
   const workspaceStatusItems =
     workspaceStatus && typeof workspaceStatus.items === "object" ? workspaceStatus.items : {};
@@ -1951,6 +2017,8 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
               <h3>Current Thread</h3>
               <div className="meta-line"><b>ThreadId</b></div>
               <div className="meta-value">{activeThread || sessionSummary?.active_thread_id || "-"}</div>
+              <div className="meta-line"><b>Project</b></div>
+              <div className="meta-value">{currentProjectLabel}</div>
               <div className="meta-line"><b>Workspace</b></div>
               <div className="meta-value">{sessionSummary?.workspace || "-"}</div>
             </div>
@@ -2094,20 +2162,61 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
                 </div>
               ) : null}
             </div>
+            <div className="panel">
+              <div className="panel-head">
+                <h3>Projects</h3>
+              </div>
+              {interactionBusy ? (
+                <div className="panel-note">Project switch is unavailable while a turn is running.</div>
+              ) : null}
+              <div className="thread-list project-list">
+                {projectItems.map((item) => (
+                  <button
+                    key={item.key}
+                    className={`thread-item project-item ${item.selected ? "active" : ""}`}
+                    onClick={() => selectProject(item.key)}
+                    disabled={interactionBusy}
+                    type="button"
+                  >
+                    <div className="thread-title">
+                      {item.name || item.key}
+                      {item.default ? <span className="project-pill">default</span> : null}
+                    </div>
+                    <div className="thread-sub">{item.key}</div>
+                  </button>
+                ))}
+                {projectItems.length ? null : <div className="panel-note">No projects configured.</div>}
+              </div>
+            </div>
             <div className="panel threads-panel">
+              <div className="panel-head">
               <h3>Threads</h3>
+                <button
+                  className={`panel-toggle ${showArchivedThreads ? "active" : ""}`}
+                  type="button"
+                  onClick={() => setShowArchivedThreads((current) => !current)}
+                >
+                  {showArchivedThreads ? "닫힘" : "열림"}
+                </button>
+              </div>
               <div className="thread-list">
                 {threadItems.map((item) => (
                   <button
                     key={item.id}
-                    className="thread-item"
+                    className={`thread-item ${normalizeThreadId(item.id) === normalizeThreadId(activeThread) ? "active" : ""}`}
                     onClick={() => viewThread(item.id)}
                     disabled={interactionBusy}
+                    type="button"
                   >
                     <div className="thread-title">{item.title || "Untitled"}</div>
                     <div className="thread-sub">{item.id}</div>
                   </button>
                 ))}
+                {threadItems.length ? null : (
+                  <div className="panel-note">
+                    {showArchivedThreads ? "No closed threads." : "No open threads."}
+                  </div>
+                )}
               </div>
             </div>
           </div>

@@ -226,6 +226,24 @@ class CommandRouterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([], result.meta.get("thread_ids"))
         self.assertEqual("No threads found.", result.text)
 
+    async def test_project_select_rejects_running_turn(self):
+        user = user_manager.get(1)
+        user.set_turn("turn-1")
+
+        with patch(
+            "codex.command_router.projects.get",
+            side_effect=lambda key, default=None: (
+                {"default": {"name": "Default", "path": "/tmp/default"}}
+                if key == "projects"
+                else "default"
+            ),
+        ):
+            result = await self.router.route("/project", ["default"], 1)
+
+        self.assertEqual("text", result.kind)
+        self.assertIn("Cannot switch project while a turn is running", result.text)
+        self.assertEqual([], self.codex.calls)
+
     async def test_features_returns_beta_only_with_feature_meta(self):
         self.codex.feature_list_data = [
             {"displayName": None, "name": None, "id": "undo", "stage": "underDevelopment", "enabled": True},

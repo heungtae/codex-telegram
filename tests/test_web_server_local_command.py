@@ -231,11 +231,20 @@ class WebServerLocalCommandTests(unittest.TestCase):
         state_user = user_manager.get(self.session.user_id)
         state_user.selected_project_path = "/tmp/web-workspace"
         state_user.selected_project_key = "default"
+        state.command_router.projects = SimpleNamespace(
+            resolve_effective_project=lambda user_id: {
+                "path": "/tmp/web-workspace",
+                "key": "default",
+                "name": "current workspace",
+            }
+        )
 
         with patch("web.server.get_guardian_settings", return_value={"enabled": True}):
             body = asyncio.run(endpoint(request))
 
         self.assertEqual("/tmp/web-workspace", body["workspace"])
+        self.assertEqual("default", body["project_key"])
+        self.assertEqual("current workspace", body["project_name"])
         self.assertEqual("build", body["collaboration_mode"])
         self.assertEqual(
             [
@@ -244,6 +253,55 @@ class WebServerLocalCommandTests(unittest.TestCase):
             ],
             body["agents"],
         )
+
+    def test_projects_endpoint_includes_structured_items(self):
+        app = create_web_app()
+        endpoint = next(
+            route.endpoint
+            for route in app.routes
+            if getattr(route, "path", None) == "/api/projects" and "GET" in getattr(route, "methods", set())
+        )
+        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+        state_user = user_manager.get(self.session.user_id)
+        state_user.selected_project_key = "default"
+        state.command_router.route = AsyncMock(
+            return_value=SimpleNamespace(kind="projects", text="Projects", meta={"project_keys": ["default"]})
+        )
+        state.command_router.projects = SimpleNamespace(
+            resolve_effective_project=lambda user_id: {"path": "/tmp/web-workspace", "key": "default"},
+            load_project_profiles=lambda: ([{"key": "default", "name": "Default", "path": "/tmp/web-workspace"}], "default"),
+        )
+
+        body = asyncio.run(endpoint(request))
+
+        self.assertEqual(
+            [
+                {
+                    "key": "default",
+                    "name": "Default",
+                    "path": "/tmp/web-workspace",
+                    "selected": True,
+                    "default": True,
+                }
+            ],
+            body["items"],
+        )
+
+    def test_project_select_endpoint_rejects_running_turn(self):
+        app = create_web_app()
+        endpoint = next(
+            route.endpoint
+            for route in app.routes
+            if getattr(route, "path", None) == "/api/projects/select"
+        )
+        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+        user_manager.get(self.session.user_id).set_turn("turn-1")
+
+        with self.assertRaises(HTTPException) as ctx:
+            asyncio.run(endpoint({"target": "default"}, request))
+
+        self.assertEqual(409, ctx.exception.status_code)
+        self.assertEqual("Cannot switch project while a turn is running.", ctx.exception.detail)
 
     def test_read_thread_preserves_plan_items_as_plan_messages(self):
         app = create_web_app()

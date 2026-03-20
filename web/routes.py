@@ -52,6 +52,33 @@ def _server_binding(name: str):
     return getattr(server_module, name)
 
 
+def _project_items_for_user(user_id: int) -> list[dict[str, Any]]:
+    if state.command_router is None or not hasattr(state.command_router, "projects"):
+        return []
+    loader = getattr(state.command_router.projects, "load_project_profiles", None)
+    if not callable(loader):
+        return []
+    profiles, default_key = loader()
+    state_user = user_manager.get(user_id)
+    items: list[dict[str, Any]] = []
+    for profile in profiles:
+        key = profile.get("key")
+        name = profile.get("name")
+        path = profile.get("path")
+        if not isinstance(key, str) or not isinstance(name, str) or not isinstance(path, str):
+            continue
+        items.append(
+            {
+                "key": key,
+                "name": name,
+                "path": path,
+                "selected": state_user.selected_project_key == key,
+                "default": default_key == key,
+            }
+        )
+    return items
+
+
 async def _run_local_feature_toggle(feature_key: str, enabled: bool) -> tuple[bool, str]:
     action = "enable" if enabled else "disable"
     try:
@@ -413,7 +440,9 @@ def register_project_routes(app: FastAPI) -> None:
     @app.get("/api/projects")
     async def list_projects(request: Request) -> dict[str, Any]:
         session = await session_from_request(request)
-        return await route_command("/projects", ["--list"], session.user_id)
+        result = await route_command("/projects", ["--list"], session.user_id)
+        result["items"] = _project_items_for_user(session.user_id)
+        return result
 
     @app.post("/api/projects")
     async def add_project(payload: dict[str, Any], request: Request) -> dict[str, Any]:
@@ -432,6 +461,9 @@ def register_project_routes(app: FastAPI) -> None:
     async def select_project(payload: dict[str, Any], request: Request) -> dict[str, Any]:
         session = await session_from_request(request)
         target = _required_str(payload, "target")
+        state_user = user_manager.get(session.user_id)
+        if state_user.active_turn_id:
+            raise HTTPException(status_code=409, detail="Cannot switch project while a turn is running.")
         return await route_command("/project", [target], session.user_id)
 
 
@@ -488,13 +520,21 @@ def register_system_routes(app: FastAPI) -> None:
         state_user = user_manager.get(session.user_id)
         workspace = state_user.selected_project_path
         project_key = state_user.selected_project_key
-        if (not workspace or not project_key) and state.command_router is not None:
+        project_name = state_user.selected_project_name
+        if not project_name and state.command_router is not None and project_key:
+            for item in _project_items_for_user(session.user_id):
+                if item.get("key") == project_key and isinstance(item.get("name"), str):
+                    project_name = item["name"]
+                    break
+        if (not workspace or not project_key or not project_name) and state.command_router is not None:
             effective = state.command_router.projects.resolve_effective_project(session.user_id)
             if isinstance(effective, dict):
                 if not workspace and isinstance(effective.get("path"), str):
                     workspace = effective["path"]
                 if not project_key and isinstance(effective.get("key"), str):
                     project_key = effective["key"]
+                if not project_name and isinstance(effective.get("name"), str):
+                    project_name = effective["name"]
         guardian = _server_binding("get_guardian_settings")()
         agents = [
             {"name": "default", "enabled": True, "toggleable": False, "configurable": False},
@@ -506,6 +546,7 @@ def register_system_routes(app: FastAPI) -> None:
             "collaboration_mode": mode_label(state_user.collaboration_mode),
             "workspace": workspace,
             "project_key": project_key,
+            "project_name": project_name,
             "agents": agents,
         }
 
