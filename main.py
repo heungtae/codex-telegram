@@ -95,10 +95,24 @@ async def post_init(app: Application | None):
     state.codex_client = await setup_codex()
     state.command_router = CommandRouter(state.codex_client)
     state.approval_guardian = ApprovalGuardianService()
-    configured_level = str(get("forwarding.app_server_event_level", "INFO")).upper()
-    configured_allowlist = get("forwarding.app_server_event_allowlist", [])
-    configured_denylist = get("forwarding.app_server_event_denylist", [])
-    configured_rules = get("forwarding.rules", [])
+    configured_level = str(
+        get(
+            "telegram.forwarding.app_server_event_level",
+            get("forwarding.app_server_event_level", "INFO"),
+        )
+    ).upper()
+    configured_allowlist = get(
+        "telegram.forwarding.app_server_event_allowlist",
+        get("forwarding.app_server_event_allowlist", []),
+    )
+    configured_denylist = get(
+        "telegram.forwarding.app_server_event_denylist",
+        get("forwarding.app_server_event_denylist", []),
+    )
+    configured_rules = get(
+        "telegram.forwarding.rules",
+        get("forwarding.rules", []),
+    )
     level_map = {
         "DEBUG": 10,
         "INFO": 20,

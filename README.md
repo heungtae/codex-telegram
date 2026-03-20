@@ -199,12 +199,12 @@ match_question_any = ["network", "internet", "http", "https", "download", "fetch
 [logging]
 level = "INFO"
 
-[forwarding]
+[telegram.forwarding]
 app_server_event_level = "DEBUG"
 app_server_event_allowlist = ["item/completed", "turn/completed", "turn/failed", "turn/cancelled"]
 app_server_event_denylist = ["item/agentMessage/delta"]
 
-[[forwarding.rules]]
+[[telegram.forwarding.rules]]
  method = "item/completed"
  require_path = "item.type"
  require_equals = "agentMessage"
@@ -219,7 +219,7 @@ send_progress = true
 Guardian rule note:
 - Different matcher groups inside one rule are combined with `AND`.
 - Use separate rules when you want `OR` semantics across conditions like changed-file count, public API changes, DB schema changes, and auth/security changes.
-- Telegram turn end messages use the app-server forwarding allowlist. Keep `turn/completed` enabled there if you want completion notices delivered to Telegram.
+- Telegram turn end messages use `telegram.forwarding.app_server_event_allowlist`. Keep `turn/completed` enabled there if you want completion notices delivered to Telegram.
 
 4. (Optional) Set token via environment variable
 

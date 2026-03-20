@@ -64,7 +64,7 @@ apply_to_methods = ["*"]
 [logging]
 level = "INFO"
 
-[forwarding]
+[telegram.forwarding]
 app_server_event_level = "INFO"
 app_server_event_allowlist = []
 app_server_event_denylist = []

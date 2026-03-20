@@ -43,7 +43,7 @@ Key sections:
 - `[approval.guardian]`: guardian on/off, timeout, fallback policy, explainability, method filters
 - `[[approval.guardian.rules]]`: typed approval policy rules with `action`, `priority`, and command/path/change/quality matchers plus optional legacy text matchers
   - Different matcher groups inside a single rule are combined with `AND`
-- `[forwarding]`: event forwarding level/allowlist/denylist/rules
+- `[telegram.forwarding]`: Telegram event forwarding level/allowlist/denylist/rules
 - `[projects.*]` + `project`: project profiles and default profile
 
 ## Telegram Entry Points
@@ -112,7 +112,7 @@ Current UX behavior:
 - Event-level threshold check (`DEBUG|INFO|WARNING|ERROR|OFF`)
 
 Formatting behavior:
-- Rule-based extraction from `forwarding.rules` if configured
+- Rule-based extraction from `telegram.forwarding.rules` if configured
 - Method-specific formatting for common events
 - Message truncation to fit Telegram limits
 - `threadId` footer appended to forwarded messages

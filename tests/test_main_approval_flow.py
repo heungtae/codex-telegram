@@ -50,15 +50,15 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
     @staticmethod
     def _config_getter(overrides: dict[str, object] | None = None):
         values = {
-            "forwarding.app_server_event_level": "DEBUG",
-            "forwarding.app_server_event_allowlist": [
+            "telegram.forwarding.app_server_event_level": "DEBUG",
+            "telegram.forwarding.app_server_event_allowlist": [
                 "item/completed",
                 "turn/completed",
                 "turn/failed",
                 "turn/cancelled",
             ],
-            "forwarding.app_server_event_denylist": ["item/agentMessage/delta"],
-            "forwarding.rules": [],
+            "telegram.forwarding.app_server_event_denylist": ["item/agentMessage/delta"],
+            "telegram.forwarding.rules": [],
         }
         if overrides:
             values.update(overrides)
@@ -330,7 +330,7 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
              patch(
                  "main.get",
                  side_effect=self._config_getter(
-                     {"forwarding.app_server_event_allowlist": ["item/completed"]}
+                     {"telegram.forwarding.app_server_event_allowlist": ["item/completed"]}
                  ),
              ), \
              patch("main.get_guardian_settings", return_value=guardian_settings):

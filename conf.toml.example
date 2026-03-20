@@ -138,13 +138,13 @@ match_question_any = ["network", "internet", "http", "https", "download", "fetch
 [logging]
 level = "INFO"
 
-[forwarding]
+[telegram.forwarding]
 app_server_event_level = "DEBUG"
 app_server_event_allowlist = ["item/completed", "turn/completed", "turn/failed", "turn/cancelled"]
 app_server_event_denylist = ["item/agentMessage/delta"]
 
 # Example rule:
-[[forwarding.rules]]
+[[telegram.forwarding.rules]]
 method = "item/completed"
 require_path = "item.type"
 require_equals = "agentMessage"
