@@ -15,6 +15,8 @@ from utils.approval_policy import (
     APPROVAL_POLICY_LIST_MATCHER_KEYS,
     APPROVAL_POLICY_TEXT_MATCHER_KEYS,
 )
+from utils.normalize import parse_bool, parse_optional_bool, parse_positive_int
+from utils.web_config import resolve_web_password
 
 _config: dict[str, Any] | None = None
 logger = logging.getLogger("codex-telegram.config")
@@ -87,7 +89,7 @@ def _ensure_config_exists():
     config_path = _get_config_path()
     if not config_path.exists():
         config_path.parent.mkdir(parents=True, exist_ok=True)
-        config_path.write_text(DEFAULT_CONFIG)
+        config_path.write_text(DEFAULT_CONFIG, encoding="utf-8")
 
 
 def _resolve_env_vars(value: Any) -> Any:
@@ -147,36 +149,7 @@ def get_telegram_bot(key: str, default: Any = None) -> Any:
 
 
 def get_web_password() -> str:
-    password_env = str(get("web.password_env", "") or "").strip()
-    if password_env:
-        from_env = os.getenv(password_env, "")
-        if from_env.strip():
-            return from_env
-
-    try:
-        raw = _get_config_path().read_text(encoding="utf-8")
-        parsed = tomllib.loads(raw) if raw.strip() else {}
-    except (OSError, tomllib.TOMLDecodeError):
-        parsed = {}
-
-    web_section = parsed.get("web") if isinstance(parsed, dict) else {}
-    raw_password_env = web_section.get("password_env", "") if isinstance(web_section, dict) else ""
-    raw_password_env = str(raw_password_env or "").strip()
-    if raw_password_env:
-        from_env = os.getenv(raw_password_env, "")
-        if from_env.strip():
-            return from_env
-
-    if password_env and not re.fullmatch(r"[A-Z_][A-Z0-9_]*", password_env):
-        return password_env
-
-    configured = str(get("web.password", "") or "").strip()
-    if configured.startswith("env:"):
-        env_key = configured[4:].strip()
-        if env_key:
-            return str(os.getenv(env_key, "") or "").strip()
-        return ""
-    return configured
+    return resolve_web_password(_get_config_path(), get)
 
 
 def _escape_toml_string(value: str) -> str:
@@ -190,28 +163,11 @@ REMOVED_GUARDIAN_RULE_NAMES = {"block reviewer handoff after unit test failure"}
 
 
 def _normalize_guardian_enabled(value: Any, default: bool = False) -> bool:
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, int):
-        return value != 0
-    if isinstance(value, str):
-        raw = value.strip().lower()
-        if raw in {"1", "true", "yes", "on"}:
-            return True
-        if raw in {"0", "false", "no", "off"}:
-            return False
-    return default
+    return parse_bool(value, default=default)
 
 
 def _normalize_guardian_timeout(value: Any, default: int = 20) -> int:
-    if isinstance(value, bool):
-        return default
-    if isinstance(value, int):
-        return value if value > 0 else default
-    if isinstance(value, str) and value.strip().isdigit():
-        parsed = int(value.strip())
-        return parsed if parsed > 0 else default
-    return default
+    return parse_positive_int(value, default)
 
 
 def _normalize_guardian_failure_policy(value: Any, default: str = "manual_fallback") -> str:
@@ -314,15 +270,7 @@ def _normalize_string_list(value: Any) -> list[str]:
 
 
 def _normalize_optional_bool(value: Any) -> bool | None:
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        raw = value.strip().lower()
-        if raw in {"1", "true", "yes", "on"}:
-            return True
-        if raw in {"0", "false", "no", "off"}:
-            return False
-    return None
+    return parse_optional_bool(value)
 
 
 def _normalize_optional_float(value: Any) -> float | None:
@@ -573,14 +521,7 @@ def get_guardian_settings() -> dict[str, Any]:
 
 
 def _normalize_positive_int(value: Any, default: int) -> int:
-    if isinstance(value, bool):
-        return default
-    if isinstance(value, int):
-        return value if value > 0 else default
-    if isinstance(value, str) and value.strip().isdigit():
-        parsed = int(value.strip())
-        return parsed if parsed > 0 else default
-    return default
+    return parse_positive_int(value, default)
 
 
 def _toml_value(value: Any) -> str:
