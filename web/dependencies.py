@@ -15,17 +15,16 @@ from web.runtime import session_manager
 
 COOKIE_NAME = "codex_web_session"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
-LEGACY_INDEX_HTML_PATH = STATIC_DIR / "index.html"
 FRONTEND_DIST_DIR = STATIC_DIR / "dist"
 FRONTEND_INDEX_HTML_PATH = FRONTEND_DIST_DIR / "index.html"
 
 
 def resolved_assets_dir() -> Path:
-    return FRONTEND_DIST_DIR if FRONTEND_INDEX_HTML_PATH.exists() else STATIC_DIR
+    return FRONTEND_DIST_DIR
 
 
 def resolved_index_html_path() -> Path:
-    return FRONTEND_INDEX_HTML_PATH if FRONTEND_INDEX_HTML_PATH.exists() else LEGACY_INDEX_HTML_PATH
+    return FRONTEND_INDEX_HTML_PATH
 
 
 async def resolve_default_model() -> str | None:
