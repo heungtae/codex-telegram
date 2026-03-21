@@ -844,7 +844,8 @@ select {
 }
 
 .workspace-panel.desktop {
-  height: 100%;
+  margin-top: 12px;
+  height: calc(100% - 12px);
 }
 
 .workspace-tree-badge {

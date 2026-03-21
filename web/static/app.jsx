@@ -588,7 +588,6 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [workspacePanelWidth, setWorkspacePanelWidth] = useState(320);
   const [isResizingWorkspacePanel, setIsResizingWorkspacePanel] = useState(false);
-  const [showArchivedThreads, setShowArchivedThreads] = useState(false);
   const [isMobileLayout, setIsMobileLayout] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth <= MOBILE_BREAKPOINT : false
   );
@@ -692,9 +691,8 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   );
   const renderItems = useMemo(() => groupMessagesForRender(messages), [messages]);
 
-  const loadThreads = async (options = {}) => {
-    const archived = typeof options.archived === "boolean" ? options.archived : showArchivedThreads;
-    const summaries = await api(`/api/threads/summaries?limit=20&offset=0&archived=${archived ? "true" : "false"}`);
+  const loadThreads = async () => {
+    const summaries = await api("/api/threads/summaries?limit=20&offset=0&archived=false");
     const items = Array.isArray(summaries.items) ? summaries.items : [];
     setThreadItems(items);
     const summaryActiveThread = normalizeThreadId(sessionSummary?.active_thread_id);
@@ -900,10 +898,9 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
         setActiveThread("");
       }
       pendingComposerFocusRef.current = true;
-      setShowArchivedThreads(false);
       await loadSessionSummary();
       await loadProjects();
-      await loadThreads({ archived: false });
+      await loadThreads();
     } catch (err) {
       setMessages((prev) => [
         ...prev,
@@ -1554,7 +1551,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   }, [activeToken?.type, activeToken?.query]);
   useEffect(() => {
     loadThreads().catch(() => {});
-  }, [showArchivedThreads]);
+  }, []);
   useEffect(() => {
     if (paletteSelectedIndex < paletteItems.length) {
       return;
@@ -2190,14 +2187,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
             </div>
             <div className="panel threads-panel">
               <div className="panel-head">
-              <h3>Threads</h3>
-                <button
-                  className={`panel-toggle ${showArchivedThreads ? "active" : ""}`}
-                  type="button"
-                  onClick={() => setShowArchivedThreads((current) => !current)}
-                >
-                  {showArchivedThreads ? "닫힘" : "열림"}
-                </button>
+                <h3>Threads</h3>
               </div>
               <div className="thread-list">
                 {threadItems.map((item) => (
@@ -2213,9 +2203,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
                   </button>
                 ))}
                 {threadItems.length ? null : (
-                  <div className="panel-note">
-                    {showArchivedThreads ? "No closed threads." : "No open threads."}
-                  </div>
+                  <div className="panel-note">No open threads.</div>
                 )}
               </div>
             </div>
