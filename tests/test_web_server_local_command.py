@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, patch
 
 from fastapi import HTTPException
 
+from codex import CodexError
 from models import state
 from models.user import user_manager
 from web.runtime import session_manager
@@ -673,6 +674,33 @@ path_glob_any = ["helm/**"]
             ],
             body["messages"],
         )
+
+    def test_thread_read_handles_unmaterialized_thread_include_turns_error(self):
+        app = create_web_app()
+        endpoint = next(
+            route.endpoint
+            for route in app.routes
+            if getattr(route, "path", None) == "/api/threads/read"
+        )
+        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+        state.codex_client.call = AsyncMock(
+            side_effect=CodexError(
+                -32600,
+                "thread thread-raw is not materialized yet; includeTurns is unavailable before first user message",
+            )
+        )
+        state.command_router.route = AsyncMock(
+            return_value=SimpleNamespace(kind="read", text="No messages yet.", meta={"thread_id": "thread-raw"})
+        )
+
+        body = asyncio.run(endpoint(request, "thread-raw"))
+
+        self.assertEqual("read", body["kind"])
+        self.assertEqual(
+            [{"role": "assistant", "text": "No messages yet."}],
+            body["messages"],
+        )
+        state.command_router.route.assert_awaited_once_with("/read", ["thread-raw"], self.session.user_id)
 
     def test_thread_summaries_filters_to_current_project(self):
         app = create_web_app()

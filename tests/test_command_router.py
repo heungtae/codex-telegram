@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import AsyncMock, patch
 
+from codex import CodexError
 from codex.command_router.core import CommandRouter
 from models.user import user_manager
 
@@ -227,6 +228,21 @@ class CommandRouterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("threads", result.kind)
         self.assertEqual([], result.meta.get("thread_ids"))
         self.assertEqual("No threads found.", result.text)
+
+    async def test_read_handles_unmaterialized_thread_include_turns_error(self):
+        self.codex.call = AsyncMock(
+            side_effect=CodexError(
+                -32600,
+                "thread thread-raw is not materialized yet; includeTurns is unavailable before first user message",
+            )
+        )
+
+        result = await self.router.route("/read", ["thread-raw"], 1)
+
+        self.assertEqual("text", result.kind)
+        self.assertIn("ID: thread-raw", result.text)
+        self.assertIn("Turns: 0", result.text)
+        self.assertIn("Preview: (no messages yet)", result.text)
 
     async def test_project_select_rejects_running_turn(self):
         user = user_manager.get(1)

@@ -970,7 +970,14 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
 
   const workspaceContextQuery = (extra = {}) => {
     const params = new URLSearchParams();
-    const threadId = normalizeThreadId(extra.thread_id || activeThread);
+    const explicitThreadId = normalizeThreadId(extra.thread_id || "");
+    let threadId = explicitThreadId || normalizeThreadId(activeThread);
+    if (!explicitThreadId && threadId && activeProjectTabId) {
+      const ownerProjectTabId = threadProjectTabIdByThreadId[threadId];
+      if (ownerProjectTabId && ownerProjectTabId !== activeProjectTabId) {
+        threadId = "";
+      }
+    }
     const projectKey = typeof extra.project_key === "string" && extra.project_key
       ? extra.project_key
       : activeProjectKey;

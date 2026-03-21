@@ -1,6 +1,8 @@
 import os
 from typing import Any
 
+from codex.client import CodexError
+
 from .common import first_text
 from .context import RouterContext
 from .contracts import CommandResult, text_result, usage_result
@@ -418,7 +420,19 @@ class ThreadCommands:
         thread_id, err = self._resolve_thread_arg(args[0], user_id)
         if err:
             return err
-        result = await self.ctx.codex.call("thread/read", {"threadId": thread_id, "includeTurns": True})
+        try:
+            result = await self.ctx.codex.call("thread/read", {"threadId": thread_id, "includeTurns": True})
+        except CodexError as exc:
+            if exc.code == -32600 and "includeTurns is unavailable before first user message" in exc.message:
+                return text_result(
+                    f"Thread: Untitled\n"
+                    f"Status: pending\n"
+                    f"ID: {thread_id}\n"
+                    f"Turns: 0\n"
+                    f"Preview: (no messages yet)",
+                    thread_id=thread_id,
+                )
+            raise
 
         thread = result.get("thread", {})
         name = self._thread_conversation(thread)

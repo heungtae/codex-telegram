@@ -8,6 +8,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 
+from codex import CodexError
 from codex.collaboration_mode import codex_mode_name
 from models import state
 from models.user import user_manager
@@ -460,22 +461,32 @@ def register_thread_routes(app: FastAPI) -> None:
     @app.get("/api/threads/read")
     async def read_thread(request: Request, thread_id: str) -> dict[str, Any]:
         session = await session_from_request(request)
-        if not thread_id.strip():
+        normalized_thread_id = thread_id.strip()
+        if not normalized_thread_id:
             raise HTTPException(status_code=400, detail="thread_id is required")
         await wait_for_codex()
-        result = await state.codex_client.call("thread/read", {"threadId": thread_id.strip(), "includeTurns": True})
+        try:
+            result = await state.codex_client.call(
+                "thread/read", {"threadId": normalized_thread_id, "includeTurns": True}
+            )
+        except CodexError as exc:
+            # Freshly created threads can reject includeTurns before first user input.
+            if exc.code == -32600 and "includeTurns is unavailable before first user message" in exc.message:
+                result = {"thread": {"id": normalized_thread_id}, "turns": []}
+            else:
+                raise
         thread = result.get("thread", {}) if isinstance(result, dict) else {}
         turns = thread_turns(result if isinstance(result, dict) else {}, thread if isinstance(thread, dict) else {})
-        messages = thread_turn_messages(turns, thread_id.strip())
+        messages = thread_turn_messages(turns, normalized_thread_id)
         if not messages:
-            summary = await route_command("/read", [thread_id.strip()], session.user_id)
+            summary = await route_command("/read", [normalized_thread_id], session.user_id)
             return {
                 **summary,
                 "messages": [{"role": "assistant", "text": summary.get("text", "")}],
             }
         return {
             "ok": True,
-            "thread_id": thread_id.strip(),
+            "thread_id": normalized_thread_id,
             "messages": messages,
         }
 
