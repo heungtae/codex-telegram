@@ -731,7 +731,7 @@ def build_event_forwarder(app, config: ForwardingConfig):
         if method == "turn/started" and turn_id and owner_id is not None:
             state_user = user_manager.get(owner_id)
             user_manager.bind_turn(owner_id, turn_id, thread_id)
-            state_user.set_turn(turn_id)
+            state_user.set_turn(turn_id, thread_id)
             actual_mode = normalize_mode_kind((params or {}).get("collaboration_mode_kind") or (params or {}).get("collaborationModeKind"))
             if actual_mode is not None:
                 state_user.set_collaboration_mode(actual_mode)
@@ -745,7 +745,9 @@ def build_event_forwarder(app, config: ForwardingConfig):
                 )
         elif method in {"turn/completed", "turn/failed", "turn/cancelled"} and owner_id is not None:
             state_user = user_manager.get(owner_id)
-            if not turn_id or state_user.active_turn_id == turn_id:
+            if turn_id:
+                state_user.clear_turn(turn_id=turn_id, thread_id=thread_id)
+            elif state_user.active_turn_id:
                 state_user.clear_turn()
 
         file_change = extract_file_change_summary(method, params)

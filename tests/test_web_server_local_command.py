@@ -885,6 +885,34 @@ path_glob_any = ["helm/**"]
         self.assertEqual(self.session.user_id, user_manager.find_user_id_by_turn("turn-new"))
         self.assertEqual("thread-tab-2", user_manager.get_turn_thread("turn-new"))
 
+    def test_chat_messages_retries_with_new_thread_when_requested_thread_is_missing(self):
+        app = create_web_app()
+        endpoint = next(
+            route.endpoint
+            for route in app.routes
+            if getattr(route, "path", None) == "/api/chat/messages"
+        )
+        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+        state_user = user_manager.get(self.session.user_id)
+        state_user.set_collaboration_mode_mask(
+            {"name": "build", "mode": "default", "model": "gpt-5.3-codex", "reasoning_effort": "medium"}
+        )
+        state.codex_client.call = AsyncMock(
+            side_effect=[
+                CodexError(-32600, "thread not found: stale-thread"),
+                {"thread": {"id": "thread-new"}},
+                {"turn": {"id": "turn-new"}},
+            ]
+        )
+
+        body = asyncio.run(endpoint({"text": "hello", "thread_id": "stale-thread"}, request))
+
+        self.assertTrue(body["ok"])
+        self.assertEqual("thread-new", body["thread_id"])
+        self.assertEqual("turn-new", body["turn_id"])
+        self.assertEqual(self.session.user_id, user_manager.find_user_id_by_turn("turn-new"))
+        self.assertEqual("thread-new", user_manager.get_turn_thread("turn-new"))
+
     def test_workspace_tree_status_file_and_diff_endpoints(self):
         with tempfile.TemporaryDirectory(prefix="codex-web-workspace-") as workspace:
             subprocess.run(["git", "init"], cwd=workspace, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

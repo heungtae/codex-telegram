@@ -7,6 +7,7 @@ class UserState:
     user_id: int
     active_thread_id: str | None = None
     active_turn_id: str | None = None
+    active_turn_id_by_thread: dict[str, str] = field(default_factory=dict)
     collaboration_mode: str = "build"
     collaboration_mode_mask: dict[str, Any] | None = None
     selected_project_key: str | None = None
@@ -29,14 +30,39 @@ class UserState:
         self.active_thread_id = thread_id
     
     def clear_thread(self):
+        if isinstance(self.active_thread_id, str) and self.active_thread_id:
+            self.active_turn_id_by_thread.pop(self.active_thread_id, None)
         self.active_thread_id = None
         self.active_turn_id = None
 
-    def set_turn(self, turn_id: str | None):
+    def set_turn(self, turn_id: str | None, thread_id: str | None = None):
         self.active_turn_id = turn_id
+        if isinstance(thread_id, str) and thread_id:
+            if isinstance(turn_id, str) and turn_id:
+                self.active_turn_id_by_thread[thread_id] = turn_id
+            else:
+                self.active_turn_id_by_thread.pop(thread_id, None)
 
-    def clear_turn(self):
+    def clear_turn(self, *, turn_id: str | None = None, thread_id: str | None = None):
+        if isinstance(thread_id, str) and thread_id:
+            removed_turn = self.active_turn_id_by_thread.pop(thread_id, None)
+            if removed_turn and (turn_id is None or turn_id == removed_turn) and self.active_turn_id == removed_turn:
+                self.active_turn_id = None
+            return
+        if isinstance(turn_id, str) and turn_id:
+            stale_threads = [tid for tid, mapped_turn in self.active_turn_id_by_thread.items() if mapped_turn == turn_id]
+            for tid in stale_threads:
+                self.active_turn_id_by_thread.pop(tid, None)
+            if self.active_turn_id == turn_id:
+                self.active_turn_id = None
+            return
+        self.active_turn_id_by_thread.clear()
         self.active_turn_id = None
+
+    def get_turn_for_thread(self, thread_id: str | None) -> str | None:
+        if not isinstance(thread_id, str) or not thread_id:
+            return None
+        return self.active_turn_id_by_thread.get(thread_id)
 
     def set_collaboration_mode(self, mode: str):
         normalized = (mode or "").strip().lower()

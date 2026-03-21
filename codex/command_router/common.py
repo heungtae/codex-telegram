@@ -12,7 +12,7 @@ COMMAND_HELP: dict[str, str] = {
     "/unarchive": "Unarchive a thread. Usage: /unarchive <thread_id>",
     "/compact": "Start thread compaction. Usage: /compact <thread_id>",
     "/rollback": "Rollback turns. Usage: /rollback <n_turns>",
-    "/interrupt": "Interrupt current turn. Usage: /interrupt",
+    "/interrupt": "Interrupt current turn. Usage: /interrupt [thread_id|number]",
     "/review": "Start review. Usage: /review [uncommittedChanges|baseBranch|commit|custom]",
     "/exec": "Execute command in Codex app-server. Usage: /exec <command>",
     "/models": "List available models. Usage: /models",

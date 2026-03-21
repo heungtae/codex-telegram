@@ -484,20 +484,28 @@ class ThreadCommands:
         thread = result.get("thread", {})
         return text_result(f"Rolled back. Thread: {thread.get('id', 'unknown')}")
 
-    async def interrupt(self, user_id: int) -> CommandResult:
+    async def interrupt(self, user_id: int, args: list[str] | None = None) -> CommandResult:
         from models.user import user_manager
 
         state = user_manager.get(user_id)
-        if not state.active_thread_id:
+        target_thread_id = state.active_thread_id
+        if args:
+            resolved_thread_id, err = self._resolve_thread_arg(args[0], user_id)
+            if err:
+                return err
+            target_thread_id = resolved_thread_id
+
+        if not target_thread_id:
             return text_result("No active thread.")
 
-        if not state.active_turn_id:
+        target_turn_id = state.get_turn_for_thread(target_thread_id) or state.active_turn_id
+        if not target_turn_id:
             return text_result("No running turn to interrupt.")
 
         await self.ctx.codex.call(
             "turn/interrupt",
-            {"threadId": state.active_thread_id, "turnId": state.active_turn_id},
+            {"threadId": target_thread_id, "turnId": target_turn_id},
         )
-        state.clear_turn()
+        state.clear_turn(turn_id=target_turn_id, thread_id=target_thread_id)
 
-        return text_result("Turn interrupted.")
+        return text_result("Turn interrupted.", thread_id=target_thread_id, turn_id=target_turn_id)
