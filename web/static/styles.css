@@ -130,16 +130,23 @@ select {
   font-family: "JetBrains Mono", "IBM Plex Mono", ui-monospace, monospace;
 }
 
-.sidebar-top-actions {
+.sidebar-header-row {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
   margin-bottom: 12px;
 }
 
-.sidebar-top-actions .status-pill {
-  margin-right: 0;
-  min-height: 34px;
+.sidebar-header-row .brand {
+  margin-bottom: 0;
+}
+
+.sidebar-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
 }
 
 .menu {
@@ -1975,45 +1982,6 @@ select {
   cursor: not-allowed;
 }
 
-.status-pill,
-.user-pill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  min-height: 36px;
-  padding: 0 12px;
-  font-size: 14px;
-  font-weight: 500;
-  line-height: 1;
-  margin-right: 10px;
-  border: 1px solid var(--border);
-  white-space: nowrap;
-}
-
-.user-pill {
-  gap: 6px;
-  background: rgba(12, 20, 32, 0.86);
-  color: var(--muted);
-}
-
-.user-pill-icon {
-  width: 16px;
-  height: 16px;
-  fill: currentColor;
-  flex: 0 0 auto;
-}
-
-.status-pill.running {
-  color: #bff6ef;
-  background: rgba(23, 115, 102, 0.26);
-  border-color: rgba(57, 199, 187, 0.34);
-}
-
-.status-pill.idle {
-  color: var(--muted);
-  background: rgba(12, 20, 32, 0.86);
-}
 
 .activity-indicator {
   max-width: 860px;
@@ -2433,11 +2401,6 @@ select {
   border-color: rgba(54, 199, 187, 0.28);
 }
 
-:root[data-theme="dark"] .user-pill,
-:root[data-theme="dark"] .status-pill.idle {
-  background: rgba(12, 20, 32, 0.86);
-}
-
 :root[data-theme="dark"] .menu-toggle {
   background: rgba(12, 20, 32, 0.86);
 }
@@ -2498,12 +2461,6 @@ select {
 :root[data-theme="dark"] .workspace-preview-close:hover {
   background: rgba(19, 33, 52, 0.94);
   border-color: rgba(81, 106, 138, 0.8);
-}
-
-:root[data-theme="dark"] .status-pill.running {
-  color: #bff6ef;
-  background: rgba(23, 115, 102, 0.26);
-  border-color: rgba(57, 199, 187, 0.34);
 }
 
 :root[data-theme="dark"] .approval {
