@@ -50,7 +50,14 @@ export default function useWorkspaceBrowser({
     if (!projectTabId) {
       return;
     }
-    removeWorkspaceBucket(projectTabId);
+    setWorkspaceByProjectTabId((prev) => {
+      if (!Object.prototype.hasOwnProperty.call(prev, projectTabId)) {
+        return prev;
+      }
+      const next = { ...prev };
+      delete next[projectTabId];
+      return next;
+    });
   }, []);
 
   const restoreWorkspaceForProjectTab = useCallback((projectTabId) => {

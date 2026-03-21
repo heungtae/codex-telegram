@@ -663,20 +663,29 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   };
 
   const selectProject = async (target, forcedMode = "") => {
-    if (!target || interactionBusy) {
+    const normalizedTarget = typeof target === "string" ? target.trim() : "";
+    if (!normalizedTarget || interactionBusy) {
+      return;
+    }
+    const existingTabForTarget = projectTabs.find((tab) => tab.key === normalizedTarget);
+    if (!forcedMode && existingTabForTarget) {
+      setActiveProjectTabId(existingTabForTarget.id);
+      if (isMobileLayout) {
+        setIsSidebarOpen(false);
+      }
       return;
     }
     const resolvedMode = forcedMode;
     if (!resolvedMode) {
-      setPendingProjectTarget(target);
+      setPendingProjectTarget(normalizedTarget);
       setIsProjectModeModalOpen(true);
       return;
     }
     try {
-      const selectedProject = projectItems.find((item) => item?.key === target);
+      const selectedProject = projectItems.find((item) => item?.key === normalizedTarget);
       let projectTabId = "";
       if (resolvedMode === "replace_current" && activeProjectTabId) {
-        const nextProject = selectedProject || { key: target, name: target, path: "" };
+        const nextProject = selectedProject || { key: normalizedTarget, name: normalizedTarget, path: "" };
         projectTabId = activeProjectTabId;
         setProjectTabs((prev) =>
           prev.map((tab) =>
@@ -704,7 +713,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
         });
       } else {
         projectTabId = upsertProjectTab(
-          selectedProject || { key: target, name: target, path: "" },
+          selectedProject || { key: normalizedTarget, name: normalizedTarget, path: "" },
           { forceNew: resolvedMode === "open_new_tab" }
         );
       }
@@ -718,7 +727,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       await loadSessionSummary();
       await loadProjects();
       await loadThreads({
-        projectKey: target,
+        projectKey: normalizedTarget,
         projectTabId,
         ensureDefaultTab: true,
         resetThreadTabs: resolvedMode === "replace_current",
