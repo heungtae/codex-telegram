@@ -1,19 +1,19 @@
 :root {
-  --bg: #0f1115;
-  --bg-soft: #171b23;
-  --panel: #171b23;
-  --panel-soft: #1c2330;
-  --border: #2a3342;
-  --text: #e6edf6;
-  --muted: #95a3b8;
-  --brand: #13b8a6;
-  --brand-strong: #0e9788;
-  --accent: #4f8cff;
-  --danger: #ff6b7f;
-  --shadow-sm: 0 8px 20px rgba(2, 8, 20, 0.32);
-  --shadow-md: 0 18px 40px rgba(2, 8, 20, 0.44);
+  --bg: #f4f6fb;
+  --bg-soft: #eaf3ff;
+  --panel: #ffffff;
+  --panel-soft: #f7faff;
+  --border: #d2dbe8;
+  --text: #132033;
+  --muted: #5f7289;
+  --brand: #0b8c82;
+  --brand-strong: #066e67;
+  --accent: #2563eb;
+  --danger: #b42318;
+  --shadow-sm: 0 6px 18px rgba(16, 24, 40, 0.06);
+  --shadow-md: 0 14px 28px rgba(16, 24, 40, 0.1);
   --radius-lg: 12px;
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 :root[data-theme="dark"] {
@@ -160,7 +160,7 @@ select {
   padding: 10px 12px;
   border: 1px solid var(--border);
   background: var(--panel);
-  border-radius: 10px;
+  border-radius: 0;
   text-align: left;
   cursor: pointer;
 }
@@ -168,7 +168,7 @@ select {
 .panel {
   background: linear-gradient(180deg, rgba(25, 32, 45, 0.96) 0%, rgba(20, 27, 38, 0.98) 100%);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: 0;
   padding: 12px;
   margin-bottom: 12px;
   box-shadow: var(--shadow-sm);
@@ -239,7 +239,7 @@ select {
   border: 1px solid var(--border);
   background: rgba(18, 32, 48, 0.92);
   color: var(--text);
-  border-radius: 999px;
+  border-radius: 0;
   font: inherit;
   cursor: pointer;
   line-height: 1;
@@ -280,11 +280,13 @@ select {
   text-align: left;
   border: 1px solid var(--border);
   background: var(--panel-soft);
-  border-radius: 10px;
+  border-radius: 0;
   padding: 9px 10px;
   margin-bottom: 6px;
   cursor: pointer;
   transition: all 0.16s ease;
+  position: relative;
+  overflow: hidden;
 }
 
 .thread-item:hover {
@@ -300,8 +302,9 @@ select {
 }
 
 .thread-item.active {
-  border-color: rgba(46, 196, 182, 0.44);
-  background: rgba(20, 99, 92, 0.34);
+  border-color: #3f556f;
+  background: rgba(21, 34, 49, 0.9);
+  box-shadow: inset 0 -3px 0 0 var(--accent);
 }
 
 .project-list {
@@ -340,7 +343,7 @@ select {
   align-items: center;
   justify-content: center;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: 0;
   font-size: 11px;
   line-height: 1;
 }
@@ -387,7 +390,7 @@ select {
   display: flex;
   justify-content: space-between;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 0;
   padding: 7px 8px;
   font-size: 12px;
   width: 100%;
@@ -444,7 +447,7 @@ select {
   border: 1px solid var(--border);
   background: rgba(18, 32, 48, 0.92);
   color: var(--text);
-  border-radius: 8px;
+  border-radius: 0;
   width: 36px;
   min-width: 36px;
   padding: 0;
@@ -500,7 +503,7 @@ select {
 .agent-status-chip {
   display: inline-flex;
   align-items: center;
-  border-radius: 999px;
+  border-radius: 0;
   padding: 4px 8px;
   font-size: 11px;
   border: 1px solid var(--border);
@@ -533,7 +536,7 @@ select {
 
 .agent-field select {
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 0;
   padding: 9px 10px;
   background: #0e1724;
   color: var(--text);
@@ -543,7 +546,7 @@ select {
   min-height: 240px;
   resize: vertical;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 0;
   padding: 10px 12px;
   background: #0e1724;
   color: var(--text);
@@ -571,7 +574,7 @@ select {
   border: 1px solid var(--border);
   background: rgba(18, 32, 48, 0.92);
   color: var(--text);
-  border-radius: 10px;
+  border-radius: 0;
   cursor: pointer;
   transition: transform 0.12s ease, background 0.16s ease, border-color 0.16s ease;
 }
@@ -611,7 +614,7 @@ select {
 
 .agent-settings-summary {
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 0;
   background: rgba(14, 23, 36, 0.92);
   padding: 10px 12px;
 }
@@ -659,7 +662,7 @@ select {
   border: 1px solid var(--border);
   background: rgba(18, 32, 48, 0.92);
   color: var(--text);
-  border-radius: 999px;
+  border-radius: 0;
   padding: 7px 12px;
   cursor: pointer;
   font-size: 12px;
@@ -723,7 +726,7 @@ select {
   max-width: 720px;
   min-height: 0;
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: 0;
   background: linear-gradient(180deg, rgba(13, 22, 35, 0.96) 0%, rgba(10, 18, 30, 0.98) 100%);
   box-shadow: var(--shadow-sm);
   display: flex;
@@ -758,10 +761,10 @@ select {
 
 .project-tab-chip,
 .turn-tab-chip {
-  border: 1px solid var(--border);
+  border: 0;
   background: rgba(11, 20, 32, 0.86);
   color: var(--muted);
-  border-radius: 8px;
+  border-radius: 0;
   white-space: nowrap;
   max-width: 280px;
   text-overflow: ellipsis;
@@ -769,16 +772,18 @@ select {
   display: inline-flex;
   align-items: center;
   box-shadow: none;
+  position: relative;
+  overflow: hidden;
 }
 
 .project-tab-chip {
-  height: 22px;
-  padding: 0 4px 0 9px;
+  height: 30px;
+  padding: 0 6px 0 10px;
 }
 
 .turn-tab-chip {
-  height: 20px;
-  padding: 0 4px 0 7px;
+  height: 30px;
+  padding: 0 6px 0 9px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -808,12 +813,12 @@ select {
 
 .project-tab-close,
 .turn-tab-close {
-  border: 1px solid var(--border);
-  background: rgba(18, 32, 48, 0.92);
+  border: 0;
+  background: transparent;
   color: var(--muted);
-  width: 14px;
-  height: 14px;
-  border-radius: 5px;
+  width: 18px;
+  height: 18px;
+  border-radius: 0;
   cursor: pointer;
   line-height: 1;
   margin-left: 4px;
@@ -824,23 +829,22 @@ select {
 
 .project-tab-close svg,
 .turn-tab-close svg {
-  width: 9px;
-  height: 9px;
+  width: 10px;
+  height: 10px;
   fill: currentColor;
 }
 
 .project-tab-close:hover,
 .turn-tab-close:hover {
   background: rgba(24, 44, 67, 0.96);
-  border-color: #3f556f;
   color: var(--text);
 }
 
 .project-tab-chip.active,
 .turn-tab-chip.active {
-  background: rgba(20, 99, 92, 0.34);
-  border-color: rgba(46, 196, 182, 0.44);
-  color: #bff6ef;
+  background: rgba(21, 34, 49, 0.92);
+  color: #d6e8ff;
+  box-shadow: inset 0 -3px 0 0 var(--accent);
 }
 
 .project-tab-chip.state-running {
@@ -882,7 +886,7 @@ select {
 .turn-tab-dot {
   width: 8px;
   height: 8px;
-  border-radius: 999px;
+  border-radius: 0;
   background: #48b46f;
   display: inline-block;
 }
@@ -893,11 +897,11 @@ select {
 }
 
 .turn-tab-add {
-  width: 20px;
-  height: 20px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: rgba(18, 32, 48, 0.92);
+  width: 30px;
+  height: 30px;
+  border-radius: 0;
+  border: 0;
+  background: transparent;
   color: var(--text);
   cursor: pointer;
   display: inline-flex;
@@ -907,19 +911,18 @@ select {
 
 .turn-tab-add:hover {
   background: rgba(24, 44, 67, 0.96);
-  border-color: #3f556f;
 }
 
-.turn-tab-add svg {
-  width: 10px;
-  height: 10px;
-  fill: currentColor;
+.tab-action-icon {
+  width: 12px;
+  height: 12px;
+  display: block;
 }
 
 .notify-toggle {
   height: 34px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 0;
   background: var(--panel-soft);
   color: var(--text);
   display: inline-flex;
@@ -964,7 +967,7 @@ select {
 .modal-card {
   width: min(520px, calc(100vw - 32px));
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 0;
   background: var(--panel);
   box-shadow: var(--shadow-md);
   padding: 16px;
@@ -1032,7 +1035,7 @@ select {
 .workspace-refresh {
   width: 36px;
   height: 36px;
-  border-radius: 12px;
+  border-radius: 0;
   border: 1px solid var(--border);
   background: rgba(12, 20, 32, 0.86);
   color: var(--text);
@@ -1069,7 +1072,7 @@ select {
   min-width: 100%;
   border: 0;
   background: transparent;
-  border-radius: 10px;
+  border-radius: 0;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1129,7 +1132,7 @@ select {
   flex: 0 0 auto;
   min-width: 24px;
   padding: 2px 6px;
-  border-radius: 999px;
+  border-radius: 0;
   background: rgba(32, 45, 63, 0.86);
   font-size: 11px;
   font-weight: 700;
@@ -1190,7 +1193,7 @@ select {
   min-height: 0;
   max-height: min(48vh, 720px);
   border: 1px solid rgba(68, 101, 140, 0.82);
-  border-radius: 18px;
+  border-radius: 0;
   background: linear-gradient(180deg, rgba(13, 22, 35, 0.96) 0%, rgba(10, 18, 30, 0.98) 100%);
   box-shadow: var(--shadow-sm);
   overflow: hidden;
@@ -1234,7 +1237,7 @@ select {
   border: 1px solid var(--border);
   background: rgba(12, 20, 32, 0.86);
   color: var(--text);
-  border-radius: 999px;
+  border-radius: 0;
   padding: 7px 12px;
   cursor: pointer;
 }
@@ -1305,7 +1308,7 @@ select {
   min-height: 280px;
   max-height: calc(100vh - 120px);
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: 0;
   background: linear-gradient(180deg, rgba(17, 27, 41, 0.96) 0%, rgba(22, 33, 50, 0.96) 100%);
   box-shadow: var(--shadow-md);
   padding: 14px;
@@ -1325,7 +1328,7 @@ select {
   border: 1px solid var(--border);
   background: rgba(18, 32, 48, 0.92);
   color: var(--text);
-  border-radius: 999px;
+  border-radius: 0;
   padding: 6px 12px;
   cursor: pointer;
   font-size: 12px;
@@ -1364,7 +1367,7 @@ select {
   justify-content: flex-start;
   align-items: center;
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: 0;
   box-shadow: var(--shadow-sm);
 }
 
@@ -1390,7 +1393,7 @@ select {
   border: 1px solid var(--border);
   background: rgba(12, 20, 32, 0.86);
   color: var(--text);
-  border-radius: 999px;
+  border-radius: 0;
   min-height: 34px;
   padding: 0 10px;
   cursor: pointer;
@@ -1508,7 +1511,7 @@ select {
   position: relative;
   max-width: min(78%, 760px);
   padding: 10px 14px 11px;
-  border-radius: 10px;
+  border-radius: 0;
   white-space: pre-wrap;
   box-shadow: 0 6px 16px rgba(2, 8, 20, 0.3);
   border: 1px solid var(--border);
@@ -1574,7 +1577,7 @@ select {
   color: var(--muted);
   background: rgba(27, 36, 52, 0.9);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: 0;
   padding: 9px 14px;
   box-shadow: none;
 }
@@ -1595,7 +1598,7 @@ select {
 .msg.system.kind-plan_checklist {
   max-width: min(72%, 640px);
   text-align: left;
-  border-radius: 10px;
+  border-radius: 0;
   padding: 12px 14px;
   background: rgba(26, 38, 56, 0.92);
   border-color: rgba(138, 177, 214, 0.45);
@@ -1615,7 +1618,7 @@ select {
 .file-change-panel {
   width: 100%;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 0;
   background: linear-gradient(180deg, rgba(22, 30, 44, 0.96) 0%, rgba(18, 25, 37, 0.98) 100%);
   box-shadow: 0 10px 22px rgba(2, 8, 20, 0.28);
   overflow: hidden;
@@ -1684,7 +1687,7 @@ select {
 
 .file-change-code {
   margin: 12px 0 0;
-  border-radius: 14px;
+  border-radius: 0;
   border: 1px solid rgba(125, 156, 196, 0.3);
   background: #0d1726;
   color: #dce9fb;
@@ -1746,7 +1749,7 @@ select {
   border: 1px solid var(--border);
   background: rgba(10, 17, 28, 0.82);
   padding: 10px;
-  border-radius: var(--radius-lg);
+  border-radius: 0;
   box-shadow: var(--shadow-sm);
 }
 
@@ -1767,7 +1770,7 @@ select {
   display: flex;
   align-items: stretch;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 0;
   background: #0e1724;
   transition: border-color 0.16s ease, box-shadow 0.16s ease;
 }
@@ -1832,7 +1835,7 @@ select {
   resize: none;
   overflow: auto;
   border: 0;
-  border-radius: 0 9px 9px 0;
+  border-radius: 0;
   padding: 8px 10px;
   background: transparent;
   color: var(--text);
@@ -1853,7 +1856,7 @@ select {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
+  border-radius: 0;
   cursor: pointer;
   transition: transform 0.12s ease, box-shadow 0.16s ease, background 0.16s ease, border-color 0.16s ease;
   flex: 0 0 auto;
@@ -1914,7 +1917,7 @@ select {
   overflow: auto;
   border: 1px solid var(--border);
   background: #0e1724;
-  border-radius: 10px;
+  border-radius: 0;
   box-shadow: var(--shadow-md);
   padding: 6px;
   z-index: 20;
@@ -1925,7 +1928,7 @@ select {
   text-align: left;
   border: 1px solid transparent;
   background: transparent;
-  border-radius: 8px;
+  border-radius: 0;
   padding: 8px 10px;
   cursor: pointer;
 }
@@ -1940,7 +1943,7 @@ select {
   border: none;
   background: var(--brand);
   color: #fff;
-  border-radius: 12px;
+  border-radius: 0;
   padding: 12px 14px;
   cursor: pointer;
   box-shadow: 0 8px 18px rgba(11, 140, 130, 0.24);
@@ -1957,7 +1960,7 @@ select {
   border: 1px solid var(--border);
   background: #172538;
   color: var(--text);
-  border-radius: 12px;
+  border-radius: 0;
   padding: 12px 14px;
   cursor: pointer;
   transition: all 0.16s ease;
@@ -1972,7 +1975,7 @@ select {
   border: 1px solid rgba(255, 139, 128, 0.35);
   background: rgba(115, 37, 40, 0.22);
   color: var(--danger);
-  border-radius: 10px;
+  border-radius: 0;
   padding: 8px 10px;
   cursor: pointer;
 }
@@ -2003,7 +2006,7 @@ select {
   margin: 0 auto;
   padding: 8px 12px;
   border: 1px solid rgba(43, 63, 84, 0.95);
-  border-radius: 999px;
+  border-radius: 0;
   background: rgba(10, 17, 28, 0.94);
   box-shadow: 0 14px 28px rgba(2, 8, 18, 0.3);
   backdrop-filter: blur(8px);
@@ -2021,7 +2024,7 @@ select {
   width: min(420px, 92vw);
   background: linear-gradient(180deg, rgba(18, 28, 42, 0.96) 0%, rgba(10, 18, 30, 0.96) 100%);
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: 0;
   padding: 20px;
   box-shadow: var(--shadow-md);
 }
@@ -2051,7 +2054,7 @@ select {
   width: 100%;
   margin-bottom: 10px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 0;
   padding: 10px;
   background: #0e1724;
   color: var(--text);
@@ -2074,7 +2077,7 @@ select {
   border: 1px solid rgba(228, 174, 69, 0.4);
   background: rgba(56, 40, 14, 0.88);
   backdrop-filter: blur(8px);
-  border-radius: 10px;
+  border-radius: 0;
   padding: 10px;
   box-shadow: 0 10px 24px rgba(14, 9, 2, 0.28);
 }
@@ -2147,15 +2150,14 @@ select {
 :root[data-theme="dark"] .project-tab-chip,
 :root[data-theme="dark"] .turn-tab-chip {
   background: rgba(9, 16, 26, 0.74);
-  border-color: #2b3f54;
   color: var(--muted);
 }
 
 :root[data-theme="dark"] .project-tab-chip.active,
 :root[data-theme="dark"] .turn-tab-chip.active {
-  background: rgba(20, 99, 92, 0.34);
-  border-color: rgba(57, 199, 187, 0.34);
-  color: #c5fff6;
+  background: rgba(21, 34, 49, 0.92);
+  color: #d6e8ff;
+  box-shadow: inset 0 -3px 0 0 var(--accent);
 }
 
 :root[data-theme="dark"] .agent-settings-btn,
@@ -2185,15 +2187,13 @@ select {
 :root[data-theme="dark"] .project-tab-close,
 :root[data-theme="dark"] .turn-tab-close,
 :root[data-theme="dark"] .turn-tab-add {
-  background: #172538;
-  border-color: #2b3f54;
+  background: transparent;
 }
 
 :root[data-theme="dark"] .project-tab-close:hover,
 :root[data-theme="dark"] .turn-tab-close:hover,
 :root[data-theme="dark"] .turn-tab-add:hover {
   background: #1c3048;
-  border-color: #496581;
 }
 
 :root[data-theme="dark"] .agent-settings-card {
@@ -2468,6 +2468,55 @@ select {
   background: rgba(56, 40, 14, 0.88);
   box-shadow: 0 10px 24px rgba(14, 9, 2, 0.28);
 }
+
+:root[data-theme="light"] body {
+  background:
+    radial-gradient(circle at 15% 5%, #d7f3ef 0, transparent 35%),
+    radial-gradient(circle at 85% 0%, #dce9ff 0, transparent 38%),
+    var(--bg);
+}
+
+:root[data-theme="light"] .sidebar {
+  background: linear-gradient(180deg, #eaf2fd 0%, #eef5ff 40%, #f3f7ff 100%);
+  box-shadow: inset -1px 0 0 rgba(210, 219, 232, 0.65);
+}
+
+:root[data-theme="light"] .panel,
+:root[data-theme="light"] .workspace-panel,
+:root[data-theme="light"] .workspace-preview-panel,
+:root[data-theme="light"] .composer,
+:root[data-theme="light"] .chat {
+  background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+}
+
+:root[data-theme="light"] .thread-item,
+:root[data-theme="light"] .project-tab-chip,
+:root[data-theme="light"] .turn-tab-chip,
+:root[data-theme="light"] .menu-toggle,
+:root[data-theme="light"] .theme-toggle,
+:root[data-theme="light"] .notify-toggle,
+:root[data-theme="light"] .turn-tab-add,
+:root[data-theme="light"] .project-tab-close,
+:root[data-theme="light"] .turn-tab-close,
+:root[data-theme="light"] .composer-new-chat {
+  background: #f1f6ff;
+  color: #1d2d42;
+}
+
+:root[data-theme="light"] .project-tab-chip.active,
+:root[data-theme="light"] .turn-tab-chip.active,
+:root[data-theme="light"] .thread-item.active {
+  background: #eaf1ff;
+  color: #1a3150;
+  box-shadow: inset 0 -3px 0 0 var(--accent);
+}
+
+:root[data-theme="light"] .project-tab-close,
+:root[data-theme="light"] .turn-tab-close,
+:root[data-theme="light"] .turn-tab-add {
+  background: transparent;
+}
+
 
 @media (max-width: 1200px) {
   .workspace-layout {

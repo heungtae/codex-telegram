@@ -239,22 +239,6 @@ function NotificationIcon({ enabled }) {
   );
 }
 
-function CloseTabIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M6.7 5.3 12 10.6l5.3-5.3 1.4 1.4-5.3 5.3 5.3 5.3-1.4 1.4-5.3-5.3-5.3 5.3-1.4-1.4 5.3-5.3-5.3-5.3z" />
-    </svg>
-  );
-}
-
-function AddTabIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z" />
-    </svg>
-  );
-}
-
 function NewChatIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -2665,15 +2649,6 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
               </div>
             </div>
             <div className="panel">
-              <h3>Current Thread</h3>
-              <div className="meta-line"><b>ThreadId</b></div>
-              <div className="meta-value">{activeThread || sessionSummary?.active_thread_id || "-"}</div>
-              <div className="meta-line"><b>Project</b></div>
-              <div className="meta-value">{currentProjectLabel}</div>
-              <div className="meta-line"><b>Workspace</b></div>
-              <div className="meta-value">{activeProjectTab?.path || sessionSummary?.workspace || "-"}</div>
-            </div>
-            <div className="panel">
               <h3>Enabled Agents</h3>
               <div className="thread-list agent-list">
                 {(sessionSummary?.agents || []).map((agent) => (
@@ -3012,7 +2987,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
                   aria-label={`Close project ${tab.name}`}
                   title="Close project tab"
                 >
-                  <CloseTabIcon />
+                  <img className="tab-action-icon" src="/assets/icons-tab-close.svg" alt="" aria-hidden="true" />
                 </button>
               </div>
             ))}
@@ -3041,7 +3016,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
                   aria-label={`Close thread ${tab.title || tab.id}`}
                   title="Close thread tab"
                 >
-                  <CloseTabIcon />
+                  <img className="tab-action-icon" src="/assets/icons-tab-close.svg" alt="" aria-hidden="true" />
                 </button>
               </div>
             ))}
@@ -3053,7 +3028,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
               title="Add thread tab"
               disabled={!activeProjectKey || interactionBusy}
             >
-              <AddTabIcon />
+              <img className="tab-action-icon" src="/assets/icons-tab-add.svg" alt="" aria-hidden="true" />
             </button>
           </div>
         </div>
