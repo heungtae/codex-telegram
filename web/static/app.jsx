@@ -239,6 +239,22 @@ function NotificationIcon({ enabled }) {
   );
 }
 
+function CloseTabIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6.7 5.3 12 10.6l5.3-5.3 1.4 1.4-5.3 5.3 5.3 5.3-1.4 1.4-5.3-5.3-5.3 5.3-1.4-1.4 5.3-5.3-5.3-5.3z" />
+    </svg>
+  );
+}
+
+function AddTabIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z" />
+    </svg>
+  );
+}
+
 function NewChatIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -2622,6 +2638,33 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
         {!isDesktopSidebarCollapsed ? (
           <div className="sidebar-content">
             <div className="brand">Codex Web</div>
+            <div className="sidebar-top-actions">
+              <button
+                className={`notify-toggle icon-only ${turnNotificationEnabled ? "on" : "off"}`}
+                type="button"
+                onClick={() => {
+                  const next = !turnNotificationEnabled;
+                  setTurnNotificationEnabled(next);
+                  persistTurnNotificationEnabled(next);
+                }}
+                aria-label="Toggle turn completion notification"
+                title={`Turn notification ${turnNotificationEnabled ? "on" : "off"}`}
+              >
+                <NotificationIcon enabled={turnNotificationEnabled} />
+              </button>
+              <button
+                className="theme-toggle icon-only"
+                type="button"
+                onClick={onToggleTheme}
+                aria-label="Toggle theme"
+                title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+              >
+                <ThemeIcon theme={theme} />
+              </button>
+              <span className={`status-pill ${interactionBusy ? "running" : "idle"}`}>
+                {interactionBusy ? "Running" : "Ready"}
+              </span>
+            </div>
             <div className="panel">
               <h3>Current Thread</h3>
               <div className="meta-line"><b>ThreadId</b></div>
@@ -2858,77 +2901,20 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
         <div className="sidebar-resizer sidebar-resizer-collapsed" aria-hidden="true" />
       )}
       <main className="main">
-        <div className="topbar">
-          <div className="topbar-leading">
-            {isMobileLayout ? (
-              <button
-                className="menu-toggle"
-                type="button"
-                onClick={() => setIsSidebarOpen((current) => !current)}
-                aria-label="Toggle navigation menu"
-                aria-expanded={isSidebarOpen}
-                aria-controls="app-sidebar"
-              >
-                <MenuIcon />
-                <span>Menu</span>
-              </button>
-            ) : null}
-            {!isMobileLayout ? (
-              <div className="user-pill" aria-label={`User ${me.username}`}>
-                <svg className="user-pill-icon" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-3.33 0-6 1.79-6 4v1h12v-1c0-2.21-2.67-4-6-4Z" />
-                </svg>
-                <span>{me.username}</span>
-              </div>
-            ) : null}
-            {isMobileLayout ? (
-              <button
-                className={`notify-toggle mobile ${turnNotificationEnabled ? "on" : "off"}`}
-                type="button"
-                onClick={() => {
-                  const next = !turnNotificationEnabled;
-                  setTurnNotificationEnabled(next);
-                  persistTurnNotificationEnabled(next);
-                }}
-                aria-label="Toggle turn completion notification"
-                title={`Turn notification ${turnNotificationEnabled ? "on" : "off"}`}
-              >
-                <NotificationIcon enabled={turnNotificationEnabled} />
-              </button>
-            ) : null}
+        {isMobileLayout ? (
+          <div className="mobile-main-actions">
+            <button
+              className="menu-toggle icon-only"
+              type="button"
+              onClick={() => setIsSidebarOpen((current) => !current)}
+              aria-label="Toggle navigation menu"
+              aria-expanded={isSidebarOpen}
+              aria-controls="app-sidebar"
+            >
+              <MenuIcon />
+            </button>
           </div>
-          {!isMobileLayout ? (
-            <div className="topbar-actions">
-              <button
-                className={`notify-toggle ${turnNotificationEnabled ? "on" : "off"}`}
-                type="button"
-                onClick={() => {
-                  const next = !turnNotificationEnabled;
-                  setTurnNotificationEnabled(next);
-                  persistTurnNotificationEnabled(next);
-                }}
-                aria-label="Toggle turn completion notification"
-                title={`Turn notification ${turnNotificationEnabled ? "on" : "off"}`}
-              >
-                <NotificationIcon enabled={turnNotificationEnabled} />
-                <span>{turnNotificationEnabled ? "Notify On" : "Notify Off"}</span>
-              </button>
-              <button
-                className="theme-toggle"
-                type="button"
-                onClick={onToggleTheme}
-                aria-label="Toggle theme"
-                title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
-              >
-                <ThemeIcon theme={theme} />
-                <span>{theme === "dark" ? "Dark" : "Light"}</span>
-              </button>
-              <span className={`status-pill ${interactionBusy ? "running" : "idle"}`}>
-                {interactionBusy ? "Running" : "Ready"}
-              </span>
-            </div>
-          ) : null}
-        </div>
+        ) : null}
         {floatingAgentSettings === "guardian" ? (
           <div className="agent-floating-settings">
             <div className="agent-floating-settings-card">
@@ -3027,7 +3013,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
                   aria-label={`Close project ${tab.name}`}
                   title="Close project tab"
                 >
-                  ×
+                  <CloseTabIcon />
                 </button>
               </div>
             ))}
@@ -3056,7 +3042,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
                   aria-label={`Close thread ${tab.title || tab.id}`}
                   title="Close thread tab"
                 >
-                  ×
+                  <CloseTabIcon />
                 </button>
               </div>
             ))}
@@ -3068,7 +3054,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
               title="Add thread tab"
               disabled={!activeProjectKey || interactionBusy}
             >
-              +
+              <AddTabIcon />
             </button>
           </div>
         </div>

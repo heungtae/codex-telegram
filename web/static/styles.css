@@ -130,6 +130,18 @@ select {
   font-family: "JetBrains Mono", "IBM Plex Mono", ui-monospace, monospace;
 }
 
+.sidebar-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.sidebar-top-actions .status-pill {
+  margin-right: 0;
+  min-height: 34px;
+}
+
 .menu {
   display: flex;
   flex-direction: column;
@@ -725,7 +737,7 @@ select {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin: 8px 0 0;
+  margin: 0;
 }
 
 .project-tabs-row,
@@ -1332,8 +1344,9 @@ select {
 .topbar-leading {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
+  flex-wrap: wrap;
 }
 
 .topbar {
@@ -1341,11 +1354,24 @@ select {
   backdrop-filter: blur(8px);
   padding: 10px 14px;
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
+}
+
+.topbar-brand {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 2px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #9ed7ff;
+  font-family: "JetBrains Mono", "IBM Plex Mono", ui-monospace, monospace;
 }
 
 .menu-toggle,
@@ -1374,6 +1400,26 @@ select {
   height: 16px;
   fill: currentColor;
   flex: 0 0 auto;
+}
+
+.notify-toggle.icon-only,
+.theme-toggle.icon-only,
+.menu-toggle.icon-only {
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  padding: 0;
+  justify-content: center;
+}
+
+.notify-toggle.icon-only span,
+.theme-toggle.icon-only span,
+.menu-toggle.icon-only span {
+  display: none;
+}
+
+.mobile-main-actions {
+  display: none;
 }
 
 .menu-toggle:hover {
@@ -2561,8 +2607,14 @@ select {
     flex-wrap: wrap;
   }
 
+  .mobile-main-actions {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+
   .top-tabs {
-    margin: 8px 0 0;
+    margin: 0;
   }
 
   .project-tab-main {
@@ -2579,7 +2631,7 @@ select {
   }
 
   .topbar-leading {
-    justify-content: space-between;
+    justify-content: flex-start;
   }
 
   .main {
@@ -2609,7 +2661,7 @@ select {
   }
 
   .topbar-actions {
-    justify-content: space-between;
+    justify-content: flex-start;
   }
 
   .login-card-head {
