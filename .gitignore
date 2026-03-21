@@ -207,3 +207,7 @@ codex_source
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Web frontend (Vite)
+web/frontend/node_modules/
+web/frontend/.vite/

@@ -44,13 +44,22 @@ If `telegram.enabled = false`, Telegram token is not required.
 python3 -m pip install -r requirements.txt
 ```
 
-2. Prepare the config file
+2. Build Web frontend assets
+
+```bash
+cd web/frontend
+npm install
+npm run build
+cd ../..
+```
+
+3. Prepare the config file
 
 ```bash
 cp conf.toml.example conf.toml
 ```
 
-3. Edit `conf.toml`
+4. Edit `conf.toml`
 
 - `projects.<key>.path`: absolute path to the target project
 - `users.allowed_ids`: list of Telegram user IDs allowed to use this bot

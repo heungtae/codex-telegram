@@ -17,10 +17,9 @@ from utils.local_command import resolve_command_cwd
 from utils.normalize import clamp_int, parse_bool
 from web.dependencies import (
     COOKIE_NAME,
-    INDEX_HTML_PATH,
-    asset_url,
     mode_label,
     require_turn_collaboration_mode,
+    resolved_index_html_path,
     route_command,
     session_from_request,
     wait_for_codex,
@@ -143,9 +142,7 @@ def register_web_routes(app: FastAPI) -> None:
 def register_auth_routes(app: FastAPI) -> None:
     @app.get("/")
     async def index() -> HTMLResponse:
-        html = INDEX_HTML_PATH.read_text(encoding="utf-8")
-        html = html.replace("/assets/styles.css", asset_url("styles.css"))
-        html = html.replace("/assets/app.jsx", asset_url("app.jsx"))
+        html = resolved_index_html_path().read_text(encoding="utf-8")
         return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
     @app.post("/api/auth/login")
@@ -368,9 +365,11 @@ def register_thread_routes(app: FastAPI) -> None:
         return await route_command("/rollback", [str(turns)], session.user_id)
 
     @app.post("/api/threads/interrupt")
-    async def interrupt_thread(request: Request) -> dict[str, Any]:
+    async def interrupt_thread(request: Request, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         session = await session_from_request(request)
-        return await route_command("/interrupt", [], session.user_id)
+        target_thread_id = str((payload or {}).get("thread_id", "")).strip()
+        args = [target_thread_id] if target_thread_id else []
+        return await route_command("/interrupt", args, session.user_id)
 
     @app.post("/api/chat/messages")
     async def send_message(payload: dict[str, Any], request: Request) -> dict[str, Any]:
@@ -398,7 +397,8 @@ def register_thread_routes(app: FastAPI) -> None:
             }
 
         thread_id = payload_thread_id or state_user.active_thread_id
-        if not thread_id:
+
+        async def start_thread_for_context() -> str:
             start_params: dict[str, Any] = {}
             if payload_project_key:
                 project = _project_profile_by_key(payload_project_key)
@@ -408,14 +408,19 @@ def register_thread_routes(app: FastAPI) -> None:
             start_result = await state.codex_client.call("thread/start", start_params)
             started_thread = (start_result.get("thread") or {}).get("id") if isinstance(start_result, dict) else None
             if isinstance(started_thread, str) and started_thread:
-                thread_id = started_thread
-                user_manager.bind_thread_owner(session.user_id, thread_id)
+                user_manager.bind_thread_owner(session.user_id, started_thread)
                 if payload_project_key:
-                    user_manager.bind_thread_project(thread_id, payload_project_key)
-            else:
-                await state.command_router.route("/start", [], session.user_id)
-                state_user = user_manager.get(session.user_id)
-                thread_id = state_user.active_thread_id
+                    user_manager.bind_thread_project(started_thread, payload_project_key)
+                return started_thread
+            await state.command_router.route("/start", [], session.user_id)
+            refreshed_state_user = user_manager.get(session.user_id)
+            fallback_thread_id = refreshed_state_user.active_thread_id
+            if not fallback_thread_id:
+                raise HTTPException(status_code=500, detail="failed to create or resolve active thread")
+            return fallback_thread_id
+
+        if not thread_id:
+            thread_id = await start_thread_for_context()
         if not thread_id:
             raise HTTPException(status_code=500, detail="failed to create or resolve active thread")
 
@@ -437,11 +442,26 @@ def register_thread_routes(app: FastAPI) -> None:
             codex_mode_name(state_user.collaboration_mode),
             collaboration_mode,
         )
-        result = await state.codex_client.call("turn/start", params)
+        try:
+            result = await state.codex_client.call("turn/start", params)
+        except CodexError as exc:
+            if (
+                exc.code == -32600
+                and "thread not found" in str(exc.message or "").lower()
+                and payload_thread_id
+            ):
+                thread_id = await start_thread_for_context()
+                if payload_project_key:
+                    user_manager.bind_thread_project(thread_id, payload_project_key)
+                user_manager.bind_thread_owner(session.user_id, thread_id)
+                params["threadId"] = thread_id
+                result = await state.codex_client.call("turn/start", params)
+            else:
+                raise
         turn = result.get("turn", {}) if isinstance(result, dict) else {}
         turn_id = turn.get("id") if isinstance(turn, dict) else None
         if isinstance(turn_id, str) and turn_id:
-            state_user.set_turn(turn_id)
+            state_user.set_turn(turn_id, thread_id)
             user_manager.bind_turn(session.user_id, turn_id, thread_id)
 
         await event_hub.publish_event(

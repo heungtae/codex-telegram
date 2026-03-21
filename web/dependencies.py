@@ -15,7 +15,17 @@ from web.runtime import session_manager
 
 COOKIE_NAME = "codex_web_session"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
-INDEX_HTML_PATH = STATIC_DIR / "index.html"
+LEGACY_INDEX_HTML_PATH = STATIC_DIR / "index.html"
+FRONTEND_DIST_DIR = STATIC_DIR / "dist"
+FRONTEND_INDEX_HTML_PATH = FRONTEND_DIST_DIR / "index.html"
+
+
+def resolved_assets_dir() -> Path:
+    return FRONTEND_DIST_DIR if FRONTEND_INDEX_HTML_PATH.exists() else STATIC_DIR
+
+
+def resolved_index_html_path() -> Path:
+    return FRONTEND_INDEX_HTML_PATH if FRONTEND_INDEX_HTML_PATH.exists() else LEGACY_INDEX_HTML_PATH
 
 
 async def resolve_default_model() -> str | None:
@@ -83,15 +93,6 @@ async def require_turn_collaboration_mode(state_user) -> dict[str, Any]:
             detail=f"Failed to resolve collaboration mode payload for {mode_label(state_user.collaboration_mode)}. Turn was not started.",
         )
     return payload
-
-
-def asset_url(filename: str) -> str:
-    asset_path = STATIC_DIR / filename
-    try:
-        version = int(asset_path.stat().st_mtime)
-    except OSError:
-        version = 0
-    return f"/assets/{filename}?v={version}"
 
 
 async def wait_for_codex() -> None:

@@ -1,4 +1,4 @@
-const { useCallback, useEffect, useMemo, useRef, useState } = React;
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const AGENT_CONFIG_DEFS = {
   guardian: {
@@ -3819,4 +3819,5 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+
+export default App;
