@@ -36,7 +36,7 @@ from web.thread_history import (
 from web.workspace import (
     git_is_repo,
     read_text_file,
-    resolve_workspace_for_user,
+    resolve_workspace_for_context,
     resolve_workspace_path,
     workspace_file_diff,
     workspace_git_status,
@@ -77,6 +77,30 @@ def _project_items_for_user(user_id: int) -> list[dict[str, Any]]:
             }
         )
     return items
+
+
+def _project_profile_by_key(project_key: str) -> dict[str, str] | None:
+    if state.command_router is None or not hasattr(state.command_router, "projects"):
+        return None
+    loader = getattr(state.command_router.projects, "load_project_profiles", None)
+    if not callable(loader):
+        return None
+    profiles, _default_key = loader()
+    for profile in profiles:
+        if not isinstance(profile, dict):
+            continue
+        key = profile.get("key")
+        name = profile.get("name")
+        path = profile.get("path")
+        if (
+            key == project_key
+            and isinstance(name, str)
+            and name
+            and isinstance(path, str)
+            and path
+        ):
+            return {"key": key, "name": name, "path": path}
+    return None
 
 
 async def _run_local_feature_toggle(feature_key: str, enabled: bool) -> tuple[bool, str]:
@@ -242,6 +266,7 @@ def register_thread_routes(app: FastAPI) -> None:
         archived: bool = False,
         offset: int = 0,
         limit: int = 20,
+        project_key: str = "",
     ) -> dict[str, Any]:
         session = await session_from_request(request)
         await wait_for_codex()
@@ -255,7 +280,9 @@ def register_thread_routes(app: FastAPI) -> None:
         if not isinstance(rows, list):
             rows = []
         state_user = user_manager.get(session.user_id)
-        current_profile_key = state_user.selected_project_key
+        current_profile_key = project_key.strip()
+        if not current_profile_key:
+            current_profile_key = state_user.selected_project_key or ""
         if not current_profile_key:
             default_key = get("project")
             if isinstance(default_key, str) and default_key.strip():
@@ -351,33 +378,49 @@ def register_thread_routes(app: FastAPI) -> None:
 
         await wait_for_codex()
         state_user = user_manager.get(session.user_id)
+        payload_thread_id = str(payload.get("thread_id", "")).strip()
+        payload_project_key = str(payload.get("project_key", "")).strip()
         if text.startswith("!"):
-            workspace = state_user.selected_project_path
-            if not workspace and state.command_router is not None:
-                effective = state.command_router.projects.resolve_effective_project(session.user_id)
-                if isinstance(effective, dict) and isinstance(effective.get("path"), str):
-                    workspace = effective["path"]
+            workspace = resolve_workspace_for_context(
+                session.user_id,
+                thread_id=payload_thread_id or None,
+                project_key=payload_project_key or None,
+                ensure_exists=False,
+            )
             output = await _server_binding("run_bang_command")(text, workspace)
             return {
                 "ok": True,
                 "local_command": True,
-                "thread_id": state_user.active_thread_id,
+                "thread_id": payload_thread_id or state_user.active_thread_id,
                 "workspace": resolve_command_cwd(workspace),
                 "output": output,
             }
 
-        thread_id = str(payload.get("thread_id", "")).strip() or state_user.active_thread_id
+        thread_id = payload_thread_id or state_user.active_thread_id
         if not thread_id:
-            await state.command_router.route("/start", [], session.user_id)
-            state_user = user_manager.get(session.user_id)
-            thread_id = state_user.active_thread_id
+            start_params: dict[str, Any] = {}
+            if payload_project_key:
+                project = _project_profile_by_key(payload_project_key)
+                if project is None:
+                    raise HTTPException(status_code=404, detail="project_key was not found")
+                start_params["cwd"] = project["path"]
+            start_result = await state.codex_client.call("thread/start", start_params)
+            started_thread = (start_result.get("thread") or {}).get("id") if isinstance(start_result, dict) else None
+            if isinstance(started_thread, str) and started_thread:
+                thread_id = started_thread
+                user_manager.bind_thread_owner(session.user_id, thread_id)
+                if payload_project_key:
+                    user_manager.bind_thread_project(thread_id, payload_project_key)
+            else:
+                await state.command_router.route("/start", [], session.user_id)
+                state_user = user_manager.get(session.user_id)
+                thread_id = state_user.active_thread_id
         if not thread_id:
             raise HTTPException(status_code=500, detail="failed to create or resolve active thread")
-        if state_user.active_thread_id != thread_id:
-            await state.command_router.route("/resume", [thread_id], session.user_id)
-            state_user = user_manager.get(session.user_id)
-        if state_user.active_turn_id:
-            raise HTTPException(status_code=409, detail="a turn is already running")
+
+        if payload_project_key:
+            user_manager.bind_thread_project(thread_id, payload_project_key)
+        user_manager.bind_thread_owner(session.user_id, thread_id)
 
         params = {
             "threadId": thread_id,
@@ -398,6 +441,7 @@ def register_thread_routes(app: FastAPI) -> None:
         turn_id = turn.get("id") if isinstance(turn, dict) else None
         if isinstance(turn_id, str) and turn_id:
             state_user.set_turn(turn_id)
+            user_manager.bind_turn(session.user_id, turn_id, thread_id)
 
         await event_hub.publish_event(
             session.user_id,
@@ -465,6 +509,30 @@ def register_project_routes(app: FastAPI) -> None:
         if state_user.active_turn_id:
             raise HTTPException(status_code=409, detail="Cannot switch project while a turn is running.")
         return await route_command("/project", [target], session.user_id)
+
+    @app.post("/api/projects/open-thread")
+    async def open_project_thread(payload: dict[str, Any], request: Request) -> dict[str, Any]:
+        session = await session_from_request(request)
+        project_key = _required_str(payload, "project_key")
+        await wait_for_codex()
+        project = _project_profile_by_key(project_key)
+        if project is None:
+            raise HTTPException(status_code=404, detail="project_key was not found")
+
+        result = await state.codex_client.call("thread/start", {"cwd": project["path"]})
+        thread = result.get("thread", {}) if isinstance(result, dict) else {}
+        thread_id = thread.get("id") if isinstance(thread, dict) else None
+        if not isinstance(thread_id, str) or not thread_id:
+            raise HTTPException(status_code=502, detail="failed to open thread for project")
+
+        user_manager.bind_thread_owner(session.user_id, thread_id)
+        user_manager.bind_thread_project(thread_id, project["key"])
+        return {
+            "thread_id": thread_id,
+            "project_key": project["key"],
+            "project_name": project["name"],
+            "workspace": project["path"],
+        }
 
 
 def register_system_routes(app: FastAPI) -> None:
@@ -557,10 +625,16 @@ def register_workspace_routes(app: FastAPI) -> None:
         request: Request,
         path: str = "",
         depth: int = 1,
+        thread_id: str = "",
+        project_key: str = "",
     ) -> dict[str, Any]:
         session = await session_from_request(request)
         await wait_for_codex()
-        workspace = resolve_workspace_for_user(session.user_id)
+        workspace = resolve_workspace_for_context(
+            session.user_id,
+            thread_id=thread_id.strip() or None,
+            project_key=project_key.strip() or None,
+        )
         rel_path, _target = resolve_workspace_path(workspace, path, expect_dir=True)
         items = workspace_tree_items(workspace, rel_path, depth)
         return {
@@ -570,10 +644,14 @@ def register_workspace_routes(app: FastAPI) -> None:
         }
 
     @app.get("/api/workspace/status")
-    async def workspace_status(request: Request) -> dict[str, Any]:
+    async def workspace_status(request: Request, thread_id: str = "", project_key: str = "") -> dict[str, Any]:
         session = await session_from_request(request)
         await wait_for_codex()
-        workspace = resolve_workspace_for_user(session.user_id)
+        workspace = resolve_workspace_for_context(
+            session.user_id,
+            thread_id=thread_id.strip() or None,
+            project_key=project_key.strip() or None,
+        )
         is_git = await git_is_repo(workspace)
         items = await workspace_git_status(workspace)
         return {
@@ -583,10 +661,14 @@ def register_workspace_routes(app: FastAPI) -> None:
         }
 
     @app.get("/api/workspace/file")
-    async def workspace_file(request: Request, path: str) -> dict[str, Any]:
+    async def workspace_file(request: Request, path: str, thread_id: str = "", project_key: str = "") -> dict[str, Any]:
         session = await session_from_request(request)
         await wait_for_codex()
-        workspace = resolve_workspace_for_user(session.user_id)
+        workspace = resolve_workspace_for_context(
+            session.user_id,
+            thread_id=thread_id.strip() or None,
+            project_key=project_key.strip() or None,
+        )
         rel_path, abs_path = resolve_workspace_path(workspace, path, expect_dir=False)
         content, is_binary, truncated = read_text_file(abs_path)
         return {
@@ -599,10 +681,14 @@ def register_workspace_routes(app: FastAPI) -> None:
         }
 
     @app.get("/api/workspace/diff")
-    async def workspace_diff(request: Request, path: str) -> dict[str, Any]:
+    async def workspace_diff(request: Request, path: str, thread_id: str = "", project_key: str = "") -> dict[str, Any]:
         session = await session_from_request(request)
         await wait_for_codex()
-        workspace = resolve_workspace_for_user(session.user_id)
+        workspace = resolve_workspace_for_context(
+            session.user_id,
+            thread_id=thread_id.strip() or None,
+            project_key=project_key.strip() or None,
+        )
         rel_path, abs_path = resolve_workspace_path(workspace, path, allow_missing=True)
         is_git = await git_is_repo(workspace)
         diff, status = await workspace_file_diff(workspace, rel_path, abs_path)
@@ -620,10 +706,16 @@ def register_workspace_routes(app: FastAPI) -> None:
         request: Request,
         prefix: str = "",
         limit: int = 200,
+        thread_id: str = "",
+        project_key: str = "",
     ) -> dict[str, Any]:
         session = await session_from_request(request)
         await wait_for_codex()
-        workspace = resolve_workspace_for_user(session.user_id)
+        workspace = resolve_workspace_for_context(
+            session.user_id,
+            thread_id=thread_id.strip() or None,
+            project_key=project_key.strip() or None,
+        )
         items = workspace_suggestions(workspace, prefix, max(1, min(1000, limit)))
         return {
             "workspace": workspace,

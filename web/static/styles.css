@@ -710,6 +710,228 @@ select {
   align-self: stretch;
 }
 
+.top-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 14px 0;
+}
+
+.project-tabs-row,
+.turn-tabs-row {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.project-tab-chip,
+.turn-tab-chip {
+  border: 1px solid var(--border-muted);
+  background: var(--surface-2);
+  color: var(--text-main);
+  border-radius: 10px;
+  white-space: nowrap;
+  max-width: 280px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+}
+
+.project-tab-chip {
+  height: 36px;
+  padding: 0 4px 0 10px;
+}
+
+.turn-tab-chip {
+  height: 32px;
+  padding: 0 4px 0 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.project-tab-main,
+.turn-tab-main {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  height: 100%;
+  min-width: 0;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+
+.project-tab-main {
+  max-width: 220px;
+}
+
+.turn-tab-main {
+  gap: 8px;
+  max-width: 240px;
+}
+
+.project-tab-close,
+.turn-tab-close {
+  border: 0;
+  background: transparent;
+  color: var(--text-sub);
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  cursor: pointer;
+  line-height: 1;
+  font-size: 14px;
+  margin-left: 4px;
+}
+
+.project-tab-close:hover,
+.turn-tab-close:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--text-main);
+}
+
+.project-tab-chip.active,
+.turn-tab-chip.active {
+  border-color: var(--accent);
+  background: color-mix(in oklab, var(--accent) 14%, var(--surface-2));
+}
+
+.project-tab-chip.state-running {
+  border-left: 3px solid #4da3ff;
+}
+
+.project-tab-chip.state-unread {
+  border-left: 3px solid #48b46f;
+}
+
+.project-tab-chip.state-failed {
+  border-left: 3px solid #dd5d67;
+}
+
+.project-tab-chip.state-cancelled {
+  border-left: 3px solid #e39e4f;
+}
+
+.turn-tab-chip.state-running {
+  border-left: 3px solid #4da3ff;
+}
+
+.turn-tab-chip.state-completed {
+  border-left: 3px solid #48b46f;
+}
+
+.turn-tab-chip.state-failed {
+  border-left: 3px solid #dd5d67;
+}
+
+.turn-tab-chip.state-cancelled {
+  border-left: 3px solid #e39e4f;
+}
+
+.turn-tab-chip.unread {
+  font-weight: 600;
+}
+
+.turn-tab-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #48b46f;
+  display: inline-block;
+}
+
+.turn-tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.turn-tab-add {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  border: 1px dashed var(--border-muted);
+  background: var(--surface-2);
+  color: var(--text-main);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.notify-toggle {
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--text-main);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  cursor: pointer;
+}
+
+.notify-toggle svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.notify-toggle.on {
+  border-color: #48b46f;
+}
+
+.notify-toggle.mobile {
+  width: 36px;
+  min-width: 36px;
+  padding: 0;
+  justify-content: center;
+}
+
+.notify-toggle.mobile span {
+  display: none;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 14, 26, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1200;
+  padding: 16px;
+}
+
+.modal-card {
+  width: min(520px, calc(100vw - 32px));
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+  padding: 16px;
+}
+
+.modal-title {
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 8px;
+}
+
+.modal-desc {
+  color: var(--text-sub);
+  margin-bottom: 14px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .workspace-panel-resizer {
   width: 6px;
   position: absolute;
@@ -2290,6 +2512,18 @@ select {
   .topbar {
     gap: 10px;
     flex-wrap: wrap;
+  }
+
+  .top-tabs {
+    margin: 8px 6px 0;
+  }
+
+  .project-tab-main {
+    max-width: 150px;
+  }
+
+  .turn-tab-main {
+    max-width: 170px;
   }
 
   .topbar-leading,

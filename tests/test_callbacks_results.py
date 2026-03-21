@@ -17,6 +17,8 @@ class CallbackResultTests(unittest.IsolatedAsyncioTestCase):
         user_manager._users.clear()
         user_manager._thread_owners.clear()
         user_manager._thread_projects.clear()
+        user_manager._turn_owners.clear()
+        user_manager._turn_threads.clear()
 
     def tearDown(self):
         state.command_router = self.original_router

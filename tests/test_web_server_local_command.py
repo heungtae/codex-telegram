@@ -20,6 +20,9 @@ class WebServerLocalCommandTests(unittest.TestCase):
         self.original_command_router = state.command_router
         user_manager._users.clear()
         user_manager._thread_owners.clear()
+        user_manager._thread_projects.clear()
+        user_manager._turn_owners.clear()
+        user_manager._turn_threads.clear()
         state.codex_ready.set()
         state.codex_client = SimpleNamespace(call=AsyncMock())
         state.command_router = SimpleNamespace(
@@ -302,6 +305,40 @@ class WebServerLocalCommandTests(unittest.TestCase):
 
         self.assertEqual(409, ctx.exception.status_code)
         self.assertEqual("Cannot switch project while a turn is running.", ctx.exception.detail)
+
+    def test_projects_open_thread_creates_thread_without_switching_selected_project(self):
+        app = create_web_app()
+        endpoint = next(
+            route.endpoint
+            for route in app.routes
+            if getattr(route, "path", None) == "/api/projects/open-thread"
+        )
+        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+        state_user = user_manager.get(self.session.user_id)
+        state_user.selected_project_key = "default"
+        state_user.selected_project_name = "Default"
+        state_user.selected_project_path = "/tmp/default-workspace"
+        state.command_router.projects = SimpleNamespace(
+            resolve_effective_project=lambda user_id: {"path": "/tmp/default-workspace", "key": "default"},
+            load_project_profiles=lambda: (
+                [
+                    {"key": "default", "name": "Default", "path": "/tmp/default-workspace"},
+                    {"key": "other", "name": "Other", "path": "/tmp/other-workspace"},
+                ],
+                "default",
+            ),
+        )
+        state.codex_client.call = AsyncMock(return_value={"thread": {"id": "thread-other-1"}})
+
+        body = asyncio.run(endpoint({"project_key": "other"}, request))
+
+        self.assertEqual("thread-other-1", body["thread_id"])
+        self.assertEqual("other", body["project_key"])
+        self.assertEqual("Other", body["project_name"])
+        self.assertEqual("/tmp/other-workspace", body["workspace"])
+        self.assertEqual("default", state_user.selected_project_key)
+        self.assertEqual(self.session.user_id, user_manager.find_user_id_by_thread("thread-other-1"))
+        self.assertEqual("other", user_manager.get_thread_project("thread-other-1"))
 
     def test_read_thread_preserves_plan_items_as_plan_messages(self):
         app = create_web_app()
@@ -720,6 +757,47 @@ path_glob_any = ["helm/**"]
             body["items"],
         )
 
+    def test_thread_summaries_accepts_project_key_query_parameter(self):
+        app = create_web_app()
+        endpoint = next(
+            route.endpoint
+            for route in app.routes
+            if getattr(route, "path", None) == "/api/threads/summaries"
+        )
+        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+        state_user = user_manager.get(self.session.user_id)
+        state_user.selected_project_key = "default"
+        user_manager.bind_thread_project("t-1", "default")
+        user_manager.bind_thread_project("t-2", "other")
+        state.codex_client.call = AsyncMock(
+            side_effect=[
+                {
+                    "data": [
+                        {"id": "t-1", "title": "first", "createdAt": "2026-03-02T00:00:00Z"},
+                        {"id": "t-2", "title": "second", "createdAt": "2026-03-02T00:00:01Z"},
+                    ]
+                },
+                {
+                    "thread": {"id": "t-2"},
+                    "turns": [{"input": [{"type": "text", "text": "second user request"}]}],
+                },
+            ]
+        )
+
+        body = asyncio.run(endpoint(request, archived=False, offset=0, limit=30, project_key="other"))
+
+        self.assertEqual(
+            [
+                {
+                    "id": "t-2",
+                    "title": "second user request",
+                    "created_at": "2026-03-02T00:00:01Z",
+                    "active": False,
+                }
+            ],
+            body["items"],
+        )
+
     def test_start_thread_returns_router_meta(self):
         app = create_web_app()
         endpoint = next(
@@ -742,6 +820,42 @@ path_glob_any = ["helm/**"]
         self.assertEqual("Thread started: thread-new", body["text"])
         self.assertEqual({"thread_id": "thread-new"}, body["meta"])
         state.command_router.route.assert_awaited_once_with("/start", [], self.session.user_id)
+
+    def test_chat_messages_allows_turn_start_even_if_another_turn_is_marked_active(self):
+        app = create_web_app()
+        endpoint = next(
+            route.endpoint
+            for route in app.routes
+            if getattr(route, "path", None) == "/api/chat/messages"
+        )
+        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+        state_user = user_manager.get(self.session.user_id)
+        state_user.active_turn_id = "turn-running-on-another-tab"
+        state_user.set_collaboration_mode_mask(
+            {"name": "build", "mode": "default", "model": "gpt-5.3-codex", "reasoning_effort": "medium"}
+        )
+        state.codex_client.call = AsyncMock(return_value={"turn": {"id": "turn-new"}})
+
+        body = asyncio.run(endpoint({"text": "hello", "thread_id": "thread-tab-2"}, request))
+
+        self.assertTrue(body["ok"])
+        state.codex_client.call.assert_awaited_once_with(
+            "turn/start",
+            {
+                "threadId": "thread-tab-2",
+                "collaborationMode": {
+                    "mode": "default",
+                    "settings": {
+                        "model": "gpt-5.3-codex",
+                        "reasoning_effort": "medium",
+                        "developer_instructions": None,
+                    },
+                },
+                "input": [{"type": "text", "text": "hello"}],
+            },
+        )
+        self.assertEqual(self.session.user_id, user_manager.find_user_id_by_turn("turn-new"))
+        self.assertEqual("thread-tab-2", user_manager.get_turn_thread("turn-new"))
 
     def test_workspace_tree_status_file_and_diff_endpoints(self):
         with tempfile.TemporaryDirectory(prefix="codex-web-workspace-") as workspace:
@@ -786,6 +900,41 @@ path_glob_any = ["helm/**"]
             self.assertEqual("M", diff_body["status"])
             self.assertIn("-before", diff_body["diff"])
             self.assertIn("+after", diff_body["diff"])
+
+    def test_workspace_endpoints_use_project_or_thread_context(self):
+        with tempfile.TemporaryDirectory(prefix="codex-web-workspace-default-") as default_workspace, \
+             tempfile.TemporaryDirectory(prefix="codex-web-workspace-other-") as other_workspace:
+            with open(os.path.join(default_workspace, "default.txt"), "w", encoding="utf-8") as handle:
+                handle.write("default\n")
+            with open(os.path.join(other_workspace, "other.txt"), "w", encoding="utf-8") as handle:
+                handle.write("other\n")
+
+            state_user = user_manager.get(self.session.user_id)
+            state_user.selected_project_path = default_workspace
+            state_user.selected_project_key = "default"
+            state.command_router.projects = SimpleNamespace(
+                resolve_effective_project=lambda user_id: {"path": default_workspace, "key": "default"},
+                load_project_profiles=lambda: (
+                    [
+                        {"key": "default", "name": "Default", "path": default_workspace},
+                        {"key": "other", "name": "Other", "path": other_workspace},
+                    ],
+                    "default",
+                ),
+            )
+            user_manager.bind_thread_project("thread-other", "other")
+
+            app = create_web_app()
+            request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+            tree_endpoint = next(route.endpoint for route in app.routes if getattr(route, "path", None) == "/api/workspace/tree")
+
+            project_scoped = asyncio.run(tree_endpoint(request, path="", depth=1, project_key="other"))
+            thread_scoped = asyncio.run(tree_endpoint(request, path="", depth=1, thread_id="thread-other"))
+
+            self.assertEqual(other_workspace, project_scoped["workspace"])
+            self.assertEqual(["other.txt"], [item["name"] for item in project_scoped["items"]])
+            self.assertEqual(other_workspace, thread_scoped["workspace"])
+            self.assertEqual(["other.txt"], [item["name"] for item in thread_scoped["items"]])
 
     def test_workspace_file_endpoint_rejects_parent_escape(self):
         with tempfile.TemporaryDirectory(prefix="codex-web-workspace-") as workspace:

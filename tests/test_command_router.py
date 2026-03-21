@@ -48,6 +48,8 @@ class CommandRouterTests(unittest.IsolatedAsyncioTestCase):
         user_manager._users.clear()
         user_manager._thread_owners.clear()
         user_manager._thread_projects.clear()
+        user_manager._turn_owners.clear()
+        user_manager._turn_threads.clear()
         self.codex = FakeCodex()
         self.router = CommandRouter(self.codex)
 

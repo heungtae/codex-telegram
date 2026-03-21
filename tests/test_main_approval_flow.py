@@ -33,6 +33,8 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
         user_manager._users.clear()
         user_manager._thread_owners.clear()
         user_manager._thread_projects.clear()
+        user_manager._turn_owners.clear()
+        user_manager._turn_threads.clear()
         event_hub._pending_approvals.clear()
         event_hub._subscribers.clear()
 
@@ -44,6 +46,8 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
         user_manager._users.clear()
         user_manager._thread_owners.clear()
         user_manager._thread_projects.clear()
+        user_manager._turn_owners.clear()
+        user_manager._turn_threads.clear()
         event_hub._pending_approvals.clear()
         event_hub._subscribers.clear()
 
@@ -113,6 +117,8 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
                 user_manager._users.clear()
                 user_manager._thread_owners.clear()
                 user_manager._thread_projects.clear()
+                user_manager._turn_owners.clear()
+                user_manager._turn_threads.clear()
 
                 client, approvals = await self._dispatch_policy_request(action=action, submit_result=False)
 
@@ -443,6 +449,45 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(1, kwargs["chat_id"])
         self.assertIn("Turn completed", kwargs["text"])
         self.assertIn("reply_markup", kwargs)
+
+    async def test_turn_cancelled_publishes_turn_cancelled_event_to_web(self):
+        client = _DummyCodexClient(submit_result=True)
+        router = SimpleNamespace(projects=SimpleNamespace(resolve_effective_project=Mock(return_value=None)))
+        guardian = SimpleNamespace(stop=AsyncMock())
+        bot = SimpleNamespace(send_message=AsyncMock())
+        telegram_app = SimpleNamespace(bot=bot)
+        guardian_settings = {
+            "enabled": False,
+            "apply_to_methods": ["*"],
+            "failure_policy": "manual_fallback",
+            "explainability": "decision_only",
+            "timeout_seconds": 5,
+            "rules": [],
+        }
+
+        with patch("main.setup_codex", new=AsyncMock(return_value=client)), \
+             patch("main.CommandRouter", return_value=router), \
+             patch("main.ApprovalGuardianService", return_value=guardian), \
+             patch("main.get", side_effect=lambda key, default=None: default), \
+             patch("main.get_guardian_settings", return_value=guardian_settings):
+            await app_main.post_init(telegram_app)
+            user_manager.bind_thread_owner(1, "thread-1")
+            queue = await event_hub.subscribe(1)
+            try:
+                await client._any_handler(
+                    "turn/cancelled",
+                    {
+                        "threadId": "thread-1",
+                        "turnId": "turn-1",
+                    },
+                )
+                first = await queue.get()
+            finally:
+                await event_hub.unsubscribe(1, queue)
+
+        self.assertEqual("turn_cancelled", first["type"])
+        self.assertEqual("thread-1", first["thread_id"])
+        self.assertEqual("turn-1", first["turn_id"])
 
     async def test_plan_delta_is_forwarded_to_web_only(self):
         client = _DummyCodexClient(submit_result=True)

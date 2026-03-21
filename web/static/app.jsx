@@ -23,6 +23,8 @@ const AGENT_CONFIG_DEFS = {
 };
 
 const THEME_STORAGE_KEY = "codex-web-theme";
+const PROJECT_CLICK_MODE_STORAGE_KEY = "codex-web-project-click-mode";
+const TURN_NOTIFICATION_STORAGE_KEY = "codex-web-turn-notification-enabled";
 const DEFAULT_THEME = "dark";
 const GUARDIAN_RULES_TOML_FALLBACK = "# Loading Guardian rules...\n";
 const EVENT_PANEL_KINDS = new Set(["file_change", "reasoning", "web_search", "image_generation"]);
@@ -58,6 +60,52 @@ function persistTheme(theme) {
   }
   try {
     window.localStorage.setItem(THEME_STORAGE_KEY, normalizeTheme(theme));
+  } catch (_err) {}
+}
+
+function readProjectClickMode() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+  try {
+    const value = window.localStorage.getItem(PROJECT_CLICK_MODE_STORAGE_KEY) || "";
+    return value === "open_new_tab" || value === "replace_current" ? value : "";
+  } catch (_err) {
+    return "";
+  }
+}
+
+function persistProjectClickMode(mode) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.setItem(PROJECT_CLICK_MODE_STORAGE_KEY, mode);
+  } catch (_err) {}
+}
+
+function readTurnNotificationEnabled() {
+  if (typeof window === "undefined") {
+    return true;
+  }
+  try {
+    const value = window.localStorage.getItem(TURN_NOTIFICATION_STORAGE_KEY);
+    if (value === "0") {
+      return false;
+    }
+    if (value === "1") {
+      return true;
+    }
+  } catch (_err) {}
+  return true;
+}
+
+function persistTurnNotificationEnabled(enabled) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.setItem(TURN_NOTIFICATION_STORAGE_KEY, enabled ? "1" : "0");
   } catch (_err) {}
 }
 
@@ -171,6 +219,22 @@ function StopIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M7 7h10v10H7z" />
+    </svg>
+  );
+}
+
+function NotificationIcon({ enabled }) {
+  if (!enabled) {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M18 16v-5a6 6 0 1 0-12 0v5l-2 2v1h16v-1zM9.6 20a2.4 2.4 0 0 0 4.8 0" />
+        <path d="M5 5l14 14" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M18 16v-5a6 6 0 1 0-12 0v5l-2 2v1h16v-1zM9.6 20a2.4 2.4 0 0 0 4.8 0" />
     </svg>
   );
 }
@@ -333,6 +397,20 @@ function basename(value) {
   }
   const parts = normalized.split("/");
   return parts[parts.length - 1] || normalized;
+}
+
+function buildProjectTabId(projectKey) {
+  return projectKey ? `project:${projectKey}` : "";
+}
+
+function createEmptyWorkspaceState() {
+  return {
+    tree: {},
+    expandedDirs: { "": true },
+    status: { is_git: false, items: {} },
+    error: "",
+    preview: null,
+  };
 }
 
 function statusClassName(code) {
@@ -554,6 +632,12 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   const WORKSPACE_PANEL_BREAKPOINT = 1200;
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
+  const [projectTabs, setProjectTabs] = useState([]);
+  const [activeProjectTabId, setActiveProjectTabId] = useState("");
+  const [threadTabsByProjectTabId, setThreadTabsByProjectTabId] = useState({});
+  const [activeThreadTabIdByProjectTabId, setActiveThreadTabIdByProjectTabId] = useState({});
+  const [threadProjectTabIdByThreadId, setThreadProjectTabIdByThreadId] = useState({});
+  const [workspaceByProjectTabId, setWorkspaceByProjectTabId] = useState({});
   const [activeThread, setActiveThread] = useState("");
   const [threadItems, setThreadItems] = useState([]);
   const [projectItems, setProjectItems] = useState([]);
@@ -601,6 +685,11 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   const [workspaceStatus, setWorkspaceStatus] = useState({ is_git: false, items: {} });
   const [workspaceError, setWorkspaceError] = useState("");
   const [workspacePreview, setWorkspacePreview] = useState(null);
+  const [projectClickMode, setProjectClickMode] = useState(() => readProjectClickMode());
+  const [isProjectModeModalOpen, setIsProjectModeModalOpen] = useState(false);
+  const [pendingProjectTarget, setPendingProjectTarget] = useState("");
+  const [turnNotificationEnabled, setTurnNotificationEnabled] = useState(() => readTurnNotificationEnabled());
+  const audioCtxRef = useRef(null);
   const slashCommands = useMemo(
     () => [
       "/commands",
@@ -690,19 +779,271 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     [paletteItems, paletteWindowStart]
   );
   const renderItems = useMemo(() => groupMessagesForRender(messages), [messages]);
+  const activeProjectTab = useMemo(
+    () => projectTabs.find((tab) => tab.id === activeProjectTabId) || null,
+    [projectTabs, activeProjectTabId]
+  );
+  const activeProjectKey = activeProjectTab?.key || "";
+  const projectTabStatusById = useMemo(() => {
+    const next = {};
+    projectTabs.forEach((tab) => {
+      const rows = Array.isArray(threadTabsByProjectTabId[tab.id]) ? threadTabsByProjectTabId[tab.id] : [];
+      if (rows.some((row) => row.status === "running")) {
+        next[tab.id] = "running";
+        return;
+      }
+      if (rows.some((row) => row.hasUnreadCompletion)) {
+        next[tab.id] = "unread";
+        return;
+      }
+      if (rows.some((row) => row.status === "failed")) {
+        next[tab.id] = "failed";
+        return;
+      }
+      if (rows.some((row) => row.status === "cancelled")) {
+        next[tab.id] = "cancelled";
+        return;
+      }
+      next[tab.id] = "idle";
+    });
+    return next;
+  }, [projectTabs, threadTabsByProjectTabId]);
 
-  const loadThreads = async () => {
-    const summaries = await api("/api/threads/summaries?limit=20&offset=0&archived=false");
+  const ensureWorkspaceBucket = (projectTabId) => {
+    if (!projectTabId) {
+      return;
+    }
+    setWorkspaceByProjectTabId((prev) => {
+      if (prev[projectTabId]) {
+        return prev;
+      }
+      return { ...prev, [projectTabId]: createEmptyWorkspaceState() };
+    });
+  };
+
+  const upsertProjectTab = (project) => {
+    const key = typeof project?.key === "string" ? project.key : "";
+    if (!key) {
+      return "";
+    }
+    const tabId = buildProjectTabId(key);
+    const tab = {
+      id: tabId,
+      key,
+      name: typeof project?.name === "string" && project.name ? project.name : key,
+      path: typeof project?.path === "string" ? project.path : "",
+    };
+    setProjectTabs((prev) => {
+      const index = prev.findIndex((item) => item.id === tabId);
+      if (index >= 0) {
+        const next = [...prev];
+        next[index] = { ...next[index], ...tab };
+        return next;
+      }
+      return [...prev, tab];
+    });
+    ensureWorkspaceBucket(tabId);
+    return tabId;
+  };
+
+  const openThreadInProjectTab = (projectTabId, thread) => {
+    const threadId = normalizeThreadId(thread?.id);
+    if (!projectTabId || !threadId) {
+      return "";
+    }
+    const title = typeof thread?.title === "string" && thread.title ? thread.title : threadId;
+    setThreadTabsByProjectTabId((prev) => {
+      const rows = Array.isArray(prev[projectTabId]) ? prev[projectTabId] : [];
+      const existing = rows.find((row) => row.id === threadId);
+      if (existing) {
+        return {
+          ...prev,
+          [projectTabId]: rows.map((row) => (
+            row.id === threadId ? { ...row, title, hasUnreadCompletion: false } : row
+          )),
+        };
+      }
+      return {
+        ...prev,
+        [projectTabId]: [...rows, { id: threadId, title, status: "idle", hasUnreadCompletion: false }],
+      };
+    });
+    setThreadProjectTabIdByThreadId((prev) => ({ ...prev, [threadId]: projectTabId }));
+    setActiveThreadForProjectTab(projectTabId, threadId);
+    return threadId;
+  };
+
+  const setActiveThreadForProjectTab = (projectTabId, threadId) => {
+    const normalizedThreadId = normalizeThreadId(threadId);
+    setActiveThreadTabIdByProjectTabId((prev) => ({ ...prev, [projectTabId]: normalizedThreadId }));
+    if (projectTabId === activeProjectTabId) {
+      setActiveThread(normalizedThreadId);
+    }
+  };
+
+  const updateThreadTabState = (threadId, patch) => {
+    const normalizedThreadId = normalizeThreadId(threadId);
+    if (!normalizedThreadId) {
+      return;
+    }
+    const projectTabId = threadProjectTabIdByThreadId[normalizedThreadId];
+    if (!projectTabId) {
+      return;
+    }
+    setThreadTabsByProjectTabId((prev) => {
+      const rows = Array.isArray(prev[projectTabId]) ? prev[projectTabId] : [];
+      const nextRows = rows.map((row) => (
+        row.id === normalizedThreadId ? { ...row, ...patch } : row
+      ));
+      return { ...prev, [projectTabId]: nextRows };
+    });
+  };
+
+  const closeThreadTab = (projectTabId, threadId) => {
+    const normalizedThreadId = normalizeThreadId(threadId);
+    if (!projectTabId || !normalizedThreadId) {
+      return;
+    }
+    setThreadTabsByProjectTabId((prev) => {
+      const rows = Array.isArray(prev[projectTabId]) ? prev[projectTabId] : [];
+      const index = rows.findIndex((row) => row.id === normalizedThreadId);
+      if (index < 0) {
+        return prev;
+      }
+      const nextRows = rows.filter((row) => row.id !== normalizedThreadId);
+      const fallback = nextRows[index] || nextRows[index - 1] || nextRows[0];
+      if (projectTabId === activeProjectTabId) {
+        setActiveThreadForProjectTab(projectTabId, fallback?.id || "");
+      } else {
+        setActiveThreadTabIdByProjectTabId((mapping) => ({
+          ...mapping,
+          [projectTabId]: fallback?.id || "",
+        }));
+      }
+      return { ...prev, [projectTabId]: nextRows };
+    });
+    setThreadProjectTabIdByThreadId((prev) => {
+      const next = { ...prev };
+      delete next[normalizedThreadId];
+      return next;
+    });
+  };
+
+  const closeProjectTab = (projectTabId) => {
+    if (!projectTabId) {
+      return;
+    }
+    const existingTabs = projectTabs;
+    const index = existingTabs.findIndex((tab) => tab.id === projectTabId);
+    const fallback = index > 0 ? existingTabs[index - 1] : existingTabs[index + 1];
+    setProjectTabs((prev) => prev.filter((tab) => tab.id !== projectTabId));
+    setThreadTabsByProjectTabId((prev) => {
+      const next = { ...prev };
+      delete next[projectTabId];
+      return next;
+    });
+    setActiveThreadTabIdByProjectTabId((prev) => {
+      const next = { ...prev };
+      delete next[projectTabId];
+      return next;
+    });
+    setWorkspaceByProjectTabId((prev) => {
+      const next = { ...prev };
+      delete next[projectTabId];
+      return next;
+    });
+    setThreadProjectTabIdByThreadId((prev) => {
+      const next = { ...prev };
+      Object.entries(next).forEach(([threadId, tabId]) => {
+        if (tabId === projectTabId) {
+          delete next[threadId];
+        }
+      });
+      return next;
+    });
+    if (activeProjectTabId === projectTabId) {
+      setActiveProjectTabId(fallback?.id || "");
+      setActiveThread(fallback ? normalizeThreadId(activeThreadTabIdByProjectTabId[fallback.id]) : "");
+      setMessages([]);
+    }
+  };
+
+  const workspaceContextQuery = (extra = {}) => {
+    const params = new URLSearchParams();
+    const threadId = normalizeThreadId(extra.thread_id || activeThread);
+    const projectKey = typeof extra.project_key === "string" && extra.project_key
+      ? extra.project_key
+      : activeProjectKey;
+    if (threadId) {
+      params.set("thread_id", threadId);
+    } else if (projectKey) {
+      params.set("project_key", projectKey);
+    }
+    return params.toString();
+  };
+
+  const playTurnNotification = () => {
+    if (!turnNotificationEnabled || typeof window === "undefined") {
+      return;
+    }
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) {
+        return;
+      }
+      if (!audioCtxRef.current) {
+        audioCtxRef.current = new AudioCtx();
+      }
+      const ctx = audioCtxRef.current;
+      if (!ctx) {
+        return;
+      }
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(880, now);
+      osc.frequency.exponentialRampToValueAtTime(660, now + 0.12);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.08, now + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.14);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.15);
+    } catch (_err) {}
+  };
+
+  const loadThreads = async (options = {}) => {
+    const projectKey = typeof options.projectKey === "string" ? options.projectKey : (activeProjectKey || "");
+    const projectTabId = typeof options.projectTabId === "string" ? options.projectTabId : (activeProjectTabId || "");
+    const ensureDefaultTab = !!options.ensureDefaultTab;
+    const query = new URLSearchParams({ limit: "20", offset: "0", archived: "false" });
+    if (projectKey) {
+      query.set("project_key", projectKey);
+    }
+    const summaries = await api(`/api/threads/summaries?${query.toString()}`);
     const items = Array.isArray(summaries.items) ? summaries.items : [];
-    setThreadItems(items);
-    const summaryActiveThread = normalizeThreadId(sessionSummary?.active_thread_id);
-    const hasActiveThread = items.some((item) => normalizeThreadId(item?.id) === activeThread);
-    const hasSummaryActiveThread = summaryActiveThread && items.some((item) => normalizeThreadId(item?.id) === summaryActiveThread);
-    if (!hasActiveThread) {
-      if (hasSummaryActiveThread) {
-        setActiveThread(summaryActiveThread);
-      } else if (!activeThread && items.length > 0) {
-        setActiveThread(items[0].id);
+    if (!projectTabId || projectTabId === activeProjectTabId) {
+      setThreadItems(items);
+    }
+    if (ensureDefaultTab && projectTabId) {
+      const opened = Array.isArray(threadTabsByProjectTabId[projectTabId]) ? threadTabsByProjectTabId[projectTabId] : [];
+      if (opened.length === 0) {
+        if (items.length > 0) {
+          openThreadInProjectTab(projectTabId, items[0]);
+        } else if (projectKey) {
+          const created = await api("/api/projects/open-thread", {
+            method: "POST",
+            body: JSON.stringify({ project_key: projectKey }),
+          });
+          const createdThreadId = normalizeThreadId(created?.thread_id);
+          if (createdThreadId) {
+            openThreadInProjectTab(projectTabId, { id: createdThreadId, title: createdThreadId });
+          }
+        }
+      } else if (!normalizeThreadId(activeThreadTabIdByProjectTabId[projectTabId])) {
+        setActiveThreadForProjectTab(projectTabId, opened[0]?.id || "");
       }
     }
   };
@@ -711,6 +1052,29 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     const result = await api("/api/projects");
     const items = Array.isArray(result.items) ? result.items : [];
     setProjectItems(items);
+    const selected = items.find((item) => item?.selected) || items[0];
+    if (!projectTabs.length && selected) {
+      const tabId = upsertProjectTab(selected);
+      if (tabId) {
+        setActiveProjectTabId(tabId);
+      }
+      return;
+    }
+    if (projectTabs.length) {
+      setProjectTabs((prev) =>
+        prev.map((tab) => {
+          const matched = items.find((item) => item?.key === tab.key);
+          if (!matched) {
+            return tab;
+          }
+          return {
+            ...tab,
+            name: matched.name || tab.name,
+            path: matched.path || tab.path,
+          };
+        })
+      );
+    }
   };
 
   const loadSkillSuggestions = async () => {
@@ -725,8 +1089,21 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     if (typeof summary?.collaboration_mode === "string") {
       setCollaborationMode(normalizeCollaborationMode(summary.collaboration_mode));
     }
-    if (summary && typeof summary.active_thread_id === "string" && summary.active_thread_id) {
+    if (!activeProjectTabId && summary && typeof summary.active_thread_id === "string" && summary.active_thread_id) {
       setActiveThread(summary.active_thread_id);
+    }
+    if (!projectTabs.length && summary && typeof summary.project_key === "string" && summary.project_key) {
+      const tabId = upsertProjectTab({
+        key: summary.project_key,
+        name: summary.project_name || summary.project_key,
+        path: summary.workspace || "",
+      });
+      if (tabId) {
+        setActiveProjectTabId((prev) => prev || tabId);
+        if (summary.active_thread_id) {
+          setActiveThreadForProjectTab(tabId, summary.active_thread_id);
+        }
+      }
     }
   };
   const loadApprovals = async () => {
@@ -742,9 +1119,16 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     if (!force && workspaceTree[normalizedPath]) {
       return workspaceTree[normalizedPath];
     }
-    const result = await api(
-      `/api/workspace/tree?path=${encodeURIComponent(normalizedPath)}&depth=${encodeURIComponent(String(depth))}`
-    );
+    const query = new URLSearchParams({
+      path: normalizedPath,
+      depth: String(depth),
+    });
+    const ctx = workspaceContextQuery();
+    if (ctx) {
+      const ctxParams = new URLSearchParams(ctx);
+      ctxParams.forEach((value, key) => query.set(key, value));
+    }
+    const result = await api(`/api/workspace/tree?${query.toString()}`);
     const items = Array.isArray(result.items) ? result.items : [];
     setWorkspaceTree((prev) => ({ ...prev, [normalizedPath]: items }));
     return items;
@@ -752,7 +1136,8 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
 
   const loadWorkspaceStatus = async () => {
     try {
-      const result = await api("/api/workspace/status");
+      const ctx = workspaceContextQuery();
+      const result = await api(`/api/workspace/status${ctx ? `?${ctx}` : ""}`);
       setWorkspaceStatus({
         is_git: !!result.is_git,
         items: result && typeof result.items === "object" ? result.items : {},
@@ -784,7 +1169,13 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     });
     try {
       if (statusCode) {
-        const diffResult = await api(`/api/workspace/diff?path=${encodeURIComponent(normalizedPath)}`);
+        const diffQuery = new URLSearchParams({ path: normalizedPath });
+        const ctx = workspaceContextQuery();
+        if (ctx) {
+          const ctxParams = new URLSearchParams(ctx);
+          ctxParams.forEach((value, key) => diffQuery.set(key, value));
+        }
+        const diffResult = await api(`/api/workspace/diff?${diffQuery.toString()}`);
         if (diffResult.has_diff && diffResult.diff) {
           setWorkspacePreview({
             path: normalizedPath,
@@ -801,7 +1192,13 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
           return;
         }
       }
-      const fileResult = await api(`/api/workspace/file?path=${encodeURIComponent(normalizedPath)}`);
+      const fileQuery = new URLSearchParams({ path: normalizedPath });
+      const ctx = workspaceContextQuery();
+      if (ctx) {
+        const ctxParams = new URLSearchParams(ctx);
+        ctxParams.forEach((value, key) => fileQuery.set(key, value));
+      }
+      const fileResult = await api(`/api/workspace/file?${fileQuery.toString()}`);
       setWorkspacePreview({
         path: normalizedPath,
         mode: "file",
@@ -863,44 +1260,87 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   };
 
   const startThread = async () => {
-    const result = await api("/api/threads/start", { method: "POST", body: "{}" });
-    const nextThreadId = result?.meta?.thread_id;
+    let nextThreadId = "";
+    if (activeProjectKey) {
+      const result = await api("/api/projects/open-thread", {
+        method: "POST",
+        body: JSON.stringify({ project_key: activeProjectKey }),
+      });
+      nextThreadId = normalizeThreadId(result?.thread_id);
+      if (activeProjectTabId && nextThreadId) {
+        openThreadInProjectTab(activeProjectTabId, { id: nextThreadId, title: nextThreadId });
+      }
+    } else {
+      const result = await api("/api/threads/start", { method: "POST", body: "{}" });
+      nextThreadId = normalizeThreadId(result?.meta?.thread_id);
+    }
     setMessages([]);
     setStatus("idle");
     pendingComposerFocusRef.current = true;
-    if (typeof nextThreadId === "string" && nextThreadId) {
+    if (nextThreadId) {
       setActiveThread(nextThreadId);
+      if (activeProjectTabId) {
+        setActiveThreadForProjectTab(activeProjectTabId, nextThreadId);
+      }
     } else {
       await loadSessionSummary();
     }
-    await loadThreads();
+    await loadThreads({ projectKey: activeProjectKey, projectTabId: activeProjectTabId });
   };
 
-  const selectProject = async (target) => {
+  const selectProject = async (target, forcedMode = "") => {
     if (!target || interactionBusy) {
       return;
     }
+    const resolvedMode = forcedMode || projectClickMode;
+    if (!resolvedMode) {
+      setPendingProjectTarget(target);
+      setIsProjectModeModalOpen(true);
+      return;
+    }
     try {
-      const result = await api("/api/projects/select", {
-        method: "POST",
-        body: JSON.stringify({ target }),
-      });
-      const nextThreadId = normalizeThreadId(result?.meta?.thread_id);
+      const selectedProject = projectItems.find((item) => item?.key === target);
+      let projectTabId = "";
+      if (resolvedMode === "replace_current" && activeProjectTabId) {
+        const nextProject = selectedProject || { key: target, name: target, path: "" };
+        projectTabId = activeProjectTabId;
+        setProjectTabs((prev) =>
+          prev.map((tab) =>
+            tab.id === activeProjectTabId
+              ? {
+                  ...tab,
+                  key: nextProject.key,
+                  name: nextProject.name || nextProject.key,
+                  path: nextProject.path || "",
+                }
+              : tab
+          )
+        );
+        setThreadTabsByProjectTabId((prev) => ({ ...prev, [activeProjectTabId]: [] }));
+        setActiveThreadTabIdByProjectTabId((prev) => ({ ...prev, [activeProjectTabId]: "" }));
+        setWorkspaceByProjectTabId((prev) => ({ ...prev, [activeProjectTabId]: createEmptyWorkspaceState() }));
+        setThreadProjectTabIdByThreadId((prev) => {
+          const next = { ...prev };
+          Object.entries(next).forEach(([threadId, tabId]) => {
+            if (tabId === activeProjectTabId) {
+              delete next[threadId];
+            }
+          });
+          return next;
+        });
+      } else {
+        projectTabId = upsertProjectTab(selectedProject || { key: target, name: target, path: "" });
+      }
+      if (projectTabId) {
+        setActiveProjectTabId(projectTabId);
+      }
       setMessages([]);
       setStatus("idle");
-      setWorkspacePreview(null);
-      setWorkspaceTree({});
-      setWorkspaceStatus({ is_git: false, items: {} });
-      setWorkspaceError("");
-      if (nextThreadId) {
-        setActiveThread(nextThreadId);
-      } else {
-        setActiveThread("");
-      }
+      setActiveThread("");
       pendingComposerFocusRef.current = true;
       await loadSessionSummary();
       await loadProjects();
-      await loadThreads();
+      await loadThreads({ projectKey: target, projectTabId, ensureDefaultTab: true });
     } catch (err) {
       setMessages((prev) => [
         ...prev,
@@ -912,6 +1352,18 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
           streaming: false,
         },
       ]);
+    }
+  };
+
+  const chooseProjectClickMode = (mode) => {
+    const normalizedMode = mode === "replace_current" ? "replace_current" : "open_new_tab";
+    setProjectClickMode(normalizedMode);
+    persistProjectClickMode(normalizedMode);
+    const target = pendingProjectTarget;
+    setPendingProjectTarget("");
+    setIsProjectModeModalOpen(false);
+    if (target) {
+      selectProject(target, normalizedMode).catch(() => {});
     }
   };
 
@@ -1090,7 +1542,11 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     try {
       const result = await api("/api/chat/messages", {
         method: "POST",
-        body: JSON.stringify({ text, thread_id: activeThread || undefined }),
+        body: JSON.stringify({
+          text,
+          thread_id: messageThreadId || undefined,
+          project_key: activeProjectKey || undefined,
+        }),
       });
       if (result.local_command) {
         setMessages((prev) => [
@@ -1200,9 +1656,18 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     if (isMobileLayout) {
       setIsSidebarOpen(false);
     }
-    setActiveThread(threadId);
+    const normalizedThreadId = normalizeThreadId(threadId);
+    setActiveThread(normalizedThreadId);
+    if (activeProjectTabId) {
+      const threadInfo = threadItems.find((item) => normalizeThreadId(item?.id) === normalizedThreadId);
+      openThreadInProjectTab(activeProjectTabId, {
+        id: normalizedThreadId,
+        title: threadInfo?.title || normalizedThreadId,
+      });
+      updateThreadTabState(normalizedThreadId, { hasUnreadCompletion: false });
+    }
     setStatus("idle");
-    const result = await api(`/api/threads/read?thread_id=${encodeURIComponent(threadId)}`);
+    const result = await api(`/api/threads/read?thread_id=${encodeURIComponent(normalizedThreadId)}`);
     if (Array.isArray(result.messages) && result.messages.length > 0) {
       setMessages(
         result.messages
@@ -1212,7 +1677,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
             text: item.text,
             variant: item.variant === "subagent" ? "subagent" : "",
             kind: item.kind === "plan" ? "plan" : "",
-            threadId: normalizeThreadId(item.thread_id) || normalizeThreadId(threadId),
+            threadId: normalizeThreadId(item.thread_id) || normalizedThreadId,
             turnId: typeof item.turn_id === "string" ? item.turn_id : "",
             streaming: false,
           }))
@@ -1223,7 +1688,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       {
         role: "assistant",
         text: result.text,
-        threadId: normalizeThreadId(result.thread_id) || normalizeThreadId(threadId),
+        threadId: normalizeThreadId(result.thread_id) || normalizedThreadId,
         turnId: typeof result.turn_id === "string" ? result.turn_id : "",
         streaming: false,
       },
@@ -1263,7 +1728,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       cmd.startsWith("/resume") ||
       cmd.startsWith("/project")
     ) {
-      loadThreads().catch(() => {});
+      loadThreads({ projectKey: activeProjectKey, projectTabId: activeProjectTabId }).catch(() => {});
     }
     if (cmd.startsWith("/projects") || cmd.startsWith("/project")) {
       loadProjects().catch(() => {});
@@ -1276,7 +1741,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       return;
     }
     loadProjects().catch(() => {});
-    loadThreads().catch(() => {});
+    loadThreads({ projectKey: activeProjectKey, projectTabId: activeProjectTabId }).catch(() => {});
     loadSkillSuggestions().catch(() => {});
     loadSessionSummary().catch(() => {});
     loadApprovals().catch(() => {});
@@ -1398,6 +1863,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     });
     es.addEventListener("turn_started", (ev) => {
       const data = JSON.parse(ev.data);
+      updateThreadTabState(data?.thread_id, { status: "running", hasUnreadCompletion: false });
       const actualMode = data?.params?.collaboration_mode_kind || data?.params?.collaborationModeKind;
       if (typeof actualMode === "string") {
         setCollaborationMode(normalizeCollaborationMode(actualMode));
@@ -1407,18 +1873,37 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       setMessages((prev) => prev.map((m) => (m.streaming ? { ...m, streaming: false } : m)));
       setStatus("running");
     });
-    es.addEventListener("turn_completed", () => {
+    es.addEventListener("turn_completed", (ev) => {
+      const data = JSON.parse(ev.data);
+      const completedThreadId = normalizeThreadId(data?.thread_id);
+      const shouldNotify = completedThreadId && completedThreadId !== normalizeThreadId(activeThread);
+      updateThreadTabState(completedThreadId, {
+        status: "completed",
+        hasUnreadCompletion: completedThreadId ? shouldNotify : true,
+      });
+      if (shouldNotify) {
+        playTurnNotification();
+      }
       setStatus("idle");
       reasoningStateRef.current = {};
       setActivityDetail("");
       setMessages((prev) => prev.map((m) => ({ ...m, streaming: false })));
-      loadThreads().catch(() => {});
+      loadThreads({ projectKey: activeProjectKey, projectTabId: activeProjectTabId }).catch(() => {});
       loadProjects().catch(() => {});
       loadSessionSummary().catch(() => {});
       loadWorkspaceStatus().catch(() => {});
     });
     es.addEventListener("turn_failed", (ev) => {
       const data = JSON.parse(ev.data);
+      const failedThreadId = normalizeThreadId(data?.thread_id);
+      const shouldNotify = failedThreadId && failedThreadId !== normalizeThreadId(activeThread);
+      updateThreadTabState(failedThreadId, {
+        status: "failed",
+        hasUnreadCompletion: failedThreadId ? shouldNotify : true,
+      });
+      if (shouldNotify) {
+        playTurnNotification();
+      }
       const text = data.text || "Turn failed.";
       const threadId = normalizeThreadId(data.thread_id);
       const turnId = typeof data.turn_id === "string" ? data.turn_id : "";
@@ -1426,6 +1911,23 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       reasoningStateRef.current = {};
       setActivityDetail("");
       setMessages((prev) => [...prev, { role: "system", text, threadId, turnId, streaming: false }]);
+      loadProjects().catch(() => {});
+      loadSessionSummary().catch(() => {});
+    });
+    es.addEventListener("turn_cancelled", (ev) => {
+      const data = JSON.parse(ev.data);
+      const cancelledThreadId = normalizeThreadId(data?.thread_id);
+      const shouldNotify = cancelledThreadId && cancelledThreadId !== normalizeThreadId(activeThread);
+      updateThreadTabState(cancelledThreadId, {
+        status: "cancelled",
+        hasUnreadCompletion: cancelledThreadId ? shouldNotify : true,
+      });
+      if (shouldNotify) {
+        playTurnNotification();
+      }
+      setStatus("idle");
+      reasoningStateRef.current = {};
+      setActivityDetail("");
       loadProjects().catch(() => {});
       loadSessionSummary().catch(() => {});
     });
@@ -1486,7 +1988,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     };
 
     return () => es.close();
-  }, [me]);
+  }, [me, activeProjectKey, activeProjectTabId, activeThread, turnNotificationEnabled]);
 
   useEffect(() => {
     if (!chatRef.current) {
@@ -1550,8 +2052,44 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     setPaletteSelectedIndex(0);
   }, [activeToken?.type, activeToken?.query]);
   useEffect(() => {
-    loadThreads().catch(() => {});
+    loadThreads({ projectKey: activeProjectKey, projectTabId: activeProjectTabId }).catch(() => {});
   }, []);
+  useEffect(() => {
+    if (!activeProjectTabId) {
+      return;
+    }
+    setActiveThread(normalizeThreadId(activeThreadTabIdByProjectTabId[activeProjectTabId]) || "");
+    const workspaceState = workspaceByProjectTabId[activeProjectTabId] || createEmptyWorkspaceState();
+    setWorkspaceTree(workspaceState.tree || {});
+    setExpandedWorkspaceDirs(workspaceState.expandedDirs || { "": true });
+    setWorkspaceStatus(workspaceState.status || { is_git: false, items: {} });
+    setWorkspaceError(workspaceState.error || "");
+    setWorkspacePreview(workspaceState.preview || null);
+    loadThreads({ projectKey: activeProjectKey, projectTabId: activeProjectTabId, ensureDefaultTab: true }).catch(() => {});
+  }, [activeProjectTabId]);
+
+  useEffect(() => {
+    if (!activeProjectTabId) {
+      return;
+    }
+    setWorkspaceByProjectTabId((prev) => ({
+      ...prev,
+      [activeProjectTabId]: {
+        tree: workspaceTree,
+        expandedDirs: expandedWorkspaceDirs,
+        status: workspaceStatus,
+        error: workspaceError,
+        preview: workspacePreview,
+      },
+    }));
+  }, [
+    activeProjectTabId,
+    workspaceTree,
+    expandedWorkspaceDirs,
+    workspaceStatus,
+    workspaceError,
+    workspacePreview,
+  ]);
   useEffect(() => {
     if (paletteSelectedIndex < paletteItems.length) {
       return;
@@ -1570,7 +2108,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     active.scrollIntoView({ block: "nearest" });
   }, [paletteOpen, paletteSelectedIndex, visiblePaletteItems.length]);
   useEffect(() => {
-    const workspacePath = sessionSummary?.workspace || "";
+    const workspacePath = activeProjectTab?.path || sessionSummary?.workspace || "";
     if (!workspacePath) {
       setWorkspaceTree({});
       setWorkspaceStatus({ is_git: false, items: {} });
@@ -1584,7 +2122,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       setWorkspaceError(err.message || "Failed to load workspace tree.");
     });
     loadWorkspaceStatus().catch(() => {});
-  }, [sessionSummary?.workspace]);
+  }, [activeProjectTabId, activeProjectTab?.path, sessionSummary?.workspace]);
   useEffect(() => {
     if (typeof window === "undefined") {
       return undefined;
@@ -1680,20 +2218,41 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       return;
     }
     const prefix = activeToken.query || "";
-    api(`/api/workspace/suggestions?prefix=${encodeURIComponent(prefix)}&limit=200`)
+    {
+      const query = new URLSearchParams({ prefix, limit: "200" });
+      const ctx = workspaceContextQuery();
+      if (ctx) {
+        const ctxParams = new URLSearchParams(ctx);
+        ctxParams.forEach((value, key) => query.set(key, value));
+      }
+      api(`/api/workspace/suggestions?${query.toString()}`)
       .then((result) => {
         const items = Array.isArray(result.items) ? result.items : [];
         setProjectSuggestions(items.filter((v) => typeof v === "string" && v));
       })
       .catch(() => {
-      setProjectSuggestions([]);
-    });
+        setProjectSuggestions([]);
+      });
+    }
   }, [activeToken?.type, activeToken?.query]);
   useEffect(() => {
     if (floatingAgentSettings && floatingAgentSettings !== activeAgentSettings) {
       setFloatingAgentSettings("");
     }
   }, [activeAgentSettings, floatingAgentSettings]);
+  useEffect(() => {
+    if (!isProjectModeModalOpen || typeof window === "undefined") {
+      return undefined;
+    }
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setPendingProjectTarget("");
+        setIsProjectModeModalOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isProjectModeModalOpen]);
 
   const applyPaletteItem = (item) => {
     if (!activeToken) {
@@ -1864,8 +2423,8 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   const settingsBusy = !!agentConfigLoading || !!agentConfigSaving;
   const interactionBusy = status === "running";
   const composerLocked = interactionBusy;
-  const currentProjectLabel = sessionSummary?.project_name || sessionSummary?.project_key || "-";
-  const workspaceRootLabel = basename(sessionSummary?.workspace || "") || "Workspace";
+  const currentProjectLabel = activeProjectTab?.name || sessionSummary?.project_name || sessionSummary?.project_key || "-";
+  const workspaceRootLabel = basename(activeProjectTab?.path || sessionSummary?.workspace || "") || "Workspace";
   const workspaceStatusItems =
     workspaceStatus && typeof workspaceStatus.items === "object" ? workspaceStatus.items : {};
   const workspaceDirectoryStatus = useMemo(() => {
@@ -1962,10 +2521,10 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
         </button>
       </div>
       {workspaceError ? <div className="workspace-panel-state">{workspaceError}</div> : null}
-      {!sessionSummary?.workspace ? (
+      {!(activeProjectTab?.path || sessionSummary?.workspace) ? (
         <div className="workspace-panel-state">Select a workspace to browse files.</div>
       ) : null}
-      {sessionSummary?.workspace ? (
+      {activeProjectTab?.path || sessionSummary?.workspace ? (
         <div className="workspace-tree">
           {deletedWorkspaceEntries.length ? (
             <div className="workspace-tree-group">
@@ -1998,9 +2557,62 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   const sidebarStyle = isMobileLayout
     ? undefined
     : { width: isDesktopSidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : sidebarWidth };
+  const projectModeModal = isProjectModeModalOpen ? (
+    <div
+      className="modal-backdrop"
+      role="presentation"
+      onMouseDown={() => {
+        setPendingProjectTarget("");
+        setIsProjectModeModalOpen(false);
+      }}
+    >
+      <div
+        className="modal-card"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Project open mode"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="modal-title">프로젝트 탭 동작 선택</div>
+        <div className="modal-desc">
+          프로젝트 클릭 시 새 탭으로 열지, 현재 탭을 교체할지 선택하세요. 이 선택은 저장됩니다.
+        </div>
+        <div className="modal-actions">
+          <button
+            type="button"
+            className="primary"
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={() => chooseProjectClickMode("open_new_tab")}
+          >
+            새 탭으로 열기
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={() => chooseProjectClickMode("replace_current")}
+          >
+            현재 탭 교체
+          </button>
+          <button
+            type="button"
+            className="ghost"
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={() => {
+              setPendingProjectTarget("");
+              setIsProjectModeModalOpen(false);
+            }}
+          >
+            취소
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null;
 
   return (
     <div className={`app ${isMobileLayout ? "mobile-layout" : ""}`}>
+      {projectModeModal}
       <aside
         id="app-sidebar"
         className={`sidebar ${isMobileLayout ? "mobile" : "desktop"} ${isSidebarOpen ? "open" : ""} ${isDesktopSidebarCollapsed ? "collapsed" : ""}`}
@@ -2017,7 +2629,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
               <div className="meta-line"><b>Project</b></div>
               <div className="meta-value">{currentProjectLabel}</div>
               <div className="meta-line"><b>Workspace</b></div>
-              <div className="meta-value">{sessionSummary?.workspace || "-"}</div>
+              <div className="meta-value">{activeProjectTab?.path || sessionSummary?.workspace || "-"}</div>
             </div>
             <div className="panel">
               <h3>Enabled Agents</h3>
@@ -2170,8 +2782,8 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
                 {projectItems.map((item) => (
                   <button
                     key={item.key}
-                    className={`thread-item project-item ${item.selected ? "active" : ""}`}
-                    onClick={() => selectProject(item.key)}
+                    className={`thread-item project-item ${item.key === activeProjectKey ? "active" : ""}`}
+                    onClick={() => selectProject(item.key).catch(() => {})}
                     disabled={interactionBusy}
                     type="button"
                   >
@@ -2269,9 +2881,38 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
                 <span>{me.username}</span>
               </div>
             ) : null}
+            {isMobileLayout ? (
+              <button
+                className={`notify-toggle mobile ${turnNotificationEnabled ? "on" : "off"}`}
+                type="button"
+                onClick={() => {
+                  const next = !turnNotificationEnabled;
+                  setTurnNotificationEnabled(next);
+                  persistTurnNotificationEnabled(next);
+                }}
+                aria-label="Toggle turn completion notification"
+                title={`Turn notification ${turnNotificationEnabled ? "on" : "off"}`}
+              >
+                <NotificationIcon enabled={turnNotificationEnabled} />
+              </button>
+            ) : null}
           </div>
           {!isMobileLayout ? (
             <div className="topbar-actions">
+              <button
+                className={`notify-toggle ${turnNotificationEnabled ? "on" : "off"}`}
+                type="button"
+                onClick={() => {
+                  const next = !turnNotificationEnabled;
+                  setTurnNotificationEnabled(next);
+                  persistTurnNotificationEnabled(next);
+                }}
+                aria-label="Toggle turn completion notification"
+                title={`Turn notification ${turnNotificationEnabled ? "on" : "off"}`}
+              >
+                <NotificationIcon enabled={turnNotificationEnabled} />
+                <span>{turnNotificationEnabled ? "Notify On" : "Notify Off"}</span>
+              </button>
               <button
                 className="theme-toggle"
                 type="button"
@@ -2357,6 +2998,80 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
             </div>
           </div>
         ) : null}
+        <div className="top-tabs">
+          <div className="project-tabs-row">
+            {projectTabs.map((tab) => (
+              <div
+                key={tab.id}
+                className={`project-tab-chip ${tab.id === activeProjectTabId ? "active" : ""} state-${projectTabStatusById[tab.id] || "idle"}`}
+              >
+                <button
+                  type="button"
+                  className="project-tab-main"
+                  onClick={() => {
+                    setActiveProjectTabId(tab.id);
+                    if (isMobileLayout) {
+                      setIsSidebarOpen(false);
+                    }
+                  }}
+                >
+                  {tab.name}
+                </button>
+                <button
+                  type="button"
+                  className="project-tab-close"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    closeProjectTab(tab.id);
+                  }}
+                  aria-label={`Close project ${tab.name}`}
+                  title="Close project tab"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+          <div className="turn-tabs-row">
+            {(threadTabsByProjectTabId[activeProjectTabId] || []).map((tab) => (
+              <div
+                key={tab.id}
+                className={`turn-tab-chip ${normalizeThreadId(tab.id) === normalizeThreadId(activeThread) ? "active" : ""} state-${tab.status || "idle"} ${tab.hasUnreadCompletion ? "unread" : ""}`}
+              >
+                <button
+                  type="button"
+                  className="turn-tab-main"
+                  onClick={() => viewThread(tab.id)}
+                >
+                  <span className="turn-tab-title">{tab.title || tab.id}</span>
+                  {tab.hasUnreadCompletion ? <span className="turn-tab-dot" /> : null}
+                </button>
+                <button
+                  type="button"
+                  className="turn-tab-close"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    closeThreadTab(activeProjectTabId, tab.id);
+                  }}
+                  aria-label={`Close thread ${tab.title || tab.id}`}
+                  title="Close thread tab"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              className="turn-tab-add"
+              onClick={() => startThread().catch(() => {})}
+              aria-label="Add thread tab"
+              title="Add thread tab"
+              disabled={!activeProjectKey || interactionBusy}
+            >
+              +
+            </button>
+          </div>
+        </div>
         <div className="workspace-layout">
           <div className="center-pane">
             {workspacePreview ? (

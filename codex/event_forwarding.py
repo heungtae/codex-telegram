@@ -718,8 +718,10 @@ def build_event_forwarder(app, config: ForwardingConfig):
     async def forward_event(method: str, params: dict | None):
         thread_id = extract_thread_id(method, params)
         turn_id = extract_turn_id(method, params)
-        user_id_by_thread = user_manager.find_user_id_by_thread(thread_id)
+        if thread_id is None and turn_id:
+            thread_id = user_manager.get_turn_thread(turn_id)
         owner_id = user_manager.find_user_id_by_turn(turn_id)
+        user_id_by_thread = user_manager.find_user_id_by_thread(thread_id)
         if owner_id is None and method in {"turn/completed", "turn/failed", "turn/cancelled"}:
             owner_id = user_manager.find_single_active_turn_owner()
         target_user_id = owner_id if owner_id is not None else user_id_by_thread
@@ -728,6 +730,7 @@ def build_event_forwarder(app, config: ForwardingConfig):
 
         if method == "turn/started" and turn_id and owner_id is not None:
             state_user = user_manager.get(owner_id)
+            user_manager.bind_turn(owner_id, turn_id, thread_id)
             state_user.set_turn(turn_id)
             actual_mode = normalize_mode_kind((params or {}).get("collaboration_mode_kind") or (params or {}).get("collaborationModeKind"))
             if actual_mode is not None:
@@ -741,7 +744,9 @@ def build_event_forwarder(app, config: ForwardingConfig):
                     params,
                 )
         elif method in {"turn/completed", "turn/failed", "turn/cancelled"} and owner_id is not None:
-            user_manager.get(owner_id).clear_turn()
+            state_user = user_manager.get(owner_id)
+            if not turn_id or state_user.active_turn_id == turn_id:
+                state_user.clear_turn()
 
         file_change = extract_file_change_summary(method, params)
         if file_change is not None:
@@ -815,6 +820,8 @@ def build_event_forwarder(app, config: ForwardingConfig):
                 event_type = "turn_completed"
             elif method == "turn/failed":
                 event_type = "turn_failed"
+            elif method == "turn/cancelled":
+                event_type = "turn_cancelled"
             await event_hub.publish_event(
                 target_user_id,
                 {

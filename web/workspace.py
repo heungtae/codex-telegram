@@ -114,9 +114,46 @@ def workspace_suggestions(workspace: str, prefix: str, limit: int) -> list[str]:
     return [row[2] for row in scored[:limit]]
 
 
-def resolve_workspace_for_user(user_id: int) -> str:
+def _project_path_from_profiles(project_key: str) -> str | None:
+    if state.command_router is None or not hasattr(state.command_router, "projects"):
+        return None
+    loader = getattr(state.command_router.projects, "load_project_profiles", None)
+    if not callable(loader):
+        return None
+    profiles, _default_key = loader()
+    for profile in profiles:
+        if not isinstance(profile, dict):
+            continue
+        key = profile.get("key")
+        path = profile.get("path")
+        if key == project_key and isinstance(path, str) and path:
+            return path
+    return None
+
+
+def resolve_workspace_for_context(
+    user_id: int,
+    *,
+    thread_id: str | None = None,
+    project_key: str | None = None,
+    ensure_exists: bool = True,
+) -> str:
     state_user = user_manager.get(user_id)
-    workspace = state_user.selected_project_path
+    normalized_thread_id = thread_id if isinstance(thread_id, str) and thread_id else None
+    normalized_project_key = project_key if isinstance(project_key, str) and project_key else None
+    workspace: str | None = None
+
+    if normalized_thread_id:
+        mapped_key = user_manager.get_thread_project(normalized_thread_id)
+        if mapped_key:
+            workspace = _project_path_from_profiles(mapped_key)
+
+    if not workspace and normalized_project_key:
+        workspace = _project_path_from_profiles(normalized_project_key)
+
+    if not workspace:
+        workspace = state_user.selected_project_path
+
     if not workspace and state.command_router is not None:
         effective = state.command_router.projects.resolve_effective_project(user_id)
         if effective and isinstance(effective.get("path"), str):
@@ -124,9 +161,13 @@ def resolve_workspace_for_user(user_id: int) -> str:
     if not workspace:
         raise HTTPException(status_code=400, detail="No active workspace is selected")
     real_workspace = os.path.realpath(workspace)
-    if not os.path.isdir(real_workspace):
+    if ensure_exists and not os.path.isdir(real_workspace):
         raise HTTPException(status_code=400, detail="Workspace path does not exist")
     return real_workspace
+
+
+def resolve_workspace_for_user(user_id: int) -> str:
+    return resolve_workspace_for_context(user_id)
 
 
 def resolve_workspace_path(

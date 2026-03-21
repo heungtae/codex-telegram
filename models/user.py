@@ -92,6 +92,8 @@ class UserManager:
         self._users: dict[int, UserState] = {}
         self._thread_owners: dict[str, int] = {}
         self._thread_projects: dict[str, str] = {}
+        self._turn_owners: dict[str, int] = {}
+        self._turn_threads: dict[str, str] = {}
     
     def get(self, user_id: int) -> UserState:
         if user_id not in self._users:
@@ -140,10 +142,30 @@ class UserManager:
     def find_user_id_by_turn(self, turn_id: str | None) -> int | None:
         if not turn_id:
             return None
+        owner = self._turn_owners.get(turn_id)
+        if owner is not None:
+            return owner
         for uid, user in self._users.items():
             if user.active_turn_id == turn_id:
                 return uid
         return None
+
+    def bind_turn_owner(self, user_id: int, turn_id: str | None):
+        if isinstance(turn_id, str) and turn_id:
+            self._turn_owners[turn_id] = user_id
+
+    def bind_turn_thread(self, turn_id: str | None, thread_id: str | None):
+        if isinstance(turn_id, str) and turn_id and isinstance(thread_id, str) and thread_id:
+            self._turn_threads[turn_id] = thread_id
+
+    def bind_turn(self, user_id: int, turn_id: str | None, thread_id: str | None = None):
+        self.bind_turn_owner(user_id, turn_id)
+        self.bind_turn_thread(turn_id, thread_id)
+
+    def get_turn_thread(self, turn_id: str | None) -> str | None:
+        if not turn_id:
+            return None
+        return self._turn_threads.get(turn_id)
 
     def find_single_active_turn_owner(self) -> int | None:
         owners = [uid for uid, user in self._users.items() if user.active_turn_id]
