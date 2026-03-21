@@ -1509,6 +1509,7 @@ select {
 
 .msg {
   position: relative;
+  width: min(78%, 760px);
   max-width: min(78%, 760px);
   padding: 10px 14px 11px;
   border-radius: 0;
@@ -1544,6 +1545,7 @@ select {
 }
 
 .msg.user {
+  width: auto;
   background: linear-gradient(180deg, rgba(24, 108, 99, 0.5) 0%, rgba(17, 89, 82, 0.55) 100%);
   color: #d8fff9;
   border-color: rgba(57, 199, 187, 0.36);
@@ -1572,6 +1574,7 @@ select {
 }
 
 .msg.system {
+  width: min(72%, 560px);
   max-width: min(72%, 560px);
   text-align: center;
   color: var(--muted);
@@ -1596,6 +1599,7 @@ select {
 }
 
 .msg.system.kind-plan_checklist {
+  width: min(72%, 640px);
   max-width: min(72%, 640px);
   text-align: left;
   border-radius: 0;
@@ -1770,7 +1774,7 @@ select {
   display: flex;
   align-items: stretch;
   border: 1px solid var(--border);
-  border-radius: 0;
+  border-radius: 10px 0 0 10px;
   background: #0e1724;
   transition: border-color 0.16s ease, box-shadow 0.16s ease;
 }
@@ -2675,10 +2679,12 @@ select {
   }
 
   .msg {
+    width: 92%;
     max-width: 92%;
   }
 
   .msg.system {
+    width: 94%;
     max-width: 94%;
   }
 

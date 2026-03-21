@@ -23,7 +23,6 @@ const AGENT_CONFIG_DEFS = {
 };
 
 const THEME_STORAGE_KEY = "codex-web-theme";
-const PROJECT_CLICK_MODE_STORAGE_KEY = "codex-web-project-click-mode";
 const TURN_NOTIFICATION_STORAGE_KEY = "codex-web-turn-notification-enabled";
 const DEFAULT_THEME = "dark";
 const GUARDIAN_RULES_TOML_FALLBACK = "# Loading Guardian rules...\n";
@@ -60,27 +59,6 @@ function persistTheme(theme) {
   }
   try {
     window.localStorage.setItem(THEME_STORAGE_KEY, normalizeTheme(theme));
-  } catch (_err) {}
-}
-
-function readProjectClickMode() {
-  if (typeof window === "undefined") {
-    return "";
-  }
-  try {
-    const value = window.localStorage.getItem(PROJECT_CLICK_MODE_STORAGE_KEY) || "";
-    return value === "open_new_tab" || value === "replace_current" ? value : "";
-  } catch (_err) {
-    return "";
-  }
-}
-
-function persistProjectClickMode(mode) {
-  if (typeof window === "undefined") {
-    return;
-  }
-  try {
-    window.localStorage.setItem(PROJECT_CLICK_MODE_STORAGE_KEY, mode);
   } catch (_err) {}
 }
 
@@ -666,6 +644,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   const recentBackspaceAtRef = useRef(0);
   const paletteRef = useRef(null);
   const workspaceResizeRef = useRef({ startX: 0, startWidth: 320 });
+  const projectTabSequenceRef = useRef(0);
   const [paletteSelectedIndex, setPaletteSelectedIndex] = useState(0);
   const [sidebarWidth, setSidebarWidth] = useState(340);
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
@@ -685,7 +664,6 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   const [workspaceStatus, setWorkspaceStatus] = useState({ is_git: false, items: {} });
   const [workspaceError, setWorkspaceError] = useState("");
   const [workspacePreview, setWorkspacePreview] = useState(null);
-  const [projectClickMode, setProjectClickMode] = useState(() => readProjectClickMode());
   const [isProjectModeModalOpen, setIsProjectModeModalOpen] = useState(false);
   const [pendingProjectTarget, setPendingProjectTarget] = useState("");
   const [turnNotificationEnabled, setTurnNotificationEnabled] = useState(() => readTurnNotificationEnabled());
@@ -821,12 +799,14 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     });
   };
 
-  const upsertProjectTab = (project) => {
+  const upsertProjectTab = (project, options = {}) => {
+    const forceNew = !!options.forceNew;
     const key = typeof project?.key === "string" ? project.key : "";
     if (!key) {
       return "";
     }
-    const tabId = buildProjectTabId(key);
+    const baseTabId = buildProjectTabId(key);
+    const tabId = forceNew ? `${baseTabId}:${++projectTabSequenceRef.current}` : baseTabId;
     const tab = {
       id: tabId,
       key,
@@ -1038,7 +1018,10 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       const opened = Array.isArray(threadTabsByProjectTabId[projectTabId]) ? threadTabsByProjectTabId[projectTabId] : [];
       if (opened.length === 0) {
         if (items.length > 0) {
-          openThreadInProjectTab(projectTabId, items[0]);
+          const openedThreadId = openThreadInProjectTab(projectTabId, items[0]);
+          if (projectTabId === activeProjectTabId && openedThreadId) {
+            viewThread(openedThreadId).catch(() => {});
+          }
         } else if (projectKey) {
           const created = await api("/api/projects/open-thread", {
             method: "POST",
@@ -1047,10 +1030,17 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
           const createdThreadId = normalizeThreadId(created?.thread_id);
           if (createdThreadId) {
             openThreadInProjectTab(projectTabId, { id: createdThreadId, title: createdThreadId });
+            if (projectTabId === activeProjectTabId) {
+              viewThread(createdThreadId).catch(() => {});
+            }
           }
         }
       } else if (!normalizeThreadId(activeThreadTabIdByProjectTabId[projectTabId])) {
-        setActiveThreadForProjectTab(projectTabId, opened[0]?.id || "");
+        const defaultThreadId = normalizeThreadId(opened[0]?.id || "");
+        setActiveThreadForProjectTab(projectTabId, defaultThreadId);
+        if (projectTabId === activeProjectTabId && defaultThreadId) {
+          viewThread(defaultThreadId).catch(() => {});
+        }
       }
     }
   };
@@ -1266,7 +1256,8 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     }
   };
 
-  const startThread = async () => {
+  const startThread = async (options = {}) => {
+    const replaceCurrentTab = !!options.replaceCurrentTab;
     let nextThreadId = "";
     if (activeProjectKey) {
       const result = await api("/api/projects/open-thread", {
@@ -1275,7 +1266,39 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       });
       nextThreadId = normalizeThreadId(result?.thread_id);
       if (activeProjectTabId && nextThreadId) {
-        openThreadInProjectTab(activeProjectTabId, { id: nextThreadId, title: nextThreadId });
+        const currentThreadTabId = normalizeThreadId(
+          activeThreadTabIdByProjectTabId[activeProjectTabId] || activeThread
+        );
+        if (replaceCurrentTab && currentThreadTabId) {
+          setThreadTabsByProjectTabId((prev) => {
+            const rows = Array.isArray(prev[activeProjectTabId]) ? prev[activeProjectTabId] : [];
+            const index = rows.findIndex((row) => normalizeThreadId(row.id) === currentThreadTabId);
+            if (index < 0) {
+              return {
+                ...prev,
+                [activeProjectTabId]: [...rows, { id: nextThreadId, title: nextThreadId, status: "idle", hasUnreadCompletion: false }],
+              };
+            }
+            const nextRows = [...rows];
+            nextRows[index] = {
+              ...nextRows[index],
+              id: nextThreadId,
+              title: nextThreadId,
+              status: "idle",
+              hasUnreadCompletion: false,
+            };
+            return { ...prev, [activeProjectTabId]: nextRows };
+          });
+          setThreadProjectTabIdByThreadId((prev) => {
+            const next = { ...prev };
+            delete next[currentThreadTabId];
+            next[nextThreadId] = activeProjectTabId;
+            return next;
+          });
+          setActiveThreadForProjectTab(activeProjectTabId, nextThreadId);
+        } else {
+          openThreadInProjectTab(activeProjectTabId, { id: nextThreadId, title: nextThreadId });
+        }
       }
     } else {
       const result = await api("/api/threads/start", { method: "POST", body: "{}" });
@@ -1299,7 +1322,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     if (!target || interactionBusy) {
       return;
     }
-    const resolvedMode = forcedMode || projectClickMode;
+    const resolvedMode = forcedMode;
     if (!resolvedMode) {
       setPendingProjectTarget(target);
       setIsProjectModeModalOpen(true);
@@ -1336,7 +1359,10 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
           return next;
         });
       } else {
-        projectTabId = upsertProjectTab(selectedProject || { key: target, name: target, path: "" });
+        projectTabId = upsertProjectTab(
+          selectedProject || { key: target, name: target, path: "" },
+          { forceNew: resolvedMode === "open_new_tab" }
+        );
       }
       if (projectTabId) {
         setActiveProjectTabId(projectTabId);
@@ -1364,8 +1390,6 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
 
   const chooseProjectClickMode = (mode) => {
     const normalizedMode = mode === "replace_current" ? "replace_current" : "open_new_tab";
-    setProjectClickMode(normalizedMode);
-    persistProjectClickMode(normalizedMode);
     const target = pendingProjectTarget;
     setPendingProjectTarget("");
     setIsProjectModeModalOpen(false);
@@ -2065,13 +2089,19 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     if (!activeProjectTabId) {
       return;
     }
-    setActiveThread(normalizeThreadId(activeThreadTabIdByProjectTabId[activeProjectTabId]) || "");
+    const selectedThreadId = normalizeThreadId(activeThreadTabIdByProjectTabId[activeProjectTabId]) || "";
+    setActiveThread(selectedThreadId);
     const workspaceState = workspaceByProjectTabId[activeProjectTabId] || createEmptyWorkspaceState();
     setWorkspaceTree(workspaceState.tree || {});
     setExpandedWorkspaceDirs(workspaceState.expandedDirs || { "": true });
     setWorkspaceStatus(workspaceState.status || { is_git: false, items: {} });
     setWorkspaceError(workspaceState.error || "");
     setWorkspacePreview(workspaceState.preview || null);
+    if (selectedThreadId) {
+      viewThread(selectedThreadId).catch(() => {});
+    } else {
+      setMessages([]);
+    }
     loadThreads({ projectKey: activeProjectKey, projectTabId: activeProjectTabId, ensureDefaultTab: true }).catch(() => {});
   }, [activeProjectTabId]);
 
@@ -2582,7 +2612,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       >
         <div className="modal-title">프로젝트 탭 동작 선택</div>
         <div className="modal-desc">
-          프로젝트 클릭 시 새 탭으로 열지, 현재 탭을 교체할지 선택하세요. 이 선택은 저장됩니다.
+          프로젝트 클릭 시 새 탭으로 열지, 현재 탭을 교체할지 선택하세요.
         </div>
         <div className="modal-actions">
           <button
@@ -3338,7 +3368,13 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
                 <FolderIcon open={isWorkspacePanelOpen} />
               </button>
             ) : null}
-            <button className="composer-action composer-new-chat" onClick={startThread} aria-label="New chat" title="New chat" disabled={interactionBusy}>
+            <button
+              className="composer-action composer-new-chat"
+              onClick={() => startThread({ replaceCurrentTab: true }).catch(() => {})}
+              aria-label="New chat"
+              title="New chat"
+              disabled={interactionBusy}
+            >
               <NewChatIcon />
             </button>
           </div>
