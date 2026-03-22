@@ -61,192 +61,43 @@ cp conf.toml.example conf.toml
 
 4. Edit `conf.toml`
 
-- `projects.<key>.path`: absolute path to the target project
-- `users.allowed_ids`: list of Telegram user IDs allowed to use this bot
-- `telegram.bot.token` or environment variable `TELEGRAM_BOT_TOKEN`
-
-Example:
-
-```toml
-project = "default"
-
-[projects.default]
-name = "my project"
-path = "/absolute/path/to/your/project"
-
-[telegram]
-enabled = true
-
-[telegram.bot]
-token = "TELEGRAM_BOT_TOKEN"
-drop_pending_updates = true
-conflict_action = "prompt" # prompt | kill | exit
-
-[web]
-enabled = true
-host = "127.0.0.1"
-port = 8080
-password = "env:CODEX_WEB_PASSWORD"
-password_env = "CODEX_WEB_PASSWORD"
-allowed_users = ["admin"]
-session_ttl_seconds = 43200
-cookie_secure = false
-
-[codex]
-command = "codex"
-args = ["app-server"]
-
-[users]
-allowed_ids = [123456789]
-
-[approval]
-mode = "interactive" # interactive | auto
-auto_response = "approve" # approve | session | deny
-
-[approval.guardian]
-enabled = false
-timeout_seconds = 8
-failure_policy = "manual_fallback" # manual_fallback | deny | approve | session
-explainability = "decision_only" # decision_only | summary
-apply_to_methods = ["*"]
-
-[[approval.guardian.rules]]
-name = "secret files"
-enabled = true
-action = "deny" # approve | session | deny | manual_fallback
-priority = 300
-path_glob_any = ["**/.env", "**/.env.*", "**/*.pem", "**/*.key", "**/id_rsa", "**/secrets/**"]
-
-[[approval.guardian.rules]]
-name = "protected build and deployment files"
-enabled = true
-action = "manual_fallback"
-priority = 250
-path_glob_any = ["**/pom.xml", "**/Dockerfile", "helm/**", "db/migration/**"]
-
-[[approval.guardian.rules]]
-name = "allow safe build commands"
-enabled = true
-action = "approve"
-priority = 220
-command_any = ["mvn -q test", "mvn -q -DskipTests compile", "./gradlew test", "git diff", "git status"]
-
-[[approval.guardian.rules]]
-name = "deny dangerous shell commands"
-enabled = true
-action = "deny"
-priority = 260
-command_any = ["rm -rf", "curl | sh", "apt install", "yum install", "dnf install", "apk add", "curl http://", "curl https://", "wget http://", "wget https://"]
-
-[[approval.guardian.rules]]
-name = "large change set"
-enabled = true
-action = "manual_fallback"
-priority = 210
-max_changed_files = 20
-
-[[approval.guardian.rules]]
-name = "public api change"
-enabled = true
-action = "manual_fallback"
-priority = 205
-require_public_api_change = true
-
-[[approval.guardian.rules]]
-name = "db schema change"
-enabled = true
-action = "manual_fallback"
-priority = 205
-require_db_schema_change = true
-
-[[approval.guardian.rules]]
-name = "auth or security change"
-enabled = true
-action = "manual_fallback"
-priority = 205
-require_auth_security_change = true
-
-[[approval.guardian.rules]]
-name = "block merge candidate after lint failure"
-enabled = true
-action = "deny"
-priority = 200
-command_any = ["merge", "merge candidate"]
-require_lint_failed = true
-
-[[approval.guardian.rules]]
-name = "coverage drop escalation"
-enabled = true
-action = "manual_fallback"
-priority = 190
-coverage_drop_gt = 2.0
-
-[[approval.guardian.rules]]
-name = "git access"
-enabled = true
-action = "approve"
-priority = 150
-match_method = ["item/tool/*", "item/commandExecution/requestApproval"]
-command_any = ["git", "repository", "commit", "branch", "push", "pull", "stage all current changes"]
-
-[[approval.guardian.rules]]
-name = "workspace file access"
-enabled = true
-action = "approve"
-priority = 140
-match_method = ["item/tool/*"]
-match_question_any = ["workspace", "file", "read file", "write file", "edit file"]
-
-[[approval.guardian.rules]]
-name = "network access"
-enabled = true
-action = "deny"
-priority = 240
-match_method = ["item/tool/*"]
-match_question_any = ["network", "internet", "http", "https", "download", "fetch", "browse"]
-
-[logging]
-level = "INFO"
-
-[telegram.forwarding]
-app_server_event_level = "DEBUG"
-app_server_event_allowlist = ["item/completed", "turn/completed", "turn/failed", "turn/cancelled"]
-app_server_event_denylist = ["item/agentMessage/delta"]
-
-[[telegram.forwarding.rules]]
- method = "item/completed"
- require_path = "item.type"
- require_equals = "agentMessage"
- text_paths = ["item.text"]
- fallback = "drop"
-
-[display]
-max_message_length = 4000
-send_progress = true
+```bash
+cp conf.toml.example conf.toml
 ```
 
-Guardian rule note:
-- Different matcher groups inside one rule are combined with `AND`.
+Key settings to update:
+
+- `projects.default.path`: absolute path to the target project
+- `users.allowed_ids`: list of Telegram user IDs allowed to use this bot
+- `telegram.bot.token` or environment variable `TELEGRAM_BOT_TOKEN`
+- For HTTPS: `web.ssl_enabled = true`, `web.ssl_certfile`, `web.ssl_keyfile`
+
+For full configuration reference, see [`conf.toml.example`](conf.toml.example).
+
+Guardian rule notes:
+- Matcher groups inside one rule are combined with `AND`.
 - Use separate rules when you want `OR` semantics across conditions like changed-file count, public API changes, DB schema changes, and auth/security changes.
 - Telegram turn end messages use `telegram.forwarding.app_server_event_allowlist`. Keep `turn/completed` enabled there if you want completion notices delivered to Telegram.
 
-4. (Optional) Set token via environment variable
+5. (Optional) Set token via environment variable
 
 ```bash
 export TELEGRAM_BOT_TOKEN="your_actual_bot_token"
 ```
 
-5. Run
+6. Run
 
 ```bash
 python3 main.py
 ```
 
-6. Open Web UI (if `web.enabled = true`)
+7. Open Web UI (if `web.enabled = true`)
 
 ```text
 http://127.0.0.1:8080
 ```
+
+For HTTPS, set `web.ssl_enabled = true`, `web.ssl_certfile`, and `web.ssl_keyfile` in `conf.toml`. See `conf.toml.example` for details.
 
 Set web password via env:
 

@@ -5,10 +5,13 @@ logger = logging.getLogger("codex-telegram")
 
 
 class WebServerThread:
-    def __init__(self, host: str, port: int, app_factory):
+    def __init__(self, host: str, port: int, app_factory, ssl_enabled: bool = False, ssl_certfile: str = "", ssl_keyfile: str = ""):
         self.host = host
         self.port = port
         self.app_factory = app_factory
+        self.ssl_enabled = ssl_enabled
+        self.ssl_certfile = ssl_certfile
+        self.ssl_keyfile = ssl_keyfile
         self.server = None
 
     def run(self):
@@ -16,7 +19,14 @@ class WebServerThread:
             import uvicorn
 
             app = self.app_factory()
-            config = uvicorn.Config(app, host=self.host, port=self.port, log_level="info", access_log=False)
+            ssl_args = {}
+            if self.ssl_enabled and self.ssl_certfile and self.ssl_keyfile:
+                ssl_args["ssl_certfile"] = self.ssl_certfile
+                ssl_args["ssl_keyfile"] = self.ssl_keyfile
+                logger.info("Web UI HTTPS enabled with cert=%s key=%s", self.ssl_certfile, self.ssl_keyfile)
+            config = uvicorn.Config(
+                app, host=self.host, port=self.port, log_level="info", access_log=False, **ssl_args
+            )
             self.server = uvicorn.Server(config)
             self.server.run()
         except Exception:

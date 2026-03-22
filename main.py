@@ -96,11 +96,17 @@ def _parse_web_endpoint() -> tuple[bool, str, int, str]:
         web_port = int(web_port_raw)
     except Exception:
         web_port = 8080
-    return web_enabled, web_host, web_port, f"http://{web_host}:{web_port}"
+    ssl_enabled = parse_bool(get("web.ssl_enabled", False), default=False)
+    ssl_certfile = str(get("web.ssl_certfile", "")).strip()
+    ssl_keyfile = str(get("web.ssl_keyfile", "")).strip()
+    scheme = "https" if ssl_enabled else "http"
+    return web_enabled, web_host, web_port, f"{scheme}://{web_host}:{web_port}", ssl_enabled, ssl_certfile, ssl_keyfile
 
 
-def _start_web_server(web_host: str, web_port: int) -> tuple[WebServerThread, threading.Thread]:
-    server = WebServerThread(web_host, web_port, create_web_app)
+def _start_web_server(
+    web_host: str, web_port: int, ssl_enabled: bool, ssl_certfile: str, ssl_keyfile: str
+) -> tuple[WebServerThread, threading.Thread]:
+    server = WebServerThread(web_host, web_port, create_web_app, ssl_enabled, ssl_certfile, ssl_keyfile)
     thread = threading.Thread(target=server.run, daemon=True, name="codex-web-server")
     thread.start()
     return server, thread
@@ -179,13 +185,13 @@ def main():
     logger.info("Starting Codex Telegram Bot...")
     logger.info("Using config file %s", get_config_path())
 
-    web_enabled, web_host, web_port, web_endpoint = _parse_web_endpoint()
+    web_enabled, web_host, web_port, web_endpoint, ssl_enabled, ssl_certfile, ssl_keyfile = _parse_web_endpoint()
     telegram_enabled = parse_bool(get("telegram.enabled", True), default=True)
     logger.info("Web endpoint configured: %s (enabled=%s)", web_endpoint, web_enabled)
     logger.info("Telegram channel enabled=%s", telegram_enabled)
 
     if web_enabled:
-        _web_server, _web_server_thread = _start_web_server(web_host, web_port)
+        _web_server, _web_server_thread = _start_web_server(web_host, web_port, ssl_enabled, ssl_certfile, ssl_keyfile)
         logger.info("Web UI started at %s", web_endpoint)
 
     if not telegram_enabled:

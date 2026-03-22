@@ -1,44 +1,241 @@
+# =============================================================================
+# Codex Telegram Bot Configuration
+# =============================================================================
+# Copy this file to ~/.config/codex-telegram/conf.toml or use:
+#   cp conf.toml.example ~/.config/codex-telegram/conf.toml
+#
+# For detailed setup instructions, see README.md.
+# =============================================================================
+
 project = "default"
+
+# -----------------------------------------------------------------------------
+# Project Profiles
+# -----------------------------------------------------------------------------
+# Define project profiles that can be selected and switched at runtime.
+# Multiple projects can be configured with different keys (e.g., default, work, home).
+#
+# Usage:
+#   - `/projects --list` to view all configured projects
+#   - `/projects --add <key>` to add a new project interactively
+#   - `/project <key|number|name>` to switch the active project
+#
+# When a project is active, its `path` is used as the working directory for
+# Codex operations (file reads, writes, command execution, etc.).
 
 [projects.default]
 name = "my project"
 path = "/absolute/path/to/your/project"
 
+# -----------------------------------------------------------------------------
+# Telegram Bot Settings
+# -----------------------------------------------------------------------------
+# Controls whether the Telegram bot functionality is enabled.
+# Set to false if you only want to use the Web UI without Telegram.
+
 [telegram]
 enabled = true
 
+# -----------------------------------------------------------------------------
+# Telegram Bot Authentication
+# -----------------------------------------------------------------------------
+# Bot token from @BotFather. Recommended: use environment variable.
+# Get your token from: https://t.me/BotFather
+#
+# Option 1: Direct token (not recommended - committed to version control)
+#   token = "123456:ABC-DEF..."
+#
+# Option 2: Environment variable (recommended)
+#   export TELEGRAM_BOT_TOKEN="123456:ABC-DEF..."
+
 [telegram.bot]
 token = "TELEGRAM_BOT_TOKEN"
+
+# Drop pending updates when bot starts. Set to true to ignore messages sent
+# while the bot was offline.
 drop_pending_updates = true
+
+# Action to take when another instance is detected with the same bot token.
+# Options:
+#   prompt  - Ask interactively (requires TTY). Falls back to "exit" if no TTY.
+#   kill    - Automatically terminate the conflicting process and start.
+#   exit    - Exit immediately without asking.
 conflict_action = "prompt" # prompt | kill | exit
 
+# -----------------------------------------------------------------------------
+# Web UI Settings
+# -----------------------------------------------------------------------------
+# The Web UI provides a ChatGPT-style interface for interacting with Codex.
+# Access it at http://<host>:<port> when enabled.
+#
+# HTTPS Setup:
+#   1. Set ssl_enabled = true
+#   2. Provide paths to your SSL certificate and private key files
+#   3. Supported formats: PEM (single file with chain or separate files)
+#
+# Security Recommendations:
+#   - Use HTTPS in production (ssl_enabled = true)
+#   - Set a strong password (use CODEX_WEB_PASSWORD env var)
+#   - Restrict allowed_users to specific usernames
+#   - Set cookie_secure = true when using HTTPS
+
 [web]
+# Enable/disable the Web UI server
 enabled = false
+
+# Host to bind to. Use "0.0.0.0" to listen on all interfaces,
+# or "127.0.0.1" for localhost only.
 host = "127.0.0.1"
+
+# Port to listen on
 port = 8080
+
+# SSL/TLS settings for HTTPS
+# Set to true to enable HTTPS, false for plain HTTP
+ssl_enabled = false
+
+# Path to SSL certificate file (fullchain.pem for Let's Encrypt, etc.)
+# Required when ssl_enabled = true
+ssl_certfile = ""
+
+# Path to SSL private key file
+# Required when ssl_enabled = true
+ssl_keyfile = ""
+
+# Authentication password for Web UI access.
+# Supports environment variable reference: "env:VARIABLE_NAME"
+# Recommended: set via CODEX_WEB_PASSWORD environment variable.
 password = "env:CODEX_WEB_PASSWORD"
+
+# Environment variable name that stores the web password.
+# The actual password value should be set via the environment variable.
 password_env = "CODEX_WEB_PASSWORD"
+
+# List of usernames allowed to access the Web UI.
+# These should match the usernames from your authentication provider.
+# Example: ["alice", "bob", "admin"]
 allowed_users = ["admin"]
+
+# Session lifetime in seconds. After this time, users must re-authenticate.
+# Default: 43200 (12 hours)
 session_ttl_seconds = 43200
+
+# Set cookie secure flag. Enable this when using HTTPS to ensure
+# cookies are only sent over secure connections.
 cookie_secure = false
 
+# -----------------------------------------------------------------------------
+# Codex App Server
+# -----------------------------------------------------------------------------
+# Configuration for the underlying Codex app-server process.
+
 [codex]
+# Command to invoke the Codex CLI. Can include path or just "codex"
+# if it's in your PATH.
 command = "codex"
+
+# Arguments passed to the Codex app-server command.
+# Default: ["app-server"] starts the Codex API server.
 args = ["app-server"]
+
+# -----------------------------------------------------------------------------
+# User Access Control
+# -----------------------------------------------------------------------------
+# Telegram user IDs that are allowed to use this bot.
+# Find your Telegram user ID by messaging @userinfobot
+#
+# IMPORTANT: If this list is empty, NOBODY can use the bot.
+# Get your user ID: https://t.me/userinfobot
 
 [users]
 allowed_ids = []
+
+# -----------------------------------------------------------------------------
+# Approval Mode Settings
+# -----------------------------------------------------------------------------
+# Controls how approval requests are handled when Codex requests permission
+# to execute potentially dangerous operations.
+#
+# Modes:
+#   interactive - Show approval buttons in Telegram/Web UI (default, recommended)
+#   auto        - Automatically respond based on auto_response setting
+#
+# Auto Response Options:
+#   approve - Automatically approve all requests (DANGEROUS)
+#   session - Approve for this session only, deny after restart
+#   deny    - Automatically deny all requests
 
 [approval]
 mode = "interactive"  # interactive | auto
 auto_response = "approve"  # approve | session | deny
 
+# -----------------------------------------------------------------------------
+# Guardian Settings (Policy-Based Safety Checks)
+# -----------------------------------------------------------------------------
+# Guardian provides policy-based safety checks BEFORE the approval decision.
+# It can automatically approve, deny, or escalate requests based on rules.
+#
+# When enabled, rules are evaluated first. If a rule matches, its action
+# is taken immediately. If no rule matches, the normal approval flow applies.
+#
+# Failure Handling:
+#   When Guardian LLM review fails (timeout, API error, etc.):
+#   - manual_fallback: Treat as if user needs to approve manually (default)
+#   - approve: Approve the request
+#   - deny: Deny the request
+#   - session: Approve for this session, deny after restart
+
 [approval.guardian]
+# Enable/disable Guardian policy checking
 enabled = false
+
+# How long to wait for Guardian LLM review (seconds)
 timeout_seconds = 8
+
+# What to do when Guardian check fails
 failure_policy = "manual_fallback"  # manual_fallback | deny | approve | session
+
+# Level of detail in Guardian explanations:
+#   decision_only - Just the action (approve/deny/session)
+#   summary        - Include a brief explanation of why
 explainability = "decision_only"  # decision_only | summary
+
+# Which Codex methods to apply Guardian checks to.
+# Use ["*"] to check all methods, or specify a list like:
+#   ["item/tool/execute"]
+#   ["item/tool/*"]
 apply_to_methods = ["*"]
+
+# =============================================================================
+# Guardian Rules
+# =============================================================================
+# Rules are evaluated in order of priority (higher number = evaluated first).
+# When a rule matches, its action is taken immediately.
+#
+# Rule Actions:
+#   approve       - Automatically approve the request
+#   deny          - Automatically deny the request
+#   session       - Approve for this session only
+#   manual_fallback - Skip to human approval (approval.mode applies)
+#
+# Matcher Types:
+#   path_glob_any  - Match if ANY of these patterns match the file path
+#                   Use glob patterns: **/*.py, **/secrets/**, etc.
+#   command_any    - Match if ANY of these strings appear in the command
+#   match_method   - Match specific Codex API methods (e.g., item/tool/*)
+#   match_question_any - Match keywords in the user's request
+#
+# Threshold Matchers:
+#   max_changed_files     - Match if more than N files would be changed
+#   require_public_api_change - Match if public API changes detected
+#   require_db_schema_change  - Match if DB schema changes detected
+#   require_auth_security_change - Match if auth/security changes detected
+#   require_lint_failed    - Match if lint checks failed
+#   coverage_drop_gt       - Match if coverage drops by more than N%
+#
+# NOTE: Matcher groups within a rule are combined with AND logic.
+# Use separate rules if you need OR logic across conditions.
+# =============================================================================
 
 [[approval.guardian.rules]]
 name = "secret files"
@@ -135,23 +332,63 @@ priority = 240
 match_method = ["item/tool/*"]
 match_question_any = ["network", "internet", "http", "https", "download", "fetch", "browse"]
 
+# -----------------------------------------------------------------------------
+# Logging Configuration
+# -----------------------------------------------------------------------------
+# Controls the verbosity of log output.
+# Options: DEBUG, INFO, WARNING, ERROR, CRITICAL
+
 [logging]
 level = "INFO"
+
+# -----------------------------------------------------------------------------
+# Telegram Event Forwarding
+# -----------------------------------------------------------------------------
+# Configure which Codex app-server events are forwarded to Telegram.
+# Events are shown as messages in the Telegram chat.
+#
+# app_server_event_level:
+#   DEBUG - Forward all events with debug info
+#   INFO  - Forward info-level and above
+#   WARNING - Forward warnings and errors only
+#   ERROR - Forward only errors
+#
+# allowlist/denylist:
+#   Use allowlist to only forward specific events (whitelist mode).
+#   Use denylist to exclude specific events (blacklist mode).
+#   Leave empty to forward all events at the configured level.
+#
+# Common event types:
+#   item/completed       - Command/tool execution completed
+#   item/agentMessage/delta - Streaming agent messages
+#   turn/completed       - Turn/response completed
+#   turn/failed          - Turn/response failed
+#   turn/cancelled       - Turn/response cancelled
 
 [telegram.forwarding]
 app_server_event_level = "DEBUG"
 app_server_event_allowlist = ["item/completed", "turn/completed", "turn/failed", "turn/cancelled"]
 app_server_event_denylist = ["item/agentMessage/delta"]
 
-# Example rule:
-[[telegram.forwarding.rules]]
-method = "item/completed"
-require_path = "item.type"
-require_equals = "agentMessage"
-text_paths = ["item.text"]
-fallback = "drop" # drop|json
+# Example forwarding rule:
+# [[telegram.forwarding.rules]]
+# method = "item/completed"
+# require_path = "item.type"
+# require_equals = "agentMessage"
+# text_paths = ["item.text"]
+# fallback = "drop" # drop|json
+
+# -----------------------------------------------------------------------------
+# Display Settings
+# -----------------------------------------------------------------------------
+# Controls message display and UI behavior in Telegram.
 
 [display]
+# Maximum message length before splitting. Telegram limit is ~4096 chars.
 max_message_length = 4000
+
+# Send progress updates while commands are running.
 send_progress = true
+
+# Maximum number of threads to show in /threads list.
 threads_list_limit = 20
