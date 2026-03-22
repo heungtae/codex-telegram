@@ -3,6 +3,11 @@ import { useEffect, useRef, useState } from "react";
 import { createEmptyThreadUiState, normalizeThreadId } from "../../common/utils";
 
 export default function useThreadScopedState(activeThread) {
+  const debugLog = (...args) => {
+    if (typeof window !== "undefined" && window.__CODEX_WEB_DEBUG__ === true) {
+      console.log(...args);
+    }
+  };
   const [messages, setMessages] = useState([]);
   const [messagesByThreadId, setMessagesByThreadId] = useState({});
   const [input, setInput] = useState("");
@@ -70,29 +75,84 @@ export default function useThreadScopedState(activeThread) {
 
   const appendMessageToThread = (threadId, message) => {
     const normalizedThreadId = normalizeThreadId(threadId);
+    const activeThreadId = normalizeThreadId(activeThreadRef.current);
+    debugLog("[CHAT-MEMORY][append]", {
+      activeThreadId,
+      targetThreadId: normalizedThreadId || "",
+      role: message?.role || "",
+      turnId: message?.turnId || "",
+      itemId: message?.itemId || "",
+      kind: message?.kind || "",
+      streaming: !!message?.streaming,
+      text: typeof message?.text === "string" ? message.text.slice(0, 200) : "",
+    });
     if (!normalizedThreadId) {
-      setMessages((prev) => [...prev, message]);
+      setMessages((prev) => {
+        const next = [...prev, message];
+        debugLog("[CHAT-MEMORY][append->messages]", {
+          activeThreadId,
+          targetThreadId: "",
+          nextCount: next.length,
+        });
+        return next;
+      });
       return;
     }
-    if (normalizedThreadId === normalizeThreadId(activeThread)) {
-      setMessages((prev) => [...prev, message]);
+    if (normalizedThreadId === activeThreadId) {
+      setMessages((prev) => {
+        const next = [...prev, message];
+        debugLog("[CHAT-MEMORY][append->messages]", {
+          activeThreadId,
+          targetThreadId: normalizedThreadId,
+          nextCount: next.length,
+        });
+        return next;
+      });
       return;
     }
     setMessagesByThreadId((prev) => {
       const existing = Array.isArray(prev[normalizedThreadId]) ? prev[normalizedThreadId] : [];
-      return { ...prev, [normalizedThreadId]: [...existing, message] };
+      const nextThreadMessages = [...existing, message];
+      debugLog("[CHAT-MEMORY][append->messagesByThreadId]", {
+        activeThreadId,
+        targetThreadId: normalizedThreadId,
+        nextCount: nextThreadMessages.length,
+      });
+      return { ...prev, [normalizedThreadId]: nextThreadMessages };
     });
   };
 
   const applyMessageMutationForThread = (threadId, mutateFn) => {
     const normalizedThreadId = normalizeThreadId(threadId);
-    if (!normalizedThreadId || normalizedThreadId === normalizeThreadId(activeThread)) {
-      setMessages((prev) => mutateFn(prev));
+    const activeThreadId = normalizeThreadId(activeThreadRef.current);
+    debugLog("[CHAT-MEMORY][mutate]", {
+      activeThreadId,
+      targetThreadId: normalizedThreadId || "",
+      targetIsActive: !normalizedThreadId || normalizedThreadId === activeThreadId,
+    });
+    if (!normalizedThreadId || normalizedThreadId === activeThreadId) {
+      setMessages((prev) => {
+        const next = mutateFn(prev);
+        debugLog("[CHAT-MEMORY][mutate->messages]", {
+          activeThreadId,
+          targetThreadId: normalizedThreadId || "",
+          prevCount: prev.length,
+          nextCount: Array.isArray(next) ? next.length : -1,
+        });
+        return next;
+      });
       return;
     }
     setMessagesByThreadId((prev) => {
       const current = Array.isArray(prev[normalizedThreadId]) ? prev[normalizedThreadId] : [];
-      return { ...prev, [normalizedThreadId]: mutateFn(current) };
+      const nextThreadMessages = mutateFn(current);
+      debugLog("[CHAT-MEMORY][mutate->messagesByThreadId]", {
+        activeThreadId,
+        targetThreadId: normalizedThreadId,
+        prevCount: current.length,
+        nextCount: Array.isArray(nextThreadMessages) ? nextThreadMessages.length : -1,
+      });
+      return { ...prev, [normalizedThreadId]: nextThreadMessages };
     });
   };
 

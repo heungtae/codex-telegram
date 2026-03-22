@@ -21,8 +21,10 @@ class HandlerResultTests(unittest.IsolatedAsyncioTestCase):
         handlers._last_conflict_log_at = 0.0
         user_manager._users.clear()
         user_manager._thread_owners.clear()
+        user_manager._thread_subscribers.clear()
         user_manager._thread_projects.clear()
         user_manager._turn_owners.clear()
+        user_manager._turn_subscribers.clear()
         user_manager._turn_threads.clear()
 
     def tearDown(self):

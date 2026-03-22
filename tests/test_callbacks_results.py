@@ -16,8 +16,10 @@ class CallbackResultTests(unittest.IsolatedAsyncioTestCase):
         self.context = SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock()))
         user_manager._users.clear()
         user_manager._thread_owners.clear()
+        user_manager._thread_subscribers.clear()
         user_manager._thread_projects.clear()
         user_manager._turn_owners.clear()
+        user_manager._turn_subscribers.clear()
         user_manager._turn_threads.clear()
 
     def tearDown(self):

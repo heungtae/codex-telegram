@@ -72,6 +72,9 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   const chatRef = useRef(null);
   const inputRef = useRef(null);
   const reasoningStateRef = useRef({});
+  const activeProjectTabIdRef = useRef("");
+  const activeProjectKeyRef = useRef("");
+  const threadProjectTabIdByThreadIdRef = useRef({});
   const pendingComposerFocusRef = useRef(false);
   const composerFocusWantedRef = useRef(false);
   const composerSelectionRef = useRef({ start: null, end: null });
@@ -79,6 +82,8 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   const paletteRef = useRef(null);
   const workspaceResizeRef = useRef({ startX: 0, startWidth: 320 });
   const projectTabSequenceRef = useRef(0);
+  const streamedTurnIdsRef = useRef({});
+  const assistantItemCompletedByTurnRef = useRef({});
   const [paletteSelectedIndex, setPaletteSelectedIndex] = useState(0);
   const [sidebarWidth, setSidebarWidth] = useState(340);
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
@@ -96,7 +101,21 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   const [isProjectModeModalOpen, setIsProjectModeModalOpen] = useState(false);
   const [pendingProjectTarget, setPendingProjectTarget] = useState("");
   const [turnNotificationEnabled, setTurnNotificationEnabled] = useState(() => readTurnNotificationEnabled());
+  const debugLoggingEnabled =
+    (typeof me?.logging_level === "string" && me.logging_level.toUpperCase() === "DEBUG") ||
+    me?.debug_logging === true;
+  const debugLog = (...args) => {
+    if (debugLoggingEnabled) {
+      console.log(...args);
+    }
+  };
+  const debugError = (...args) => {
+    if (debugLoggingEnabled) {
+      console.error(...args);
+    }
+  };
   const audioCtxRef = useRef(null);
+  const itemPhaseByTurnRef = useRef({});
   const {
     messages,
     setMessages,
@@ -124,9 +143,8 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   const activeProjectTabSnapshot = projectTabs.find((tab) => tab.id === activeProjectTabId) || null;
   const {
     ensureWorkspaceBucket,
-    resetWorkspaceBucket,
     removeWorkspaceBucket,
-    restoreWorkspaceForProjectTab,
+    restoreWorkspaceForThread,
     workspaceTree,
     expandedWorkspaceDirs,
     workspaceStatus,
@@ -241,6 +259,24 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     [projectTabs, activeProjectTabId]
   );
   const activeProjectKey = activeProjectTab?.key || "";
+
+  useEffect(() => {
+    activeProjectTabIdRef.current = activeProjectTabId;
+  }, [activeProjectTabId]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.__CODEX_WEB_DEBUG__ = debugLoggingEnabled;
+    }
+  }, [debugLoggingEnabled]);
+
+  useEffect(() => {
+    activeProjectKeyRef.current = activeProjectKey;
+  }, [activeProjectKey]);
+
+  useEffect(() => {
+    threadProjectTabIdByThreadIdRef.current = threadProjectTabIdByThreadId;
+  }, [threadProjectTabIdByThreadId]);
   const projectTabStatusById = useMemo(() => {
     const next = {};
     projectTabs.forEach((tab) => {
@@ -289,7 +325,6 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       }
       return [...prev, tab];
     });
-    ensureWorkspaceBucket(tabId);
     return tabId;
   };
 
@@ -316,6 +351,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       };
     });
     setThreadProjectTabIdByThreadId((prev) => ({ ...prev, [threadId]: projectTabId }));
+    ensureWorkspaceBucket(threadId);
     setActiveThreadForProjectTab(projectTabId, threadId);
     return threadId;
   };
@@ -333,7 +369,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     if (!normalizedThreadId) {
       return;
     }
-    const projectTabId = threadProjectTabIdByThreadId[normalizedThreadId];
+    const projectTabId = threadProjectTabIdByThreadIdRef.current[normalizedThreadId];
     if (!projectTabId) {
       return;
     }
@@ -397,6 +433,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       delete next[normalizedThreadId];
       return next;
     });
+    removeWorkspaceBucket(normalizedThreadId);
   };
 
   const closeProjectTab = (projectTabId) => {
@@ -417,7 +454,10 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       delete next[projectTabId];
       return next;
     });
-    removeWorkspaceBucket(projectTabId);
+    const ownedThreads = Array.isArray(threadTabsByProjectTabId[projectTabId])
+      ? threadTabsByProjectTabId[projectTabId].map((row) => normalizeThreadId(row.id)).filter(Boolean)
+      : [];
+    ownedThreads.forEach((threadId) => removeWorkspaceBucket(threadId));
     setThreadProjectTabIdByThreadId((prev) => {
       const next = { ...prev };
       Object.entries(next).forEach(([threadId, tabId]) => {
@@ -551,11 +591,36 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     const summary = await api("/api/session/summary");
     setSessionSummary(summary);
     const summaryThreadId = normalizeThreadId(summary?.active_thread_id);
+    const hasActiveTurn = !!summary?.active_turn_id;
+    setThreadTabsByProjectTabId((prev) => {
+      const next = {};
+      for (const [projectTabId, rows] of Object.entries(prev)) {
+        next[projectTabId] = (Array.isArray(rows) ? rows : []).map((row) => {
+          const rowThreadId = normalizeThreadId(row?.id);
+          if (!rowThreadId) {
+            return row;
+          }
+          if (hasActiveTurn && rowThreadId === summaryThreadId) {
+            if (row.status === "running") {
+              return row;
+            }
+            return { ...row, status: "running" };
+          }
+          if (!hasActiveTurn && row.status === "running") {
+            return { ...row, status: "idle" };
+          }
+          return row;
+        });
+      }
+      return next;
+    });
     if (summaryThreadId) {
-      updateThreadUi(summaryThreadId, { status: summary?.active_turn_id ? "running" : "idle" });
+      updateThreadUi(summaryThreadId, { status: hasActiveTurn ? "running" : "idle" });
     }
     if (summaryThreadId && summaryThreadId === activeThreadRef.current) {
-      setStatusForActiveThread(summary?.active_turn_id ? "running" : "idle");
+      setStatusForActiveThread(hasActiveTurn ? "running" : "idle");
+    } else if (!hasActiveTurn) {
+      setStatus((current) => (current === "running" ? "idle" : current));
     }
     if (typeof summary?.collaboration_mode === "string") {
       setCollaborationMode(normalizeCollaborationMode(summary.collaboration_mode));
@@ -582,6 +647,45 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     const items = Array.isArray(result.items) ? result.items : [];
     const filtered = items.filter((item) => item && typeof item.id === "number");
     setApprovalItems(filtered.length ? [filtered[filtered.length - 1]] : []);
+  };
+
+  const normalizeThreadMessages = (result, normalizedThreadId) => {
+    const list = Array.isArray(result?.messages) && result.messages.length > 0
+      ? result.messages
+        .filter((item) => item && typeof item.text === "string" && item.text.trim())
+        .map((item) => ({
+          role: item.role === "user" ? "user" : item.role === "assistant" ? "assistant" : "system",
+          text: item.text,
+          variant: item.variant === "subagent" ? "subagent" : "",
+          kind: item.kind === "plan" ? "plan" : "",
+          threadId: normalizeThreadId(item.thread_id) || normalizedThreadId,
+          turnId: typeof item.turn_id === "string" ? item.turn_id : "",
+          streaming: false,
+        }))
+      : [
+        {
+          role: "assistant",
+          text: result?.text || "",
+          threadId: normalizeThreadId(result?.thread_id) || normalizedThreadId,
+          turnId: typeof result?.turn_id === "string" ? result.turn_id : "",
+          streaming: false,
+        },
+      ];
+    return list;
+  };
+
+  const syncThreadMessagesFromServer = async (threadId, options = {}) => {
+    const { applyToVisible = true } = options;
+    const normalizedThreadId = normalizeThreadId(threadId);
+    if (!normalizedThreadId) {
+      return;
+    }
+    const result = await api(`/api/threads/read?thread_id=${encodeURIComponent(normalizedThreadId)}`);
+    const nextMessages = normalizeThreadMessages(result, normalizedThreadId);
+    setMessagesByThreadId((prev) => ({ ...prev, [normalizedThreadId]: nextMessages }));
+    if (applyToVisible && activeThreadRef.current === normalizedThreadId) {
+      setMessages(nextMessages);
+    }
   };
 
   const submitApproval = async (requestId, decision) => {
@@ -639,6 +743,8 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
             next[nextThreadId] = activeProjectTabId;
             return next;
           });
+          removeWorkspaceBucket(currentThreadTabId);
+          ensureWorkspaceBucket(nextThreadId);
           setActiveThreadForProjectTab(activeProjectTabId, nextThreadId);
         } else {
           openThreadInProjectTab(activeProjectTabId, { id: nextThreadId, title: nextThreadId });
@@ -701,7 +807,10 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
         );
         setThreadTabsByProjectTabId((prev) => ({ ...prev, [activeProjectTabId]: [] }));
         setActiveThreadTabIdByProjectTabId((prev) => ({ ...prev, [activeProjectTabId]: "" }));
-        resetWorkspaceBucket(activeProjectTabId);
+        const ownedThreads = Array.isArray(threadTabsByProjectTabId[activeProjectTabId])
+          ? threadTabsByProjectTabId[activeProjectTabId].map((row) => normalizeThreadId(row.id)).filter(Boolean)
+          : [];
+        ownedThreads.forEach((threadId) => removeWorkspaceBucket(threadId));
         setThreadProjectTabIdByThreadId((prev) => {
           const next = { ...prev };
           Object.entries(next).forEach(([threadId, tabId]) => {
@@ -943,6 +1052,13 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       });
       const resultTurnId = typeof result?.turn_id === "string" ? result.turn_id : "";
       const resultThreadId = normalizeThreadId(result?.thread_id) || messageThreadId;
+      if (resultThreadId && activeProjectTabId) {
+        const threadInfo = threadItems.find((item) => normalizeThreadId(item?.id) === resultThreadId);
+        openThreadInProjectTab(activeProjectTabId, {
+          id: resultThreadId,
+          title: threadInfo?.title || resultThreadId,
+        });
+      }
       if (resultTurnId && resultThreadId) {
         turnThreadIdRef.current[resultTurnId] = resultThreadId;
       }
@@ -1063,33 +1179,11 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       });
       updateThreadTabState(normalizedThreadId, { hasUnreadCompletion: false });
     }
-    if (restoreThreadMessages(normalizedThreadId)) {
-      return;
+    const restored = restoreThreadMessages(normalizedThreadId);
+    if (!restored) {
+      setMessages([]);
     }
-    const result = await api(`/api/threads/read?thread_id=${encodeURIComponent(normalizedThreadId)}`);
-    const nextMessages = Array.isArray(result.messages) && result.messages.length > 0
-      ? result.messages
-        .filter((item) => item && typeof item.text === "string" && item.text.trim())
-        .map((item) => ({
-          role: item.role === "user" ? "user" : item.role === "assistant" ? "assistant" : "system",
-          text: item.text,
-          variant: item.variant === "subagent" ? "subagent" : "",
-          kind: item.kind === "plan" ? "plan" : "",
-          threadId: normalizeThreadId(item.thread_id) || normalizedThreadId,
-          turnId: typeof item.turn_id === "string" ? item.turn_id : "",
-          streaming: false,
-        }))
-      : [
-        {
-          role: "assistant",
-          text: result.text,
-          threadId: normalizeThreadId(result.thread_id) || normalizedThreadId,
-          turnId: typeof result.turn_id === "string" ? result.turn_id : "",
-          streaming: false,
-        },
-      ];
-    setMessages(nextMessages);
-    setMessagesByThreadId((prev) => ({ ...prev, [normalizedThreadId]: nextMessages }));
+    await syncThreadMessagesFromServer(normalizedThreadId, { applyToVisible: true });
   };
 
   const runCommand = async (line) => {
@@ -1108,6 +1202,13 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       setCollaborationMode(normalizeCollaborationMode(result.meta.collaboration_mode));
     }
     const responseThreadId = normalizeThreadId(result?.meta?.thread_id) || commandThreadId;
+    if (responseThreadId && activeProjectTabId) {
+      const threadInfo = threadItems.find((item) => normalizeThreadId(item?.id) === responseThreadId);
+      openThreadInProjectTab(activeProjectTabId, {
+        id: responseThreadId,
+        title: threadInfo?.title || responseThreadId,
+      });
+    }
     appendMessageToThread(responseThreadId, {
       role: "assistant",
       text: result.text,
@@ -1140,26 +1241,169 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     loadApprovals().catch(() => {});
 
     const es = new EventSource("/api/events/stream", { withCredentials: true });
+    const safeParseSseData = (eventType, ev) => {
+      try {
+        return JSON.parse(ev.data);
+      } catch (err) {
+        debugError("[SSE parse error]", eventType, ev?.data, err);
+        return null;
+      }
+    };
+    const logSseEvent = (eventType, data) => {
+      if (!data || typeof data !== "object") {
+        debugLog("[SSE]", eventType, data);
+        return;
+      }
+      const text = typeof data.text === "string" ? data.text : "";
+      debugLog("[SSE]", {
+        eventType,
+        method: typeof data.method === "string" ? data.method : "",
+        thread_id: typeof data.thread_id === "string" ? data.thread_id : "",
+        turn_id: typeof data.turn_id === "string" ? data.turn_id : "",
+        text: text ? text.slice(0, 200) : "",
+        payload: data,
+      });
+    };
+    const recordItemPhase = (data) => {
+      if (!data || typeof data !== "object") {
+        return;
+      }
+      const turnId = typeof data.turn_id === "string" && data.turn_id ? data.turn_id : "";
+      if (!turnId) {
+        return;
+      }
+      const item = data?.params?.item;
+      if (!item || typeof item !== "object") {
+        return;
+      }
+      const itemId = typeof item.id === "string" && item.id ? item.id : (typeof data.item_id === "string" ? data.item_id : "");
+      const phase = typeof item.phase === "string" ? item.phase.toLowerCase() : "";
+      if (!itemId || !phase) {
+        return;
+      }
+      const turnMap = itemPhaseByTurnRef.current[turnId] || {};
+      turnMap[itemId] = phase;
+      itemPhaseByTurnRef.current[turnId] = turnMap;
+    };
+    const pruneCommentaryAfterCompletion = (threadId, turnId) => {
+      if (!turnId) {
+        return;
+      }
+      const phaseMap = itemPhaseByTurnRef.current[turnId] || {};
+      const hasFinal = Object.values(phaseMap).includes("final_answer");
+      if (!hasFinal) {
+        return;
+      }
+      applyMessageMutationForThread(threadId, (prev) =>
+        prev.filter((message) => {
+          if (message.role !== "assistant") {
+            return true;
+          }
+          if ((message.turnId || "") !== turnId) {
+            return true;
+          }
+          const itemId = typeof message.itemId === "string" ? message.itemId : "";
+          const phase = itemId ? phaseMap[itemId] : "";
+          return phase !== "commentary";
+        }).map((message) => (message.streaming ? { ...message, streaming: false } : message))
+      );
+      delete itemPhaseByTurnRef.current[turnId];
+    };
+    const extractEventText = (data) => {
+      if (!data || typeof data !== "object") {
+        return "";
+      }
+      if (typeof data.text === "string" && data.text.trim()) {
+        return data.text;
+      }
+      const item = data?.params?.item;
+      if (!item || typeof item !== "object") {
+        return "";
+      }
+      if (typeof item.text === "string" && item.text.trim()) {
+        return item.text;
+      }
+      const content = item.content;
+      if (Array.isArray(content)) {
+        for (const entry of content) {
+          if (entry && typeof entry === "object" && typeof entry.text === "string" && entry.text.trim()) {
+            return entry.text;
+          }
+        }
+      }
+      return "";
+    };
+    es.onopen = () => {
+      debugLog("[SSE] connected");
+    };
     es.addEventListener("turn_delta", (ev) => {
-      const data = JSON.parse(ev.data);
-      const text = data.text || "";
+      const data = safeParseSseData("turn_delta", ev);
+      if (!data) {
+        return;
+      }
+      logSseEvent("turn_delta", data);
+      const method = typeof data.method === "string" ? data.method : "";
+      const text = extractEventText(data);
       if (!text) {
+        debugLog("[SSE] turn_delta ignored: empty text", data);
         return;
       }
       const variant = data.variant === "subagent" ? "subagent" : "";
       const turnId = typeof data.turn_id === "string" && data.turn_id ? data.turn_id : "";
+      const itemId = typeof data.item_id === "string" && data.item_id ? data.item_id : "";
+      const phase =
+        turnId && itemId && itemPhaseByTurnRef.current[turnId]
+          ? itemPhaseByTurnRef.current[turnId][itemId] || ""
+          : "";
       const threadId = resolveThreadIdFromTurn(data.thread_id, turnId);
       if (!threadId && turnId) {
+        debugLog("[SSE] turn_delta ignored: unresolved thread_id for turn", { turnId, data });
+        return;
+      }
+      if (turnId) {
+        streamedTurnIdsRef.current[turnId] = true;
+      }
+      if (method === "item/completed") {
+        // The full completed text can duplicate already-streamed delta chunks.
+        // For completed notifications, just finalize the current streaming message.
+        applyMessageMutationForThread(threadId, (prev) => {
+          const copy = [...prev];
+          for (let i = copy.length - 1; i >= 0; i -= 1) {
+            const message = copy[i];
+            if (message.role !== "assistant") {
+              continue;
+            }
+            if (turnId && (message.turnId || "") !== turnId) {
+              continue;
+            }
+            if (itemId && (message.itemId || "") !== itemId) {
+              continue;
+            }
+            copy[i] = { ...message, streaming: false };
+            return copy;
+          }
+          copy.push({ role: "assistant", text, variant, threadId, turnId, itemId, phase, streaming: false });
+          return copy;
+        });
+        if (turnId) {
+          assistantItemCompletedByTurnRef.current[turnId] = true;
+        }
         return;
       }
       applyMessageMutationForThread(threadId, (prev) => {
         const copy = [...prev];
         const last = copy[copy.length - 1];
+        const shouldStartNewMessage = turnId && assistantItemCompletedByTurnRef.current[turnId];
+        if (shouldStartNewMessage && turnId) {
+          delete assistantItemCompletedByTurnRef.current[turnId];
+        }
         if (
+          !shouldStartNewMessage &&
           last &&
           last.role === "assistant" &&
           last.streaming &&
           (last.variant || "") === variant &&
+          ((last.itemId || "") === itemId || !itemId) &&
           ((last.turnId || "") === turnId || !turnId)
         ) {
           last.text += text;
@@ -1169,35 +1413,65 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
           if (!last.turnId && turnId) {
             last.turnId = turnId;
           }
+          if (!last.itemId && itemId) {
+            last.itemId = itemId;
+          }
+          if (!last.phase && phase) {
+            last.phase = phase;
+          }
           return copy;
         }
-        copy.push({ role: "assistant", text, variant, threadId, turnId, streaming: true });
+        copy.push({ role: "assistant", text, variant, threadId, turnId, itemId, phase, streaming: true });
         return copy;
       });
     });
     es.addEventListener("plan_delta", (ev) => {
-      const data = JSON.parse(ev.data);
+      const data = safeParseSseData("plan_delta", ev);
+      if (!data) {
+        return;
+      }
+      logSseEvent("plan_delta", data);
       upsertPlanMessage("append", data);
     });
     es.addEventListener("plan_completed", (ev) => {
-      const data = JSON.parse(ev.data);
+      const data = safeParseSseData("plan_completed", ev);
+      if (!data) {
+        return;
+      }
+      logSseEvent("plan_completed", data);
       upsertPlanMessage("final", data);
       loadSessionSummary().catch(() => {});
     });
     es.addEventListener("plan_checklist", (ev) => {
-      const data = JSON.parse(ev.data);
+      const data = safeParseSseData("plan_checklist", ev);
+      if (!data) {
+        return;
+      }
+      logSseEvent("plan_checklist", data);
       upsertPlanChecklist(data);
     });
     es.addEventListener("reasoning_status", (ev) => {
-      const data = JSON.parse(ev.data);
+      const data = safeParseSseData("reasoning_status", ev);
+      if (!data) {
+        return;
+      }
+      logSseEvent("reasoning_status", data);
       appendReasoningStatus(data);
     });
     es.addEventListener("reasoning_completed", (ev) => {
-      const data = JSON.parse(ev.data);
+      const data = safeParseSseData("reasoning_completed", ev);
+      if (!data) {
+        return;
+      }
+      logSseEvent("reasoning_completed", data);
       completeReasoning(data);
     });
     es.addEventListener("web_search_item", (ev) => {
-      const data = JSON.parse(ev.data);
+      const data = safeParseSseData("web_search_item", ev);
+      if (!data) {
+        return;
+      }
+      logSseEvent("web_search_item", data);
       const query = typeof data?.query === "string" ? data.query.trim() : "";
       const actionText = formatWebSearchAction(data?.action);
       if (!query && !actionText) {
@@ -1215,7 +1489,11 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       });
     });
     es.addEventListener("image_generation_item", (ev) => {
-      const data = JSON.parse(ev.data);
+      const data = safeParseSseData("image_generation_item", ev);
+      if (!data) {
+        return;
+      }
+      logSseEvent("image_generation_item", data);
       const detailLines = [];
       const revisedPrompt = typeof data?.revised_prompt === "string" ? data.revised_prompt.trim() : "";
       const savedPath = typeof data?.saved_path === "string" ? data.saved_path.trim() : "";
@@ -1238,7 +1516,11 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       });
     });
     es.addEventListener("context_compacted_item", (ev) => {
-      const data = JSON.parse(ev.data);
+      const data = safeParseSseData("context_compacted_item", ev);
+      if (!data) {
+        return;
+      }
+      logSseEvent("context_compacted_item", data);
       const text = typeof data?.text === "string" && data.text.trim() ? data.text.trim() : "Context compacted";
       appendMessageToThread(normalizeThreadId(data?.thread_id), {
         role: "system",
@@ -1249,7 +1531,11 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       });
     });
     es.addEventListener("turn_started", (ev) => {
-      const data = JSON.parse(ev.data);
+      const data = safeParseSseData("turn_started", ev);
+      if (!data) {
+        return;
+      }
+      logSseEvent("turn_started", data);
       const turnId = typeof data?.turn_id === "string" ? data.turn_id : "";
       const eventThreadId = resolveThreadIdFromTurn(data?.thread_id, turnId);
       if (turnId && eventThreadId) {
@@ -1268,7 +1554,11 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       }
     });
     es.addEventListener("turn_completed", (ev) => {
-      const data = JSON.parse(ev.data);
+      const data = safeParseSseData("turn_completed", ev);
+      if (!data) {
+        return;
+      }
+      logSseEvent("turn_completed", data);
       const turnId = typeof data?.turn_id === "string" ? data.turn_id : "";
       const completedThreadId = resolveThreadIdFromTurn(data?.thread_id, turnId);
       if (turnId) {
@@ -1288,14 +1578,31 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       if (completedThreadId === activeThreadRef.current) {
         setMessages((prev) => prev.map((m) => ({ ...m, streaming: false })));
       }
-      loadThreads({ projectKey: activeProjectKey, projectTabId: activeProjectTabId }).catch(() => {});
+      const hasStreamed = turnId ? !!streamedTurnIdsRef.current[turnId] : false;
+      if (turnId) {
+        delete streamedTurnIdsRef.current[turnId];
+        delete assistantItemCompletedByTurnRef.current[turnId];
+      }
+      syncThreadMessagesFromServer(completedThreadId, { applyToVisible: !hasStreamed }).catch(() => {});
+      loadThreads({
+        projectKey: activeProjectKeyRef.current,
+        projectTabId: activeProjectTabIdRef.current,
+      }).catch(() => {});
       loadProjects().catch(() => {});
       loadSessionSummary().catch(() => {});
       loadWorkspaceStatus().catch(() => {});
     });
     es.addEventListener("turn_failed", (ev) => {
-      const data = JSON.parse(ev.data);
+      const data = safeParseSseData("turn_failed", ev);
+      if (!data) {
+        return;
+      }
+      logSseEvent("turn_failed", data);
       const turnId = typeof data?.turn_id === "string" ? data.turn_id : "";
+      if (turnId) {
+        delete streamedTurnIdsRef.current[turnId];
+        delete assistantItemCompletedByTurnRef.current[turnId];
+      }
       const failedThreadId = resolveThreadIdFromTurn(data?.thread_id, turnId);
       if (turnId) {
         delete turnThreadIdRef.current[turnId];
@@ -1318,8 +1625,16 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       loadSessionSummary().catch(() => {});
     });
     es.addEventListener("turn_cancelled", (ev) => {
-      const data = JSON.parse(ev.data);
+      const data = safeParseSseData("turn_cancelled", ev);
+      if (!data) {
+        return;
+      }
+      logSseEvent("turn_cancelled", data);
       const turnId = typeof data?.turn_id === "string" ? data.turn_id : "";
+      if (turnId) {
+        delete streamedTurnIdsRef.current[turnId];
+        delete assistantItemCompletedByTurnRef.current[turnId];
+      }
       const cancelledThreadId = resolveThreadIdFromTurn(data?.thread_id, turnId);
       if (turnId) {
         delete turnThreadIdRef.current[turnId];
@@ -1339,7 +1654,11 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       loadSessionSummary().catch(() => {});
     });
     es.addEventListener("approval_required", (ev) => {
-      const data = JSON.parse(ev.data);
+      const data = safeParseSseData("approval_required", ev);
+      if (!data) {
+        return;
+      }
+      logSseEvent("approval_required", data);
       if (!data || typeof data.id !== "number") {
         return;
       }
@@ -1347,7 +1666,11 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       setApprovalItems([data]);
     });
     es.addEventListener("system_message", (ev) => {
-      const data = JSON.parse(ev.data);
+      const data = safeParseSseData("system_message", ev);
+      if (!data) {
+        return;
+      }
+      logSseEvent("system_message", data);
       const text = data.text || "";
       if (!text) {
         return;
@@ -1363,7 +1686,11 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       loadWorkspaceStatus().catch(() => {});
     });
     es.addEventListener("file_change", (ev) => {
-      const data = JSON.parse(ev.data);
+      const data = safeParseSseData("file_change", ev);
+      if (!data) {
+        return;
+      }
+      logSseEvent("file_change", data);
       const summary = data.summary || data.text || "";
       const files = Array.isArray(data.files) ? data.files : [];
       const diff = typeof data.diff === "string" ? data.diff : "";
@@ -1384,12 +1711,86 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       });
       loadSessionSummary().catch(() => {});
     });
+    es.addEventListener("app_event", (ev) => {
+      const data = safeParseSseData("app_event", ev);
+      if (!data) {
+        return;
+      }
+      logSseEvent("app_event", data);
+      if (data.method === "item/started" || data.method === "item/completed") {
+        recordItemPhase(data);
+      }
+      const method = typeof data.method === "string" ? data.method : "";
+      if (method !== "item/completed") {
+        return;
+      }
+      const item = data?.params?.item;
+      const itemType = typeof item?.type === "string" ? item.type.toLowerCase() : "";
+      if (!["agentmessage", "assistantmessage", "message"].includes(itemType)) {
+        return;
+      }
+      const text = extractEventText(data);
+      if (!text) {
+        return;
+      }
+      const turnId = typeof data.turn_id === "string" && data.turn_id ? data.turn_id : "";
+      const threadId = resolveThreadIdFromTurn(data.thread_id, turnId);
+      if (!threadId && turnId) {
+        return;
+      }
+      if (turnId && streamedTurnIdsRef.current[turnId]) {
+        return;
+      }
+      applyMessageMutationForThread(threadId, (prev) => {
+        const copy = [...prev];
+        const last = copy[copy.length - 1];
+        if (
+          last &&
+          last.role === "assistant" &&
+          last.streaming &&
+          ((last.turnId || "") === turnId || !turnId)
+        ) {
+          last.text += text;
+          if (!last.threadId && threadId) {
+            last.threadId = threadId;
+          }
+          if (!last.turnId && turnId) {
+            last.turnId = turnId;
+          }
+          return copy;
+        }
+        copy.push({ role: "assistant", text, threadId, turnId, streaming: true });
+        return copy;
+      });
+    });
     es.onerror = () => {
+      debugError("[SSE] connection error");
       setStatusForThread(activeThreadRef.current, "disconnected");
     };
 
     return () => es.close();
-  }, [me, activeProjectKey, activeProjectTabId, turnNotificationEnabled]);
+  }, [me, turnNotificationEnabled]);
+
+  useEffect(() => {
+    const activeThreadId = normalizeThreadId(activeThreadRef.current);
+    const preview = (Array.isArray(messages) ? messages : []).slice(-5).map((m) => ({
+      role: m?.role || "",
+      threadId: m?.threadId || "",
+      turnId: m?.turnId || "",
+      itemId: m?.itemId || "",
+      kind: m?.kind || "",
+      streaming: !!m?.streaming,
+      text: typeof m?.text === "string" ? m.text.slice(0, 120) : "",
+      visibleInCurrentThread:
+        !m?.threadId || normalizeThreadId(m.threadId) === activeThreadId,
+    }));
+    debugLog("[CHAT-RENDER]", {
+      activeThreadId,
+      messageCount: Array.isArray(messages) ? messages.length : 0,
+      renderItemCount: Array.isArray(renderItems) ? renderItems.length : 0,
+      tailMessages: preview,
+    });
+  }, [messages, renderItems, activeThreadRef]);
 
   useEffect(() => {
     if (!chatRef.current) {
@@ -1461,12 +1862,13 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     }
     const selectedThreadId = normalizeThreadId(activeThreadTabIdByProjectTabId[activeProjectTabId]) || "";
     setActiveThread(selectedThreadId);
-    restoreWorkspaceForProjectTab(activeProjectTabId);
+    restoreWorkspaceForThread(selectedThreadId);
     if (selectedThreadId) {
       viewThread(selectedThreadId).catch(() => {});
     } else {
       setMessages([]);
     }
+    loadSessionSummary().catch(() => {});
     loadThreads({ projectKey: activeProjectKey, projectTabId: activeProjectTabId, ensureDefaultTab: true }).catch(() => {});
   }, [activeProjectTabId]);
   useEffect(() => {

@@ -21,8 +21,10 @@ class WebServerLocalCommandTests(unittest.TestCase):
         self.original_command_router = state.command_router
         user_manager._users.clear()
         user_manager._thread_owners.clear()
+        user_manager._thread_subscribers.clear()
         user_manager._thread_projects.clear()
         user_manager._turn_owners.clear()
+        user_manager._turn_subscribers.clear()
         user_manager._turn_threads.clear()
         state.codex_ready.set()
         state.codex_client = SimpleNamespace(call=AsyncMock())
@@ -637,6 +639,28 @@ path_glob_any = ["helm/**"]
             ],
             body["messages"],
         )
+
+    def test_thread_read_registers_web_session_as_thread_subscriber(self):
+        app = create_web_app()
+        endpoint = next(
+            route.endpoint
+            for route in app.routes
+            if getattr(route, "path", None) == "/api/threads/read"
+        )
+        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+        state.codex_client.call = AsyncMock(
+            return_value={
+                "thread": {"id": "thread-sub"},
+                "turns": [],
+            }
+        )
+        state.command_router.route = AsyncMock(
+            return_value=SimpleNamespace(kind="read", text="No messages yet.", meta={"thread_id": "thread-sub"})
+        )
+
+        asyncio.run(endpoint(request, "thread-sub"))
+
+        self.assertIn(self.session.user_id, user_manager.find_user_ids_by_thread("thread-sub"))
 
     def test_thread_read_marks_non_default_assistant_messages_as_subagent(self):
         app = create_web_app()

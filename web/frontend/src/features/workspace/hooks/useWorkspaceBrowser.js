@@ -15,62 +15,70 @@ export default function useWorkspaceBrowser({
   activeProjectTabPath,
   sessionWorkspace,
 }) {
-  const [workspaceByProjectTabId, setWorkspaceByProjectTabId] = useState({});
+  const [workspaceByThreadId, setWorkspaceByThreadId] = useState({});
   const [workspaceTree, setWorkspaceTree] = useState({});
   const [expandedWorkspaceDirs, setExpandedWorkspaceDirs] = useState({ "": true });
   const [workspaceStatus, setWorkspaceStatus] = useState({ is_git: false, items: {} });
   const [workspaceError, setWorkspaceError] = useState("");
   const [workspacePreview, setWorkspacePreview] = useState(null);
   const workspaceTreeRef = useRef({});
+  const workspaceByThreadIdRef = useRef({});
 
   useEffect(() => {
     workspaceTreeRef.current = workspaceTree;
   }, [workspaceTree]);
 
-  const ensureWorkspaceBucket = useCallback((projectTabId) => {
-    if (!projectTabId) {
+  useEffect(() => {
+    workspaceByThreadIdRef.current = workspaceByThreadId;
+  }, [workspaceByThreadId]);
+
+  const ensureWorkspaceBucket = useCallback((threadId) => {
+    const normalizedThreadId = normalizeThreadId(threadId);
+    if (!normalizedThreadId) {
       return;
     }
-    setWorkspaceByProjectTabId((prev) => {
-      if (prev[projectTabId]) {
+    setWorkspaceByThreadId((prev) => {
+      if (prev[normalizedThreadId]) {
         return prev;
       }
-      return { ...prev, [projectTabId]: createEmptyWorkspaceState() };
+      return { ...prev, [normalizedThreadId]: createEmptyWorkspaceState() };
     });
   }, []);
 
-  const resetWorkspaceBucket = useCallback((projectTabId) => {
-    if (!projectTabId) {
+  const resetWorkspaceBucket = useCallback((threadId) => {
+    const normalizedThreadId = normalizeThreadId(threadId);
+    if (!normalizedThreadId) {
       return;
     }
-    setWorkspaceByProjectTabId((prev) => ({ ...prev, [projectTabId]: createEmptyWorkspaceState() }));
+    setWorkspaceByThreadId((prev) => ({ ...prev, [normalizedThreadId]: createEmptyWorkspaceState() }));
   }, []);
 
-  const removeWorkspaceBucket = useCallback((projectTabId) => {
-    if (!projectTabId) {
+  const removeWorkspaceBucket = useCallback((threadId) => {
+    const normalizedThreadId = normalizeThreadId(threadId);
+    if (!normalizedThreadId) {
       return;
     }
-    setWorkspaceByProjectTabId((prev) => {
-      if (!Object.prototype.hasOwnProperty.call(prev, projectTabId)) {
+    setWorkspaceByThreadId((prev) => {
+      if (!Object.prototype.hasOwnProperty.call(prev, normalizedThreadId)) {
         return prev;
       }
       const next = { ...prev };
-      delete next[projectTabId];
+      delete next[normalizedThreadId];
       return next;
     });
   }, []);
 
-  const restoreWorkspaceForProjectTab = useCallback((projectTabId) => {
-    if (!projectTabId) {
-      return;
-    }
-    const workspaceState = workspaceByProjectTabId[projectTabId] || createEmptyWorkspaceState();
+  const restoreWorkspaceForThread = useCallback((threadId) => {
+    const normalizedThreadId = normalizeThreadId(threadId);
+    const workspaceState = normalizedThreadId
+      ? (workspaceByThreadIdRef.current[normalizedThreadId] || createEmptyWorkspaceState())
+      : createEmptyWorkspaceState();
     setWorkspaceTree(workspaceState.tree || {});
     setExpandedWorkspaceDirs(workspaceState.expandedDirs || { "": true });
     setWorkspaceStatus(workspaceState.status || { is_git: false, items: {} });
     setWorkspaceError(workspaceState.error || "");
     setWorkspacePreview(workspaceState.preview || null);
-  }, [workspaceByProjectTabId]);
+  }, []);
 
   const workspaceContextQuery = useCallback((extra = {}) => {
     const params = new URLSearchParams();
@@ -225,12 +233,13 @@ export default function useWorkspaceBrowser({
   }, [expandedWorkspaceDirs, loadWorkspaceTree]);
 
   useEffect(() => {
-    if (!activeProjectTabId) {
+    const threadId = normalizeThreadId(activeThread);
+    if (!threadId) {
       return;
     }
-    setWorkspaceByProjectTabId((prev) => ({
+    setWorkspaceByThreadId((prev) => ({
       ...prev,
-      [activeProjectTabId]: {
+      [threadId]: {
         tree: workspaceTree,
         expandedDirs: expandedWorkspaceDirs,
         status: workspaceStatus,
@@ -239,7 +248,7 @@ export default function useWorkspaceBrowser({
       },
     }));
   }, [
-    activeProjectTabId,
+    activeThread,
     workspaceTree,
     expandedWorkspaceDirs,
     workspaceStatus,
@@ -248,27 +257,55 @@ export default function useWorkspaceBrowser({
   ]);
 
   useEffect(() => {
+    restoreWorkspaceForThread(activeThread);
+  }, [activeThread, restoreWorkspaceForThread]);
+
+  useEffect(() => {
     const workspacePath = activeProjectTabPath || sessionWorkspace || "";
     if (!workspacePath) {
       setWorkspaceTree({});
+      setExpandedWorkspaceDirs({ "": true });
       setWorkspaceStatus({ is_git: false, items: {} });
       setWorkspacePreview(null);
       setWorkspaceError("");
       return;
     }
-    setExpandedWorkspaceDirs({ "": true });
+    const activeThreadId = normalizeThreadId(activeThread);
+    if (!activeThreadId) {
+      setWorkspaceTree({});
+      setExpandedWorkspaceDirs({ "": true });
+      setWorkspaceStatus({ is_git: false, items: {} });
+      setWorkspacePreview(null);
+      setWorkspaceError("");
+      return;
+    }
+    ensureWorkspaceBucket(activeThreadId);
+    const existing = workspaceByThreadIdRef.current[activeThreadId];
+    const hasExistingTree = existing && existing.tree && Object.keys(existing.tree).length > 0;
+    if (hasExistingTree) {
+      return;
+    }
     loadWorkspaceTree("", { force: true }).catch((err) => {
       setWorkspaceTree({});
       setWorkspaceError(err.message || "Failed to load workspace tree.");
     });
     loadWorkspaceStatus().catch(() => {});
-  }, [activeProjectTabId, activeProjectTabPath, sessionWorkspace, workspaceContextQuery]);
+  }, [
+    activeProjectTabId,
+    activeProjectTabPath,
+    sessionWorkspace,
+    activeThread,
+    workspaceContextQuery,
+    loadWorkspaceTree,
+    loadWorkspaceStatus,
+    ensureWorkspaceBucket,
+  ]);
 
   return {
     ensureWorkspaceBucket,
     resetWorkspaceBucket,
     removeWorkspaceBucket,
-    restoreWorkspaceForProjectTab,
+    restoreWorkspaceForThread,
     workspaceTree,
     expandedWorkspaceDirs,
     workspaceStatus,

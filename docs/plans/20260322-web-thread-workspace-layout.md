@@ -1,42 +1,53 @@
-# Thread별 Workspace Layout 분리 설계
+# Thread별 Workspace 상태 분리 적용 설계 (현 구조 정합)
 
 ## Summary
-- `thread tab` 개수만큼 `workspace-layout` 컨테이너를 동적으로 렌더링하고, `activeThread`에 해당하는 컨테이너만 노출되도록 변경한다.
-- 현재 project tab 단위로 공유되는 workspace 상태를 thread 단위로 분리해, 파일 트리 확장/프리뷰/에러 상태를 각 thread가 독립적으로 유지하게 만든다.
-- 비활성 thread 레이아웃은 언마운트하지 않고 숨김 처리해 상태를 보존한다.
+- 현재 코드 구조(`web/frontend/src/*`) 기준으로 `workspace` 상태를 project tab 단위에서 thread 단위로 분리한다.
+- `workspace-layout`은 단일 렌더 구조를 유지하고, thread 전환 시 상태 버킷을 복원하는 방식으로 적용한다.
+- 목표는 thread 간 파일 트리 확장/프리뷰/status/error 상태가 섞이지 않고 독립적으로 유지되는 것이다.
 
 ## Key Changes
 - 상태 모델 전환
-  - `workspaceByProjectTabId` 중심 구조를 `workspaceByThreadId` 중심 구조로 변경.
-  - 기본 워크스페이스 상태 생성 함수(`createEmptyWorkspaceState`)는 재사용하고, 저장/복원 키를 thread id로 통일.
-- 렌더 구조 전환
-  - 기존 단일 `<div className="workspace-layout">`를 thread tab 목록 기반 반복 렌더로 변경.
-  - 각 레이아웃에 thread 식별 가능한 class/data 속성을 부여하고, active 여부에 따라 `display`/`visibility` 클래스로 제어.
-- 동기화/수명주기
-  - thread 전환 시 해당 thread의 workspace 상태를 복원.
-  - workspace 트리/프리뷰/status 변경 시 active thread 버킷만 업데이트.
-  - thread tab close 시 해당 thread의 `messages`, `threadUi`, `workspace` 버킷까지 함께 정리.
+  - `workspaceByProjectTabId`를 `workspaceByThreadId`로 전환한다.
+  - `createEmptyWorkspaceState`는 재사용하고 저장/복원 키를 thread id로 통일한다.
+  - `useWorkspaceBrowser`의 버킷 API를 thread 기준으로 재정의한다.
+    - `ensureWorkspaceBucket(threadId)`
+    - `resetWorkspaceBucket(threadId)`
+    - `removeWorkspaceBucket(threadId)`
+    - `restoreWorkspaceForThread(threadId)`
+- 수명주기 동기화
+  - `activeThread` 변경 시 해당 thread의 workspace 상태를 복원한다.
+  - workspace 트리/프리뷰/status/error 변경 시 active thread 버킷만 갱신한다.
+  - thread tab close 시 `messages`, `threadUi`와 함께 workspace 버킷도 정리한다.
+  - project tab close 시 해당 탭 소유 thread들의 workspace 버킷을 일괄 정리한다.
+- 렌더 구조 원칙
+  - 기존 단일 `<div className="workspace-layout">` 구조는 유지한다.
+  - thread 수만큼 `workspace-layout`을 반복 렌더하는 방식은 채택하지 않는다.
 - 워크스페이스 API 컨텍스트
-  - `workspaceContextQuery()`는 기존처럼 thread 우선 컨텍스트를 유지하되, active layout의 thread id를 기준으로 동작하도록 정합성 보장.
+  - `workspaceContextQuery()`의 thread 우선 컨텍스트를 유지한다.
+  - active thread가 유효하지 않거나 현재 project tab과 소유 관계가 맞지 않으면 project key로 fallback한다.
 
 ## Test Plan
 - 수동 시나리오
-  - thread A/B를 열고 각기 다른 파일 트리 확장, 파일 프리뷰를 만든 뒤 탭 전환 시 상태가 서로 섞이지 않는지 확인.
-  - inactive thread는 숨김이고 active thread만 표시되는지 확인.
-  - thread close 시 해당 thread의 workspace 상태가 제거되고 다른 thread에 영향 없는지 확인.
-  - project tab 전환/복귀 시 thread별 workspace 상태가 유지되는지 확인.
+  - thread A/B 각각 다른 디렉터리 확장/파일 프리뷰 상태를 만든 뒤 탭 전환 시 상태 분리 여부 확인.
+  - thread close 시 닫힌 thread의 workspace 상태만 제거되고 나머지는 유지되는지 확인.
+  - project tab 전환/복귀 시 각 thread의 workspace 상태가 유지되는지 확인.
+  - active thread가 없는 상태에서 workspace 패널이 기본 상태로 동작하는지 확인.
 - 자동 테스트(가능 시)
-  - 렌더링 테스트: active thread만 노출 클래스 적용 확인.
-  - 상태 테스트: thread id 키 기반 저장/복원, close 시 정리 로직 검증.
+  - `useWorkspaceBrowser` 단위 테스트: thread 키 저장/복원, close 정리, project tab close 시 일괄 정리 검증.
+  - `AuthenticatedApp` 상호작용 테스트: thread 전환 시 복원 로직과 close 시 cleanup 호출 검증.
 
 ## Public Interfaces / Types
 - 백엔드 API 변경 없음.
-- 프론트엔드 내부 상태 구조 변경
-  - `workspaceByProjectTabId` -> `workspaceByThreadId` (내부 구현 상세).
-- 이벤트 모델(`turn_*`, `plan_*`, `file_change`)은 기존 유지.
+- 이벤트 모델(`turn_*`, `plan_*`, `file_change`) 유지.
+- 프론트엔드 내부 상태 인터페이스 변경
+  - `workspaceByProjectTabId` -> `workspaceByThreadId`
+  - `restoreWorkspaceForProjectTab` -> `restoreWorkspaceForThread`
+  - workspace cleanup 함수들의 주요 입력 키를 projectTabId 기준에서 threadId 기준으로 조정
 
 ## Assumptions
-- 숨김 유지 방식으로 구현한다.
-- thread별 workspace 제어 범위는 파일 트리, 확장 상태, status, preview, error를 포함한다.
-- 레이아웃 수는 현재 열린 thread tab 수를 기준으로 한다.
-- 주요 변경 대상 파일은 `web/static/app.jsx`, `web/static/styles.css` 이다.
+- 안정성 우선으로 단일 레이아웃 구조를 유지한다.
+- thread별 workspace 제어 범위는 `tree`, `expandedDirs`, `status`, `preview`, `error` 전체를 포함한다.
+- 주요 변경 대상 파일은 다음이다.
+  - `web/frontend/src/features/workspace/hooks/useWorkspaceBrowser.js`
+  - `web/frontend/src/features/app/AuthenticatedApp.jsx`
+  - `web/frontend/src/styles.css` (필요 시 최소 변경)

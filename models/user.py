@@ -117,8 +117,10 @@ class UserManager:
     def __init__(self):
         self._users: dict[int, UserState] = {}
         self._thread_owners: dict[str, int] = {}
+        self._thread_subscribers: dict[str, set[int]] = {}
         self._thread_projects: dict[str, str] = {}
         self._turn_owners: dict[str, int] = {}
+        self._turn_subscribers: dict[str, set[int]] = {}
         self._turn_threads: dict[str, str] = {}
     
     def get(self, user_id: int) -> UserState:
@@ -133,7 +135,7 @@ class UserManager:
         user = self.get(user_id)
         user.set_thread(thread_id)
         if isinstance(thread_id, str) and thread_id:
-            self._thread_owners[thread_id] = user_id
+            self.bind_thread_owner(user_id, thread_id)
             if isinstance(project_key, str) and project_key:
                 self._thread_projects[thread_id] = project_key
 
@@ -144,6 +146,11 @@ class UserManager:
     def bind_thread_owner(self, user_id: int, thread_id: str | None):
         if isinstance(thread_id, str) and thread_id:
             self._thread_owners[thread_id] = user_id
+            self.bind_thread_subscriber(user_id, thread_id)
+
+    def bind_thread_subscriber(self, user_id: int, thread_id: str | None):
+        if isinstance(thread_id, str) and thread_id:
+            self._thread_subscribers.setdefault(thread_id, set()).add(user_id)
 
     def bind_thread_project(self, thread_id: str | None, project_key: str | None):
         if isinstance(thread_id, str) and thread_id and isinstance(project_key, str) and project_key:
@@ -179,13 +186,21 @@ class UserManager:
     def bind_turn_owner(self, user_id: int, turn_id: str | None):
         if isinstance(turn_id, str) and turn_id:
             self._turn_owners[turn_id] = user_id
+            self.bind_turn_subscriber(user_id, turn_id)
 
     def bind_turn_thread(self, turn_id: str | None, thread_id: str | None):
         if isinstance(turn_id, str) and turn_id and isinstance(thread_id, str) and thread_id:
             self._turn_threads[turn_id] = thread_id
 
+    def bind_turn_subscriber(self, user_id: int, turn_id: str | None, thread_id: str | None = None):
+        if isinstance(turn_id, str) and turn_id:
+            self._turn_subscribers.setdefault(turn_id, set()).add(user_id)
+        if isinstance(thread_id, str) and thread_id:
+            self.bind_thread_subscriber(user_id, thread_id)
+
     def bind_turn(self, user_id: int, turn_id: str | None, thread_id: str | None = None):
         self.bind_turn_owner(user_id, turn_id)
+        self.bind_turn_subscriber(user_id, turn_id, thread_id)
         self.bind_turn_thread(turn_id, thread_id)
 
     def get_turn_thread(self, turn_id: str | None) -> str | None:
@@ -198,6 +213,37 @@ class UserManager:
         if len(owners) == 1:
             return owners[0]
         return None
+
+    def find_user_ids_by_thread(self, thread_id: str | None) -> set[int]:
+        if not thread_id:
+            return set()
+        user_ids = set(self._thread_subscribers.get(thread_id, set()))
+        owner = self._thread_owners.get(thread_id)
+        if owner is not None:
+            user_ids.add(owner)
+        for uid, user in self._users.items():
+            if user.active_thread_id == thread_id:
+                user_ids.add(uid)
+        return user_ids
+
+    def find_user_ids_by_turn(self, turn_id: str | None) -> set[int]:
+        if not turn_id:
+            return set()
+        user_ids = set(self._turn_subscribers.get(turn_id, set()))
+        owner = self._turn_owners.get(turn_id)
+        if owner is not None:
+            user_ids.add(owner)
+        for uid, user in self._users.items():
+            if user.active_turn_id == turn_id:
+                user_ids.add(uid)
+        return user_ids
+
+    def clear_turn_bindings(self, turn_id: str | None):
+        if not isinstance(turn_id, str) or not turn_id:
+            return
+        self._turn_subscribers.pop(turn_id, None)
+        self._turn_owners.pop(turn_id, None)
+        self._turn_threads.pop(turn_id, None)
 
 
 user_manager = UserManager()

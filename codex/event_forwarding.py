@@ -109,12 +109,36 @@ def extract_turn_id(method: str, params: dict | None) -> str | None:
     return None
 
 
+def extract_item_id(params: dict | None) -> str | None:
+    payload = params or {}
+    if isinstance(payload.get("itemId"), str) and payload.get("itemId"):
+        return payload.get("itemId")
+    item = payload.get("item")
+    if isinstance(item, dict) and isinstance(item.get("id"), str) and item.get("id"):
+        return item.get("id")
+    return None
+
+
 def extract_text(params: dict | None) -> str | None:
     payload = params or {}
     for key in ("delta", "text", "message"):
         value = payload.get(key)
         if isinstance(value, str) and value.strip():
             return value
+    item = payload.get("item")
+    if isinstance(item, dict):
+        for key in ("text", "message"):
+            value = item.get(key)
+            if isinstance(value, str) and value.strip():
+                return value
+        content = item.get("content")
+        if isinstance(content, list):
+            for entry in content:
+                if not isinstance(entry, dict):
+                    continue
+                value = entry.get("text")
+                if isinstance(value, str) and value.strip():
+                    return value
     msg = payload.get("msg")
     if isinstance(msg, dict):
         for key in ("message", "text"):
@@ -720,41 +744,48 @@ def build_event_forwarder(app, config: ForwardingConfig):
         turn_id = extract_turn_id(method, params)
         if thread_id is None and turn_id:
             thread_id = user_manager.get_turn_thread(turn_id)
-        owner_id = user_manager.find_user_id_by_turn(turn_id)
-        user_id_by_thread = user_manager.find_user_id_by_thread(thread_id)
-        if owner_id is None and method in {"turn/completed", "turn/failed", "turn/cancelled"}:
-            owner_id = user_manager.find_single_active_turn_owner()
-        target_user_id = owner_id if owner_id is not None else user_id_by_thread
-        if owner_id is None:
-            owner_id = user_id_by_thread
+        target_user_ids = set()
+        if turn_id:
+            target_user_ids.update(user_manager.find_user_ids_by_turn(turn_id))
+        if thread_id:
+            target_user_ids.update(user_manager.find_user_ids_by_thread(thread_id))
 
-        if method == "turn/started" and turn_id and owner_id is not None:
-            state_user = user_manager.get(owner_id)
-            user_manager.bind_turn(owner_id, turn_id, thread_id)
-            state_user.set_turn(turn_id, thread_id)
+        if not target_user_ids and method in {"turn/completed", "turn/failed", "turn/cancelled"}:
+            fallback_owner = user_manager.find_single_active_turn_owner()
+            if fallback_owner is not None:
+                target_user_ids.add(fallback_owner)
+
+        if method == "turn/started" and turn_id and target_user_ids:
             actual_mode = normalize_mode_kind((params or {}).get("collaboration_mode_kind") or (params or {}).get("collaborationModeKind"))
-            if actual_mode is not None:
-                state_user.set_collaboration_mode(actual_mode)
+            for uid in target_user_ids:
+                state_user = user_manager.get(uid)
+                user_manager.bind_turn(uid, turn_id, thread_id)
+                state_user.set_turn(turn_id, thread_id)
+                if actual_mode is not None:
+                    state_user.set_collaboration_mode(actual_mode)
                 logger.info(
                     "Codex turn started user_id=%s thread_id=%s turn_id=%s actual_mode=%s raw_params=%s",
-                    owner_id,
+                    uid,
                     thread_id,
                     turn_id,
                     actual_mode,
                     params,
                 )
-        elif method in {"turn/completed", "turn/failed", "turn/cancelled"} and owner_id is not None:
-            state_user = user_manager.get(owner_id)
+        elif method in {"turn/completed", "turn/failed", "turn/cancelled"} and target_user_ids:
+            for uid in target_user_ids:
+                state_user = user_manager.get(uid)
+                if turn_id:
+                    state_user.clear_turn(turn_id=turn_id, thread_id=thread_id)
+                elif state_user.active_turn_id:
+                    state_user.clear_turn()
             if turn_id:
-                state_user.clear_turn(turn_id=turn_id, thread_id=thread_id)
-            elif state_user.active_turn_id:
-                state_user.clear_turn()
+                user_manager.clear_turn_bindings(turn_id)
 
         file_change = extract_file_change_summary(method, params)
         if file_change is not None:
-            if target_user_id is not None:
+            for uid in target_user_ids:
                 await event_hub.publish_event(
-                    target_user_id,
+                    uid,
                     {
                         "type": "file_change",
                         "thread_id": file_change.get("thread_id"),
@@ -765,15 +796,15 @@ def build_event_forwarder(app, config: ForwardingConfig):
                         "diff": file_change.get("diff"),
                     },
                 )
-                if str(file_change.get("source") or "").strip().lower() != "apply_patch":
-                    await send_telegram_file_change(app, target_user_id, file_change)
+                if uid > 0 and str(file_change.get("source") or "").strip().lower() != "apply_patch":
+                    await send_telegram_file_change(app, uid, file_change)
             return
 
         plan_item = extract_plan_item_payload(method, params)
         if plan_item is not None:
-            if target_user_id is not None:
+            for uid in target_user_ids:
                 await event_hub.publish_event(
-                    target_user_id,
+                    uid,
                     {
                         "type": "plan_completed" if plan_item["is_final"] else "plan_delta",
                         "thread_id": plan_item.get("thread_id"),
@@ -782,15 +813,15 @@ def build_event_forwarder(app, config: ForwardingConfig):
                         "text": plan_item.get("text") or "",
                     },
                 )
-                if plan_item["is_final"]:
-                    await send_telegram_plan(app, target_user_id, plan_item)
+                if uid > 0 and plan_item["is_final"]:
+                    await send_telegram_plan(app, uid, plan_item)
             return
 
         plan_checklist = extract_plan_checklist_payload(method, params)
         if plan_checklist is not None:
-            if target_user_id is not None:
+            for uid in target_user_ids:
                 await event_hub.publish_event(
-                    target_user_id,
+                    uid,
                     {
                         "type": "plan_checklist",
                         "thread_id": plan_checklist.get("thread_id"),
@@ -808,14 +839,21 @@ def build_event_forwarder(app, config: ForwardingConfig):
             extract_context_compaction_payload(method, params),
         ):
             if specialized_payload is not None:
-                if target_user_id is not None:
-                    await event_hub.publish_event(target_user_id, specialized_payload)
+                for uid in target_user_ids:
+                    await event_hub.publish_event(uid, specialized_payload)
                 return
 
-        if target_user_id is not None:
+        if target_user_ids:
             event_type = "app_event"
             if method == "item/agentMessage/delta":
                 event_type = "turn_delta"
+            elif method == "item/completed":
+                item = (params or {}).get("item")
+                if isinstance(item, dict):
+                    item_type = normalize_item_type(item.get("type"))
+                    completed_text = extract_text(params)
+                    if item_type in {"agentmessage", "assistantmessage", "message"} and completed_text:
+                        event_type = "turn_delta"
             elif method == "turn/started":
                 event_type = "turn_started"
             elif method == "turn/completed":
@@ -824,27 +862,29 @@ def build_event_forwarder(app, config: ForwardingConfig):
                 event_type = "turn_failed"
             elif method == "turn/cancelled":
                 event_type = "turn_cancelled"
-            await event_hub.publish_event(
-                target_user_id,
-                {
-                    "type": event_type,
-                    "method": method,
-                    "thread_id": thread_id,
-                    "turn_id": turn_id,
-                    "text": extract_text(params) or "",
-                    "variant": extract_message_variant(params),
-                    "params": params or {},
-                },
-            )
-            if method == "turn/completed":
-                actual_mode = normalize_mode_kind((params or {}).get("collaboration_mode_kind") or (params or {}).get("collaborationModeKind"))
-                mode_suffix = f" Mode: {actual_mode.upper()}." if actual_mode else ""
-                await publish_system_message(
-                    target_user_id,
-                    thread_id,
-                    turn_id,
-                    f"Turn completed.{mode_suffix}",
+            for uid in target_user_ids:
+                await event_hub.publish_event(
+                    uid,
+                    {
+                        "type": event_type,
+                        "method": method,
+                        "thread_id": thread_id,
+                        "turn_id": turn_id,
+                        "item_id": extract_item_id(params),
+                        "text": extract_text(params) or "",
+                        "variant": extract_message_variant(params),
+                        "params": params or {},
+                    },
                 )
+                if method == "turn/completed":
+                    actual_mode = normalize_mode_kind((params or {}).get("collaboration_mode_kind") or (params or {}).get("collaborationModeKind"))
+                    mode_suffix = f" Mode: {actual_mode.upper()}." if actual_mode else ""
+                    await publish_system_message(
+                        uid,
+                        thread_id,
+                        turn_id,
+                        f"Turn completed.{mode_suffix}",
+                    )
 
         if method_matches(method, config.denylist):
             return
@@ -852,29 +892,30 @@ def build_event_forwarder(app, config: ForwardingConfig):
             return
         if event_level(method, params) < config.threshold:
             return
-        user_id = target_user_id
-        if user_id is None or user_id <= 0 or app is None:
+        telegram_user_ids = [uid for uid in target_user_ids if uid > 0]
+        if not telegram_user_ids or app is None:
             return
         message = format_event(method, params, config.rules)
         if message is None or not message.strip():
             return
         footer = f"\n\nturnId: {turn_id or 'unknown'}"
-        logger.info(
-            "Forwarding app-server event to Telegram user_id=%s method=%s message=%s",
-            user_id,
-            method,
-            truncate_telegram_text(message, footer),
-        )
-        try:
-            kwargs: dict[str, Any] = {}
-            if method in {"turn/completed", "turn/failed", "turn/cancelled"}:
-                kwargs["reply_markup"] = main_menu_keyboard(user_manager.get(user_id).collaboration_mode)
-            await app.bot.send_message(
-                chat_id=user_id,
-                text=truncate_telegram_text(message, footer),
-                **kwargs,
+        for user_id in telegram_user_ids:
+            logger.info(
+                "Forwarding app-server event to Telegram user_id=%s method=%s message=%s",
+                user_id,
+                method,
+                truncate_telegram_text(message, footer),
             )
-        except Exception:
-            logger.exception("Failed to forward app-server event to Telegram")
+            try:
+                kwargs: dict[str, Any] = {}
+                if method in {"turn/completed", "turn/failed", "turn/cancelled"}:
+                    kwargs["reply_markup"] = main_menu_keyboard(user_manager.get(user_id).collaboration_mode)
+                await app.bot.send_message(
+                    chat_id=user_id,
+                    text=truncate_telegram_text(message, footer),
+                    **kwargs,
+                )
+            except Exception:
+                logger.exception("Failed to forward app-server event to Telegram")
 
     return forward_event

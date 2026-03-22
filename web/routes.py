@@ -52,6 +52,14 @@ def _server_binding(name: str):
     return getattr(server_module, name)
 
 
+def _resolved_logging_level() -> str:
+    raw = get("logging.level", None)
+    if not isinstance(raw, str) or not raw.strip():
+        fallback = get("logging", "INFO")
+        raw = fallback if isinstance(fallback, str) else "INFO"
+    return str(raw).strip().upper() or "INFO"
+
+
 def _project_items_for_user(user_id: int) -> list[dict[str, Any]]:
     if state.command_router is None or not hasattr(state.command_router, "projects"):
         return []
@@ -166,6 +174,7 @@ def register_auth_routes(app: FastAPI) -> None:
 
         ttl = clamp_int(get("web.session_ttl_seconds", 43200), 43200, minimum=60, maximum=604800)
         session = await session_manager.create(username, ttl)
+        logging_level = _resolved_logging_level()
         response.set_cookie(
             key=COOKIE_NAME,
             value=session.token,
@@ -177,6 +186,8 @@ def register_auth_routes(app: FastAPI) -> None:
         return {
             "username": session.username,
             "user_id": session.user_id,
+            "logging_level": logging_level,
+            "debug_logging": logging_level == "DEBUG",
         }
 
     @app.post("/api/auth/logout")
@@ -189,9 +200,12 @@ def register_auth_routes(app: FastAPI) -> None:
     @app.get("/api/auth/me")
     async def me(request: Request) -> dict[str, Any]:
         session = await session_from_request(request)
+        logging_level = _resolved_logging_level()
         return {
             "username": session.username,
             "user_id": session.user_id,
+            "logging_level": logging_level,
+            "debug_logging": logging_level == "DEBUG",
         }
 
 
@@ -484,6 +498,7 @@ def register_thread_routes(app: FastAPI) -> None:
         normalized_thread_id = thread_id.strip()
         if not normalized_thread_id:
             raise HTTPException(status_code=400, detail="thread_id is required")
+        user_manager.bind_thread_subscriber(session.user_id, normalized_thread_id)
         await wait_for_codex()
         try:
             result = await state.codex_client.call(

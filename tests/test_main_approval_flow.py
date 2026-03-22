@@ -32,8 +32,10 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
         state.codex_ready.clear()
         user_manager._users.clear()
         user_manager._thread_owners.clear()
+        user_manager._thread_subscribers.clear()
         user_manager._thread_projects.clear()
         user_manager._turn_owners.clear()
+        user_manager._turn_subscribers.clear()
         user_manager._turn_threads.clear()
         event_hub._pending_approvals.clear()
         event_hub._subscribers.clear()
@@ -45,8 +47,10 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
         state.codex_ready.clear()
         user_manager._users.clear()
         user_manager._thread_owners.clear()
+        user_manager._thread_subscribers.clear()
         user_manager._thread_projects.clear()
         user_manager._turn_owners.clear()
+        user_manager._turn_subscribers.clear()
         user_manager._turn_threads.clear()
         event_hub._pending_approvals.clear()
         event_hub._subscribers.clear()
@@ -116,8 +120,10 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
                 event_hub._pending_approvals.clear()
                 user_manager._users.clear()
                 user_manager._thread_owners.clear()
+                user_manager._thread_subscribers.clear()
                 user_manager._thread_projects.clear()
                 user_manager._turn_owners.clear()
+                user_manager._turn_subscribers.clear()
                 user_manager._turn_threads.clear()
 
                 client, approvals = await self._dispatch_policy_request(action=action, submit_result=False)
@@ -489,6 +495,63 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("thread-1", first["thread_id"])
         self.assertEqual("turn-1", first["turn_id"])
 
+    async def test_turn_events_are_fanned_out_to_web_and_telegram_subscribers(self):
+        client = _DummyCodexClient(submit_result=True)
+        router = SimpleNamespace(projects=SimpleNamespace(resolve_effective_project=Mock(return_value=None)))
+        guardian = SimpleNamespace(stop=AsyncMock())
+        bot = SimpleNamespace(send_message=AsyncMock())
+        telegram_app = SimpleNamespace(bot=bot)
+        guardian_settings = {
+            "enabled": False,
+            "apply_to_methods": ["*"],
+            "failure_policy": "manual_fallback",
+            "explainability": "decision_only",
+            "timeout_seconds": 5,
+            "rules": [],
+        }
+
+        with patch("main.setup_codex", new=AsyncMock(return_value=client)), \
+             patch("main.CommandRouter", return_value=router), \
+             patch("main.ApprovalGuardianService", return_value=guardian), \
+             patch("main.get", side_effect=lambda key, default=None: default), \
+             patch("main.get_guardian_settings", return_value=guardian_settings):
+            await app_main.post_init(telegram_app)
+            user_manager.bind_thread_owner(1, "thread-1")
+            user_manager.bind_thread_subscriber(-100, "thread-1")
+            web_queue = await event_hub.subscribe(-100)
+            tg_queue = await event_hub.subscribe(1)
+            try:
+                await client._any_handler(
+                    "turn/started",
+                    {
+                        "threadId": "thread-1",
+                        "turnId": "turn-1",
+                    },
+                )
+                web_started = await web_queue.get()
+                tg_started = await tg_queue.get()
+                await client._any_handler(
+                    "item/agentMessage/delta",
+                    {
+                        "turnId": "turn-1",
+                        "delta": "hello",
+                    },
+                )
+                web_delta = await web_queue.get()
+                tg_delta = await tg_queue.get()
+            finally:
+                await event_hub.unsubscribe(-100, web_queue)
+                await event_hub.unsubscribe(1, tg_queue)
+
+        self.assertEqual("turn_started", web_started["type"])
+        self.assertEqual("turn_started", tg_started["type"])
+        self.assertEqual("turn_delta", web_delta["type"])
+        self.assertEqual("turn_delta", tg_delta["type"])
+        self.assertEqual("hello", web_delta["text"])
+        self.assertEqual("hello", tg_delta["text"])
+        self.assertIn(-100, user_manager.find_user_ids_by_turn("turn-1"))
+        self.assertIn(1, user_manager.find_user_ids_by_turn("turn-1"))
+
     async def test_plan_delta_is_forwarded_to_web_only(self):
         client = _DummyCodexClient(submit_result=True)
         router = SimpleNamespace(projects=SimpleNamespace(resolve_effective_project=Mock(return_value=None)))
@@ -530,6 +593,49 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("turn-1-plan", event["item_id"])
         self.assertEqual("# Plan\n", event["text"])
         bot.send_message.assert_not_awaited()
+
+    async def test_item_completed_agent_message_is_forwarded_as_turn_delta(self):
+        client = _DummyCodexClient(submit_result=True)
+        router = SimpleNamespace(projects=SimpleNamespace(resolve_effective_project=Mock(return_value=None)))
+        guardian = SimpleNamespace(stop=AsyncMock())
+        bot = SimpleNamespace(send_message=AsyncMock())
+        telegram_app = SimpleNamespace(bot=bot)
+        guardian_settings = {
+            "enabled": False,
+            "apply_to_methods": ["*"],
+            "failure_policy": "manual_fallback",
+            "explainability": "decision_only",
+            "timeout_seconds": 5,
+            "rules": [],
+        }
+
+        with patch("main.setup_codex", new=AsyncMock(return_value=client)), \
+             patch("main.CommandRouter", return_value=router), \
+             patch("main.ApprovalGuardianService", return_value=guardian), \
+             patch("main.get", side_effect=lambda key, default=None: default), \
+             patch("main.get_guardian_settings", return_value=guardian_settings):
+            await app_main.post_init(telegram_app)
+            user_manager.bind_thread_owner(1, "thread-1")
+            queue = await event_hub.subscribe(1)
+            try:
+                await client._any_handler(
+                    "item/completed",
+                    {
+                        "threadId": "thread-1",
+                        "turnId": "turn-1",
+                        "item": {
+                            "type": "agentMessage",
+                            "id": "item-2",
+                            "text": "final assistant message",
+                        },
+                    },
+                )
+                event = await queue.get()
+            finally:
+                await event_hub.unsubscribe(1, queue)
+
+        self.assertEqual("turn_delta", event["type"])
+        self.assertEqual("final assistant message", event["text"])
 
     async def test_plan_completed_is_forwarded_to_web_and_telegram(self):
         client = _DummyCodexClient(submit_result=True)

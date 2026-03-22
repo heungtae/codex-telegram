@@ -107,13 +107,22 @@ def thread_turn_messages(turns: list[dict[str, Any]], default_thread_id: str | N
         default_variant: str | None = None,
         thread_id: str | None = None,
         turn_id: str | None = None,
+        *,
+        drop_commentary_if_final: bool = False,
     ) -> None:
         if isinstance(value, str):
             add_message(default_role, value, default_variant, None, thread_id, turn_id)
             return
         if isinstance(value, list):
             for item in value:
-                walk(item, default_role, default_variant, thread_id, turn_id)
+                walk(
+                    item,
+                    default_role,
+                    default_variant,
+                    thread_id,
+                    turn_id,
+                    drop_commentary_if_final=drop_commentary_if_final,
+                )
             return
         if not isinstance(value, dict):
             return
@@ -121,6 +130,15 @@ def thread_turn_messages(turns: list[dict[str, Any]], default_thread_id: str | N
         role = infer_role(value, default_role)
         variant = infer_variant(value, role, default_variant)
         item_type = str(value.get("type") or "").strip().lower()
+        normalized_item_type = item_type.replace("_", "").replace("-", "")
+        phase = str(value.get("phase") or "").strip().lower()
+        if (
+            drop_commentary_if_final
+            and role == "assistant"
+            and normalized_item_type in {"agentmessage", "assistantmessage", "message"}
+            and phase == "commentary"
+        ):
+            return
         kind = "plan" if item_type == "plan" and role == "assistant" else None
         direct = value.get("text")
         if isinstance(direct, str) and direct.strip():
@@ -136,9 +154,23 @@ def thread_turn_messages(turns: list[dict[str, Any]], default_thread_id: str | N
                     if isinstance(text, str) and text.strip():
                         add_message(role, text, variant, kind, thread_id, turn_id)
                     else:
-                        walk(item, role, variant, thread_id, turn_id)
+                        walk(
+                            item,
+                            role,
+                            variant,
+                            thread_id,
+                            turn_id,
+                            drop_commentary_if_final=drop_commentary_if_final,
+                        )
                 else:
-                    walk(item, role, variant, thread_id, turn_id)
+                    walk(
+                        item,
+                        role,
+                        variant,
+                        thread_id,
+                        turn_id,
+                        drop_commentary_if_final=drop_commentary_if_final,
+                    )
 
         for key in ("input", "userInput", "prompt", "output", "items", "messages"):
             nested = value.get(key)
@@ -148,7 +180,29 @@ def thread_turn_messages(turns: list[dict[str, Any]], default_thread_id: str | N
             if key in {"output", "items", "messages"} and role == "user":
                 next_role = "assistant"
             next_variant = variant if next_role == "assistant" else None
-            walk(nested, next_role, next_variant, thread_id, turn_id)
+            walk(
+                nested,
+                next_role,
+                next_variant,
+                thread_id,
+                turn_id,
+                drop_commentary_if_final=drop_commentary_if_final,
+            )
+
+    def has_final_answer_agent_message(turn: dict[str, Any]) -> bool:
+        items = turn.get("items")
+        if not isinstance(items, list):
+            return False
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            item_type = str(item.get("type") or "").strip().lower().replace("_", "").replace("-", "")
+            if item_type not in {"agentmessage", "assistantmessage", "message"}:
+                continue
+            phase = str(item.get("phase") or "").strip().lower()
+            if phase == "final_answer":
+                return True
+        return False
 
     for turn in turns:
         turn_thread_id = default_thread_id
@@ -161,13 +215,44 @@ def thread_turn_messages(turns: list[dict[str, Any]], default_thread_id: str | N
             turn_turn_id = turn.get("turnId")
         elif isinstance(turn.get("turn_id"), str) and turn.get("turn_id"):
             turn_turn_id = turn.get("turn_id")
+        elif isinstance(turn.get("id"), str) and turn.get("id"):
+            turn_turn_id = turn.get("id")
+        drop_commentary_if_final = has_final_answer_agent_message(turn)
         before_count = len(messages)
-        walk(turn.get("input"), "user", None, turn_thread_id, turn_turn_id)
-        walk(turn.get("userInput"), "user", None, turn_thread_id, turn_turn_id)
-        walk(turn.get("prompt"), "user", None, turn_thread_id, turn_turn_id)
-        walk(turn.get("output"), "assistant", None, turn_thread_id, turn_turn_id)
-        walk(turn.get("items"), "assistant", None, turn_thread_id, turn_turn_id)
-        walk(turn.get("messages"), "assistant", None, turn_thread_id, turn_turn_id)
+        walk(turn.get("input"), "user", None, turn_thread_id, turn_turn_id, drop_commentary_if_final=drop_commentary_if_final)
+        walk(
+            turn.get("userInput"),
+            "user",
+            None,
+            turn_thread_id,
+            turn_turn_id,
+            drop_commentary_if_final=drop_commentary_if_final,
+        )
+        walk(turn.get("prompt"), "user", None, turn_thread_id, turn_turn_id, drop_commentary_if_final=drop_commentary_if_final)
+        walk(
+            turn.get("output"),
+            "assistant",
+            None,
+            turn_thread_id,
+            turn_turn_id,
+            drop_commentary_if_final=drop_commentary_if_final,
+        )
+        walk(
+            turn.get("items"),
+            "assistant",
+            None,
+            turn_thread_id,
+            turn_turn_id,
+            drop_commentary_if_final=drop_commentary_if_final,
+        )
+        walk(
+            turn.get("messages"),
+            "assistant",
+            None,
+            turn_thread_id,
+            turn_turn_id,
+            drop_commentary_if_final=drop_commentary_if_final,
+        )
 
         if len(messages) == before_count:
             user_text = first_text(turn.get("input")) or first_text(turn.get("userInput")) or first_text(turn.get("prompt"))
