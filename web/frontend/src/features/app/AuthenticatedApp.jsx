@@ -85,6 +85,13 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   const initialLoadRef = useRef(true);
   const streamedTurnIdsRef = useRef({});
   const assistantItemCompletedByTurnRef = useRef({});
+  const sendMessageRef = useRef(null);
+  const startThreadRef = useRef(null);
+  const closeThreadTabRef = useRef(null);
+  const viewThreadRef = useRef(null);
+  const selectProjectRef = useRef(null);
+  const focusComposerRef = useRef(null);
+  const setInputForActiveThreadRef = useRef(null);
   const [paletteSelectedIndex, setPaletteSelectedIndex] = useState(0);
   const [sidebarWidth, setSidebarWidth] = useState(340);
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
@@ -100,6 +107,10 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   );
   const [isWorkspacePanelOpen, setIsWorkspacePanelOpen] = useState(false);
   const [isProjectModeModalOpen, setIsProjectModeModalOpen] = useState(false);
+  const [isShortcutModalOpen, setIsShortcutModalOpen] = useState(false);
+  const [shortcutModalPage, setShortcutModalPage] = useState("main");
+  const [selectedProjectIndex, setSelectedProjectIndex] = useState(0);
+  const [projectSearchQuery, setProjectSearchQuery] = useState("");
   const [pendingProjectTarget, setPendingProjectTarget] = useState("");
   const [turnNotificationEnabled, setTurnNotificationEnabled] = useState(() => readTurnNotificationEnabled());
   const debugLoggingEnabled =
@@ -260,6 +271,8 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     [projectTabs, activeProjectTabId]
   );
   const activeProjectKey = activeProjectTab?.key || "";
+  const interactionBusy = status === "running";
+  const composerLocked = interactionBusy;
 
   useEffect(() => {
     activeProjectTabIdRef.current = activeProjectTabId;
@@ -2067,6 +2080,233 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [isProjectModeModalOpen]);
 
+  useEffect(() => {
+    sendMessageRef.current = sendMessage;
+    startThreadRef.current = startThread;
+    closeThreadTabRef.current = closeThreadTab;
+    viewThreadRef.current = viewThread;
+    selectProjectRef.current = selectProject;
+    focusComposerRef.current = focusComposer;
+    setInputForActiveThreadRef.current = setInputForActiveThread;
+  });
+
+  const filteredProjects = useMemo(() => {
+    const query = projectSearchQuery.toLowerCase();
+    if (!query) {
+      return projectItems;
+    }
+    return projectItems.filter(
+      (item) =>
+        (item.name && item.name.toLowerCase().includes(query)) ||
+        (item.key && item.key.toLowerCase().includes(query))
+    );
+  }, [projectItems, projectSearchQuery]);
+
+  useEffect(() => {
+    if (shortcutModalPage === "project") {
+      setSelectedProjectIndex(0);
+    }
+  }, [projectSearchQuery, shortcutModalPage]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+    const onKeyDown = (event) => {
+      const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
+      const ctrlKey = isMac ? event.metaKey : event.ctrlKey;
+      const altKey = event.altKey;
+      if (event.key === "Escape") {
+        if (shortcutModalPage === "project") {
+          setShortcutModalPage("main");
+          setProjectSearchQuery("");
+        }
+        return;
+      }
+      if (altKey && !ctrlKey) {
+        const target = event.target;
+        const isInputFocused = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+        if (isInputFocused) {
+          return;
+        }
+        event.preventDefault();
+        switch (event.key) {
+          case "n":
+          case "N":
+            focusComposerRef.current?.();
+            if (!interactionBusy) {
+              startThreadRef.current?.({ replaceCurrentTab: true }).catch(() => {});
+            }
+            break;
+          case "t":
+          case "T":
+            if (!interactionBusy && activeProjectKey) {
+              startThreadRef.current?.().catch(() => {});
+            }
+            break;
+          case "w":
+          case "W":
+            if (activeThread && activeProjectTabId) {
+              closeThreadTabRef.current?.(activeProjectTabId, activeThread);
+            }
+            break;
+          case "p":
+          case "P":
+            setShortcutModalPage("project");
+            setSelectedProjectIndex(0);
+            setProjectSearchQuery("");
+            break;
+          case "v":
+          case "V":
+            if (isCompactWorkspaceLayout) {
+              setIsWorkspacePanelOpen((current) => !current);
+            }
+            break;
+          case "[":
+            {
+              const threadTabs = threadTabsByProjectTabId[activeProjectTabId] || [];
+              const currentIndex = threadTabs.findIndex((t) => normalizeThreadId(t.id) === normalizeThreadId(activeThread));
+              if (currentIndex > 0) {
+                viewThreadRef.current?.(threadTabs[currentIndex - 1].id);
+              } else if (threadTabs.length > 0) {
+                viewThreadRef.current?.(threadTabs[threadTabs.length - 1].id);
+              }
+            }
+            break;
+          case "]":
+            {
+              const threadTabs = threadTabsByProjectTabId[activeProjectTabId] || [];
+              const currentIndex = threadTabs.findIndex((t) => normalizeThreadId(t.id) === normalizeThreadId(activeThread));
+              if (currentIndex < threadTabs.length - 1 && currentIndex >= 0) {
+                viewThreadRef.current?.(threadTabs[currentIndex + 1].id);
+              } else if (threadTabs.length > 0) {
+                viewThreadRef.current?.(threadTabs[0].id);
+              }
+            }
+            break;
+          case "1":
+          case "2":
+          case "3":
+          case "4":
+          case "5":
+          case "6":
+          case "7":
+          case "8":
+          case "9":
+            {
+              const num = parseInt(event.key, 10);
+              const threadTabs = threadTabsByProjectTabId[activeProjectTabId] || [];
+              if (threadTabs[num - 1]) {
+                viewThreadRef.current?.(threadTabs[num - 1].id);
+              }
+            }
+            break;
+          default:
+            break;
+        }
+        return;
+      }
+      if (!ctrlKey) {
+        return;
+      }
+      const target = event.target;
+      const isInputFocused = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+      if (isInputFocused && !event.shiftKey && event.key !== "Enter") {
+        return;
+      }
+      event.preventDefault();
+      switch (event.key) {
+        case "Enter":
+          if (!isInputFocused || event.shiftKey) {
+            sendMessageRef.current?.().catch(() => {});
+          }
+          break;
+        case "p":
+        case "P":
+          if (event.shiftKey) {
+            if (collaborationMode !== "plan" && !modeSwitchBusy) {
+              api("/api/command", {
+                method: "POST",
+                body: JSON.stringify({ command_line: "/mode plan" }),
+              }).then((result) => {
+                if (result?.meta?.collaboration_mode) {
+                  setCollaborationMode("plan");
+                }
+              }).catch(() => {});
+            }
+          }
+          break;
+        case "b":
+        case "B":
+          if (collaborationMode !== "build" && !modeSwitchBusy) {
+            api("/api/command", {
+              method: "POST",
+              body: JSON.stringify({ command_line: "/mode build" }),
+            }).then((result) => {
+              if (result?.meta?.collaboration_mode) {
+                setCollaborationMode("build");
+              }
+            }).catch(() => {});
+          }
+          break;
+        default:
+          break;
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [
+    shortcutModalPage,
+    interactionBusy,
+    activeThread,
+    activeProjectTabId,
+    threadTabsByProjectTabId,
+    collaborationMode,
+    modeSwitchBusy,
+    isCompactWorkspaceLayout,
+    focusComposerRef,
+  ]);
+
+  useEffect(() => {
+    if (shortcutModalPage !== "project" || typeof window === "undefined") {
+      return undefined;
+    }
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") {
+        if (projectSearchQuery) {
+          setProjectSearchQuery("");
+          return;
+        }
+        setShortcutModalPage("main");
+        return;
+      }
+      if (event.key === "Enter") {
+        const target = filteredProjects[selectedProjectIndex];
+        if (target) {
+          selectProjectRef.current?.(target.key).catch(() => {});
+          setShortcutModalPage("main");
+          setProjectSearchQuery("");
+        }
+        return;
+      }
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setSelectedProjectIndex((prev) => Math.min(prev + 1, filteredProjects.length - 1));
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setSelectedProjectIndex((prev) => Math.max(prev - 1, 0));
+        return;
+      }
+      if (event.key === "Backspace" && !projectSearchQuery) {
+        setShortcutModalPage("main");
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [shortcutModalPage, projectSearchQuery, filteredProjects, selectedProjectIndex]);
+
   const applyPaletteItem = (item) => {
     if (!activeToken) {
       return;
@@ -2239,8 +2479,6 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
         formatGuardianRulesEditor(activeAgentConfig))
       : "";
   const settingsBusy = !!agentConfigLoading || !!agentConfigSaving;
-  const interactionBusy = status === "running";
-  const composerLocked = interactionBusy;
   const currentProjectLabel = activeProjectTab?.name || sessionSummary?.project_name || sessionSummary?.project_key || "-";
   const workspaceRootLabel = basename(activeProjectTab?.path || sessionSummary?.workspace || "") || "Workspace";
   const workspaceStatusItems =
@@ -2428,9 +2666,70 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     </div>
   ) : null;
 
+  const projectPickerModal = shortcutModalPage === "project" ? (
+    <div
+      className="modal-backdrop"
+      role="presentation"
+      onMouseDown={() => {
+        setShortcutModalPage("main");
+        setProjectSearchQuery("");
+      }}
+    >
+      <div
+        className="modal-card project-picker-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Project picker"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="project-picker-search">
+          <input
+            type="text"
+            className="project-picker-input"
+            placeholder="Search projects..."
+            value={projectSearchQuery}
+            onChange={(e) => setProjectSearchQuery(e.target.value)}
+            autoFocus
+          />
+        </div>
+        <div className="project-picker-list">
+          {filteredProjects.length === 0 ? (
+            <div className="project-picker-empty">No projects found</div>
+          ) : (
+            filteredProjects.map((item, idx) => (
+              <button
+                key={item.key}
+                className={`project-picker-item ${idx === selectedProjectIndex ? "selected" : ""}`}
+                onClick={() => {
+                  selectProject(item.key).catch(() => {});
+                  setShortcutModalPage("main");
+                  setProjectSearchQuery("");
+                }}
+                onMouseEnter={() => setSelectedProjectIndex(idx)}
+              >
+                <span className="project-picker-name">{item.name || item.key}</span>
+                <span className="project-picker-key">{item.key}</span>
+                {item.default ? <span className="project-picker-badge">default</span> : null}
+              </button>
+            ))
+          )}
+        </div>
+        <div className="project-picker-footer">
+          <span><kbd>↑↓</kbd> Navigate</span>
+          <span><kbd>Enter</kbd> Select</span>
+          <span><kbd>Esc</kbd> Close</span>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
+  const shortcutModal = null;
+
   return (
     <div className={`app ${isMobileLayout ? "mobile-layout" : ""}`}>
       {projectModeModal}
+      {projectPickerModal}
+      {shortcutModal}
       <aside
         id="app-sidebar"
         className={`sidebar ${isMobileLayout ? "mobile" : "desktop"} ${isSidebarOpen ? "open" : ""} ${isDesktopSidebarCollapsed ? "collapsed" : ""}`}

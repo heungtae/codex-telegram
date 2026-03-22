@@ -88,6 +88,36 @@ Guardian provides automated safety checks before approval decisions:
 - **Turn notifications**: Sound alert on turn completion (toggleable)
 - **Command palette**: Autocomplete for commands, projects, and skills
 - **Mobile drawer**: Sidebar opens as drawer on mobile devices
+- **Keyboard shortcuts**: Full keyboard navigation support
+
+### Keyboard Shortcuts
+
+#### General
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl/Cmd + Enter` | Send message |
+| `Tab` | Toggle Build/Plan mode |
+
+#### Alt Key Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Alt + N` | New chat |
+| `Alt + T` | New thread tab |
+| `Alt + W` | Close current thread |
+| `Alt + P` | Open project picker |
+| `Alt + [` | Previous thread |
+| `Alt + ]` | Next thread |
+| `Alt + 1-9` | Switch to thread 1-9 |
+| `Alt + V` | Toggle workspace panel |
+
+#### Mode
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl/Cmd + B` | Switch to Build mode |
+| `Ctrl/Cmd + Shift + P` | Switch to Plan mode |
 
 ## API Endpoints
 
