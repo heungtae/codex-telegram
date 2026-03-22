@@ -5,8 +5,23 @@ from typing import Any, Awaitable, Callable
 from telegram.ext import Application
 
 from models import state
+from utils.pypi_check import check_latest_version
 
 logger = logging.getLogger("codex-telegram")
+
+
+async def _check_update() -> None:
+    try:
+        version_info = await check_latest_version()
+        if version_info is not None and version_info.is_outdated:
+            logger.warning(
+                "A newer version of codex-telegram is available: %s (current: %s). "
+                "Run: pip install --upgrade codex-telegram",
+                version_info.latest,
+                version_info.current,
+            )
+    except Exception as e:
+        logger.warning("Failed to check for updates: %s", e)
 
 
 async def setup_codex(*, codex_client_factory: Callable[[], Any], client_info: dict[str, Any]):
@@ -53,6 +68,10 @@ async def post_init(
 
     state.codex_ready.set()
     logger.info("Codex initialized")
+
+    if not state.update_notified:
+        asyncio.create_task(_check_update())
+        state.update_notified = True
 
 
 async def post_shutdown(
