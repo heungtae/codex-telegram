@@ -339,12 +339,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       const rows = Array.isArray(prev[projectTabId]) ? prev[projectTabId] : [];
       const existing = rows.find((row) => row.id === threadId);
       if (existing) {
-        return {
-          ...prev,
-          [projectTabId]: rows.map((row) => (
-            row.id === threadId ? { ...row, title, hasUnreadCompletion: false } : row
-          )),
-        };
+        return prev;
       }
       return {
         ...prev,
@@ -773,11 +768,15 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       }
       return;
     }
-    const resolvedMode = forcedMode;
+    let resolvedMode = forcedMode;
     if (!resolvedMode) {
-      setPendingProjectTarget(normalizedTarget);
-      setIsProjectModeModalOpen(true);
-      return;
+      if (!projectTabs.length) {
+        resolvedMode = "open_new_tab";
+      } else {
+        setPendingProjectTarget(normalizedTarget);
+        setIsProjectModeModalOpen(true);
+        return;
+      }
     }
     try {
       const selectedProject = projectItems.find((item) => item?.key === normalizedTarget);
