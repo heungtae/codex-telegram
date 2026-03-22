@@ -82,6 +82,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   const paletteRef = useRef(null);
   const workspaceResizeRef = useRef({ startX: 0, startWidth: 320 });
   const projectTabSequenceRef = useRef(0);
+  const initialLoadRef = useRef(true);
   const streamedTurnIdsRef = useRef({});
   const assistantItemCompletedByTurnRef = useRef({});
   const [paletteSelectedIndex, setPaletteSelectedIndex] = useState(0);
@@ -561,11 +562,14 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     const result = await api("/api/projects");
     const items = Array.isArray(result.items) ? result.items : [];
     setProjectItems(items);
-    const selected = items.find((item) => item?.selected) || items[0];
-    if (!projectTabs.length && selected) {
-      const tabId = upsertProjectTab(selected);
-      if (tabId) {
-        setActiveProjectTabId(tabId);
+    if (!projectTabs.length && initialLoadRef.current) {
+      initialLoadRef.current = false;
+      const defaultItem = items.find((item) => item?.default) || items[0];
+      if (defaultItem) {
+        const tabId = upsertProjectTab(defaultItem);
+        if (tabId) {
+          setActiveProjectTabId(tabId);
+        }
       }
       return;
     }
@@ -628,19 +632,6 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     }
     if (typeof summary?.collaboration_mode === "string") {
       setCollaborationMode(normalizeCollaborationMode(summary.collaboration_mode));
-    }
-    if (!activeProjectTabId && summary && typeof summary.project_key === "string" && summary.project_key) {
-      const tabId = upsertProjectTab({
-        key: summary.project_key,
-        name: summary.project_name || summary.project_key,
-        path: summary.workspace || "",
-      });
-      if (tabId) {
-        setActiveProjectTabId((prev) => prev || tabId);
-        if (summary.active_thread_id) {
-          setActiveThreadForProjectTab(tabId, summary.active_thread_id);
-        }
-      }
     }
   };
   const loadApprovals = async () => {
