@@ -44,34 +44,34 @@ export default function useThreadScopedState(activeThread) {
     });
   }, [activeThread, messages]);
 
-  useEffect(() => {
-    const threadId = normalizeThreadId(activeThread);
-    if (!threadId) {
-      setInput("");
-      setStatus("idle");
-      setActivityDetail("");
-      return;
-    }
-    const saved = threadUiByThreadIdRef.current[threadId] || createEmptyThreadUiState();
-    setInput(typeof saved.input === "string" ? saved.input : "");
-    setStatus(typeof saved.status === "string" ? saved.status : "idle");
-    setActivityDetail(typeof saved.activityDetail === "string" ? saved.activityDetail : "");
-  }, [activeThread]);
+   useEffect(() => {
+     const threadId = normalizeThreadId(activeThread);
+     if (!threadId) {
+       setInput("");
+       setStatus("idle");
+       setActivityDetail("");
+       return;
+     }
+     const saved = threadUiByThreadId[threadId] || createEmptyThreadUiState();
+     setInput(typeof saved.input === "string" ? saved.input : "");
+     setStatus(typeof saved.status === "string" ? saved.status : "idle");
+     setActivityDetail(typeof saved.activityDetail === "string" ? saved.activityDetail : "");
+   }, [activeThread]);
 
-  const restoreThreadMessages = (threadId) => {
-    const normalizedThreadId = normalizeThreadId(threadId);
-    if (!normalizedThreadId) {
-      setMessages([]);
-      return false;
-    }
-    const cached = messagesByThreadIdRef.current[normalizedThreadId];
-    if (Array.isArray(cached)) {
-      setMessages(cached);
-      return true;
-    }
-    setMessages([]);
-    return false;
-  };
+   const restoreThreadMessages = (threadId) => {
+     const normalizedThreadId = normalizeThreadId(threadId);
+     if (!normalizedThreadId) {
+       setMessages([]);
+       return false;
+     }
+     const cached = messagesByThreadId[normalizedThreadId];
+     if (Array.isArray(cached)) {
+       setMessages(cached);
+       return true;
+     }
+     setMessages([]);
+     return false;
+   };
 
   const appendMessageToThread = (threadId, message) => {
     const normalizedThreadId = normalizeThreadId(threadId);
