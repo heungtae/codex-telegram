@@ -629,10 +629,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     if (typeof summary?.collaboration_mode === "string") {
       setCollaborationMode(normalizeCollaborationMode(summary.collaboration_mode));
     }
-    if (!activeProjectTabId && summary && typeof summary.active_thread_id === "string" && summary.active_thread_id) {
-      setActiveThread(summary.active_thread_id);
-    }
-    if (!projectTabs.length && summary && typeof summary.project_key === "string" && summary.project_key) {
+    if (!activeProjectTabId && summary && typeof summary.project_key === "string" && summary.project_key) {
       const tabId = upsertProjectTab({
         key: summary.project_key,
         name: summary.project_name || summary.project_key,
@@ -842,7 +839,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       await loadThreads({
         projectKey: normalizedTarget,
         projectTabId,
-        ensureDefaultTab: true,
+        ensureDefaultTab: false,
         resetThreadTabs: resolvedMode === "replace_current",
       });
     } catch (err) {
@@ -1917,7 +1914,6 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       return;
     }
     const selectedThreadId = normalizeThreadId(activeThreadTabIdByProjectTabId[activeProjectTabId]) || "";
-    setActiveThread(selectedThreadId);
     restoreWorkspaceForThread(selectedThreadId);
     if (selectedThreadId) {
       viewThread(selectedThreadId).catch(() => {});
@@ -1925,7 +1921,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       setMessages([]);
     }
     loadSessionSummary().catch(() => {});
-    loadThreads({ projectKey: activeProjectKey, projectTabId: activeProjectTabId, ensureDefaultTab: true }).catch(() => {});
+    loadThreads({ projectKey: activeProjectKey, projectTabId: activeProjectTabId, ensureDefaultTab: false }).catch(() => {});
   }, [activeProjectTabId]);
   useEffect(() => {
     if (paletteSelectedIndex < paletteItems.length) {
