@@ -140,7 +140,12 @@ Guardian rules can automatically approve safe operations and escalate risky ones
 - Large change sets require manual approval
 - Build commands like `mvn test` are auto-approved
 
-Configure Guardian rules in `conf.toml` or via Web UI.
+Configure Guardian rules in `conf.toml` or via [Web UI Guardian settings](WEB.md#system-configuration).
+
+## See Also
+
+- [WEB.md](WEB.md) - Web UI features and workspace browser
+- [README.md](README.md) - Project overview and quick start
 
 ## First-Run Checklist
 

@@ -196,3 +196,8 @@ Set password via environment variable:
 ```bash
 export CODEX_WEB_PASSWORD="your_password"
 ```
+
+## See Also
+
+- [TELEGRAM.md](TELEGRAM.md) - Telegram bot commands and approval workflow
+- [README.md](README.md) - Project overview and quick start

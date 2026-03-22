@@ -2,33 +2,45 @@
 
 A bridge that lets you control the Codex App Server from Telegram and Web UI.
 
-<img src="./docs/images/codex-telegram.png" alt="Codex Telegram Bot Integration" width="520" />
+## Features
 
-## What's New Beyond 0.3.4
+### Telegram Bot
 
-- Web workspace browser for the active project, including directory tree, file preview, and Git diff preview
-- Structured patch/file-change events in Web chat, with diff rendering for `apply_patch` results
-- Message-level `threadId` display in Web chat so streamed output and loaded history stay traceable
-- Web settings panels for Guardian, Models, Modes, Skills, Apps, MCP, and App Config
-- Interactive project profile add/select flows in both Telegram and Web
-- More resilient turn completion routing so completion/progress messages reach the correct Telegram/Web user session
-- Responsive Web UI refinements including sidebar toggle, mobile layout, and workspace panel controls
+Control Codex directly from Telegram:
 
-## What You Can Do
+- **Slash commands**: `/start`, `/resume`, `/projects`, `/review`, `/exec`, and more
+- **Real-time updates**: Receive progress notifications and turn completions
+- **Interactive approvals**: Approve/deny dangerous operations with inline buttons
+- **Multi-project support**: Switch between projects with `/project <name>`
+- **Thread management**: Start, resume, fork, archive conversations
 
-- **Telegram Bot**: Control Codex from Telegram with slash commands and receive real-time updates
-- **Web UI**: ChatGPT-style interface with streaming responses and workspace browser
-- **Multi-project**: Manage multiple projects with independent thread histories
-- **Approval workflow**: Interactive approve/deny buttons for sensitive operations
+### Web UI
+
+ChatGPT-style interface with advanced features:
+
+- **Streaming responses**: Real-time message streaming via SSE
+- **Multi-project tabs**: Each project has independent workspace context
+- **Thread tabs**: Multiple conversations per project
+- **Workspace browser**: File tree, Git status, file preview, diff viewer
+- **Settings panels**: Features, Models, Modes, Skills, Apps, MCP, Guardian
+- **Dark/Light theme**: Theme toggle with localStorage persistence
+- **Responsive design**: Desktop and mobile layouts
+
+### Shared Features
+
+- **Approval workflow**: Interactive approve/deny for sensitive operations
 - **Guardian**: Policy-based safety rules to auto-approve or escalate requests
-- **Real-time events**: Live updates via SSE in Web, push notifications in Telegram
+- **Real-time events**: Live updates via SSE (Web) and push notifications (Telegram)
+- **Multi-project**: Manage multiple projects with separate thread histories
 
 ## Requirements
 
 - Python `3.11+`
-- [Telegram Bot Token](TELEGRAM.md#getting-a-bot-token) (if Telegram enabled)
+- [Telegram Bot Token](https://t.me/BotFather) (if Telegram enabled)
 - Installed and runnable `codex` CLI
-- Web UI: `web.password` and `web.allowed_users` configured
+- Web UI: password and allowed users configured
+
+Find your Telegram user ID: https://t.me/userinfobot
 
 ## Quick Start
 
@@ -40,7 +52,7 @@ pip install codex-telegram
 
 ### 2. Configure
 
-Create `~/.config/codex-telegram/conf.toml` with minimum settings:
+Create `~/.config/codex-telegram/conf.toml`:
 
 ```toml
 project = "default"
@@ -55,8 +67,6 @@ token = "YOUR_TELEGRAM_BOT_TOKEN"
 [users]
 allowed_ids = [123456789]
 ```
-
-Find your Telegram user ID: https://t.me/userinfobot
 
 ### 3. Run
 
@@ -80,48 +90,30 @@ http://127.0.0.1:8080
 
 ## Developing from Source
 
-### 1. Clone and install
-
 ```bash
 git clone https://github.com/heungtae/codex-telegram.git
 cd codex-telegram
 pip install -e .
-```
-
-### 2. Build Web frontend
-
-```bash
-cd web/frontend
-npm install
-npm run build
-cd ../..
-```
-
-### 3. Configure
-
-```bash
+cd web/frontend && npm install && npm run build && cd ../..
 cp conf.toml.example ~/.config/codex-telegram/conf.toml
-```
-
-Edit `~/.config/codex-telegram/conf.toml`:
-
-- `projects.default.path`: absolute path to your project
-- `users.allowed_ids`: your Telegram user ID
-- `telegram.bot.token`: your bot token from @BotFather
-
-For full configuration options, see [`conf.toml.example`](conf.toml.example).
-
-### 4. Run
-
-```bash
+# Edit config, then run:
 python3 main.py
 ```
 
 ## Documentation
 
-- [Telegram Bot](TELEGRAM.md) - Commands, real-time updates, approval workflow
-- [Web UI](README_WEB.md) - Chat interface, workspace browser, settings panels
-- [Configuration](conf.toml.example) - Full configuration reference
+| File | Description |
+|------|-------------|
+| [TELEGRAM.md](TELEGRAM.md) | Telegram bot commands, real-time updates, approval workflow |
+| [WEB.md](WEB.md) | Web UI features, API endpoints, workspace browser |
+| [conf.toml.example](conf.toml.example) | Full configuration reference |
+
+## Security
+
+- Keep `users.allowed_ids` populated with trusted Telegram user IDs only
+- Use environment variables for tokens: `TELEGRAM_BOT_TOKEN`, `CODEX_WEB_PASSWORD`
+- Run one polling instance per bot token to avoid conflicts
+- Set `cookie_secure = true` when using HTTPS
 
 ## License
 
