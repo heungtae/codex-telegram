@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "Bridge for controlling the Codex App Server from Telegram and Web UI"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
 authors = [
   { name = "heungtae" }
 ]

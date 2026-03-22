@@ -1,5 +1,7 @@
 include README.md
 include LICENSE
+include TELEGRAM.md
+include WEB.md
 include conf.toml.example
 recursive-include web/static *
 prune codex_source

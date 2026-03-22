@@ -121,9 +121,9 @@ python3 main.py
 
 | File | Description |
 |------|-------------|
-| [TELEGRAM.md](TELEGRAM.md) | Telegram bot commands, real-time updates, approval workflow |
-| [WEB.md](WEB.md) | Web UI features, API endpoints, workspace browser |
-| [conf.toml.example](conf.toml.example) | Full configuration reference |
+| [TELEGRAM.md](https://github.com/heungtae/codex-telegram/blob/main/TELEGRAM.md) | Telegram bot commands, real-time updates, approval workflow |
+| [WEB.md](https://github.com/heungtae/codex-telegram/blob/main/WEB.md) | Web UI features, API endpoints, workspace browser |
+| [conf.toml.example](https://github.com/heungtae/codex-telegram/blob/main/conf.toml.example) | Full configuration reference |
 
 ## Security
 
