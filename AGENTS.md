@@ -51,8 +51,12 @@ If repository config conflicts with this guide, repository config wins.
 - CLI entrypoint: `codex-telegram`
 - Full test run: `python3 -m pytest -q`
 - Targeted run: `python3 -m pytest -k web -q`
+- Frontend build: `cd web/frontend && npm run build`
 
 Use `conf.toml` from `conf.toml.example`. For Web auth, set `web.password` or `CODEX_WEB_PASSWORD`.
+
+## Frontend Code Changes
+- **Always run `npm run build`** after modifying `web/frontend/src/` files to ensure the changes are compiled correctly.
 
 ## Coding Rules
 - Keep changes localized and intention-revealing.

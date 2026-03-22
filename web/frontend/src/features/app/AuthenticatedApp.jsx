@@ -1172,9 +1172,16 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     }
     const restored = restoreThreadMessages(normalizedThreadId);
     if (!restored) {
-      setMessages([]);
+      const rows = Array.isArray(threadTabsByProjectTabId[activeProjectTabId])
+        ? threadTabsByProjectTabId[activeProjectTabId]
+        : [];
+      const threadTab = rows.find((tab) => normalizeThreadId(tab.id) === normalizedThreadId);
+      const isRunning = threadTab?.status === "running";
+      if (!isRunning) {
+        setMessages([]);
+        await syncThreadMessagesFromServer(normalizedThreadId, { applyToVisible: true });
+      }
     }
-    await syncThreadMessagesFromServer(normalizedThreadId, { applyToVisible: true });
   };
 
   const runCommand = async (line) => {
@@ -1626,7 +1633,6 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
         delete streamedTurnIdsRef.current[turnId];
         delete assistantItemCompletedByTurnRef.current[turnId];
       }
-      syncThreadMessagesFromServer(completedThreadId, { applyToVisible: !hasStreamed }).catch(() => {});
       loadThreads({
         projectKey: activeProjectKeyRef.current,
         projectTabId: activeProjectTabIdRef.current,
