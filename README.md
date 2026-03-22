@@ -50,6 +50,23 @@ Find your Telegram user ID: https://t.me/userinfobot
 pip install codex-telegram
 ```
 
+If installation fails, try:
+
+```bash
+# Upgrade pip first
+pip install --upgrade pip
+
+# Install with system packages flag (some Linux distributions)
+pip install codex-telegram --break-system-packages
+
+# Or install for current user only
+pip install codex-telegram --user
+
+# Or use a virtual environment
+python -m venv .venv && source .venv/bin/activate
+pip install codex-telegram
+```
+
 ### 2. Configure
 
 Create `~/.config/codex-telegram/conf.toml`:
