@@ -511,7 +511,11 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     const projectTabId = typeof options.projectTabId === "string" ? options.projectTabId : (activeProjectTabId || "");
     const ensureDefaultTab = !!options.ensureDefaultTab;
     const resetThreadTabs = !!options.resetThreadTabs;
-    const query = new URLSearchParams({ limit: "20", offset: "0", archived: "false" });
+    const configuredThreadsLimit = Number.parseInt(String(me?.threads_list_limit ?? "20"), 10);
+    const threadsLimit = Number.isFinite(configuredThreadsLimit)
+      ? Math.max(1, Math.min(100, configuredThreadsLimit))
+      : 20;
+    const query = new URLSearchParams({ limit: String(threadsLimit), offset: "0", archived: "false" });
     if (projectKey) {
       query.set("project_key", projectKey);
     }
@@ -1333,6 +1337,19 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       }
       return "";
     };
+    const extractEventItemId = (data) => {
+      if (!data || typeof data !== "object") {
+        return "";
+      }
+      if (typeof data.item_id === "string" && data.item_id) {
+        return data.item_id;
+      }
+      const item = data?.params?.item;
+      if (item && typeof item === "object" && typeof item.id === "string" && item.id) {
+        return item.id;
+      }
+      return "";
+    };
     es.onopen = () => {
       debugLog("[SSE] connected");
     };
@@ -1350,7 +1367,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       }
       const variant = data.variant === "subagent" ? "subagent" : "";
       const turnId = typeof data.turn_id === "string" && data.turn_id ? data.turn_id : "";
-      const itemId = typeof data.item_id === "string" && data.item_id ? data.item_id : "";
+      const itemId = extractEventItemId(data);
       const phase =
         turnId && itemId && itemPhaseByTurnRef.current[turnId]
           ? itemPhaseByTurnRef.current[turnId][itemId] || ""
@@ -1368,6 +1385,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
         // For completed notifications, just finalize the current streaming message.
         applyMessageMutationForThread(threadId, (prev) => {
           const copy = [...prev];
+          let targetIndex = -1;
           for (let i = copy.length - 1; i >= 0; i -= 1) {
             const message = copy[i];
             if (message.role !== "assistant") {
@@ -1376,12 +1394,50 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
             if (turnId && (message.turnId || "") !== turnId) {
               continue;
             }
-            if (itemId && (message.itemId || "") !== itemId) {
+            if ((message.variant || "") !== variant) {
               continue;
             }
-            copy[i] = { ...message, streaming: false };
+            if (itemId && (message.itemId || "") === itemId) {
+              targetIndex = i;
+              break;
+            }
+            if (!itemId) {
+              targetIndex = i;
+              break;
+            }
+            if (targetIndex < 0 && message.streaming) {
+              // Fallback for streams where early deltas do not carry item_id.
+              targetIndex = i;
+            }
+          }
+          if (targetIndex >= 0) {
+            const current = copy[targetIndex];
+            copy[targetIndex] = {
+              ...current,
+              threadId: current.threadId || threadId,
+              turnId: current.turnId || turnId,
+              itemId: current.itemId || itemId,
+              phase: current.phase || phase,
+              streaming: false,
+            };
             return copy;
           }
+          debugLog("[SSE] turn_delta item/completed unmatched: append fallback", {
+            threadId,
+            turnId,
+            itemId,
+            variant,
+            assistantTail: copy
+              .slice(-5)
+              .filter((message) => message?.role === "assistant")
+              .map((message) => ({
+                turnId: message?.turnId || "",
+                itemId: message?.itemId || "",
+                variant: message?.variant || "",
+                streaming: !!message?.streaming,
+                text: typeof message?.text === "string" ? message.text.slice(0, 80) : "",
+              })),
+          });
           copy.push({ role: "assistant", text, variant, threadId, turnId, itemId, phase, streaming: false });
           return copy;
         });
@@ -1403,7 +1459,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
           last.role === "assistant" &&
           last.streaming &&
           (last.variant || "") === variant &&
-          ((last.itemId || "") === itemId || !itemId) &&
+          ((last.itemId || "") === itemId || !itemId || (itemId && !(last.itemId || ""))) &&
           ((last.turnId || "") === turnId || !turnId)
         ) {
           last.text += text;
