@@ -38,13 +38,63 @@ If `telegram.enabled = false`, Telegram token is not required.
 
 ## Quick Start
 
-1. Install dependencies
+### 1. Install
 
 ```bash
-python3 -m pip install -r requirements.txt
+pip install codex-telegram
 ```
 
-2. Build Web frontend assets
+### 2. Configure
+
+Create `~/.config/codex-telegram/conf.toml` with minimum settings:
+
+```toml
+project = "default"
+
+[projects.default]
+name = "my project"
+path = "/path/to/your/project"
+
+[telegram.bot]
+token = "YOUR_TELEGRAM_BOT_TOKEN"
+
+[users]
+allowed_ids = [123456789]
+```
+
+Find your Telegram user ID: https://t.me/userinfobot
+
+### 3. Run
+
+```bash
+codex-telegram
+```
+
+Or with environment variables:
+
+```bash
+export TELEGRAM_BOT_TOKEN="your_token"
+export CODEX_WEB_PASSWORD="your_password"
+codex-telegram
+```
+
+### 4. Open Web UI
+
+```text
+http://127.0.0.1:8080
+```
+
+## Developing from Source
+
+### 1. Clone and install
+
+```bash
+git clone https://github.com/heungtae/codex-telegram.git
+cd codex-telegram
+pip install -e .
+```
+
+### 2. Build Web frontend
 
 ```bash
 cd web/frontend
@@ -53,56 +103,24 @@ npm run build
 cd ../..
 ```
 
-3. Prepare the config file
+### 3. Configure
 
 ```bash
-cp conf.toml.example conf.toml
+cp conf.toml.example ~/.config/codex-telegram/conf.toml
 ```
 
-4. Edit `conf.toml`
+Edit `~/.config/codex-telegram/conf.toml`:
 
-```bash
-cp conf.toml.example conf.toml
-```
+- `projects.default.path`: absolute path to your project
+- `users.allowed_ids`: your Telegram user ID
+- `telegram.bot.token`: your bot token from @BotFather
 
-Key settings to update:
+For full configuration options, see [`conf.toml.example`](conf.toml.example).
 
-- `projects.default.path`: absolute path to the target project
-- `users.allowed_ids`: list of Telegram user IDs allowed to use this bot
-- `telegram.bot.token` or environment variable `TELEGRAM_BOT_TOKEN`
-- For HTTPS: `web.ssl_enabled = true`, `web.ssl_certfile`, `web.ssl_keyfile`
-
-For full configuration reference, see [`conf.toml.example`](conf.toml.example).
-
-Guardian rule notes:
-- Matcher groups inside one rule are combined with `AND`.
-- Use separate rules when you want `OR` semantics across conditions like changed-file count, public API changes, DB schema changes, and auth/security changes.
-- Telegram turn end messages use `telegram.forwarding.app_server_event_allowlist`. Keep `turn/completed` enabled there if you want completion notices delivered to Telegram.
-
-5. (Optional) Set token via environment variable
-
-```bash
-export TELEGRAM_BOT_TOKEN="your_actual_bot_token"
-```
-
-6. Run
+### 4. Run
 
 ```bash
 python3 main.py
-```
-
-7. Open Web UI (if `web.enabled = true`)
-
-```text
-http://127.0.0.1:8080
-```
-
-For HTTPS, set `web.ssl_enabled = true`, `web.ssl_certfile`, and `web.ssl_keyfile` in `conf.toml`. See `conf.toml.example` for details.
-
-Set web password via env:
-
-```bash
-export CODEX_WEB_PASSWORD="your_strong_password"
 ```
 
 ## First-Run Command Sequence
