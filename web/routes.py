@@ -60,6 +60,14 @@ def _resolved_logging_level() -> str:
     return str(raw).strip().upper() or "INFO"
 
 
+def _resolved_threads_list_limit() -> int:
+    raw = get("display.threads_list_limit", 20)
+    try:
+        return max(1, min(100, int(raw)))
+    except (TypeError, ValueError):
+        return 20
+
+
 def _project_items_for_user(user_id: int) -> list[dict[str, Any]]:
     if state.command_router is None or not hasattr(state.command_router, "projects"):
         return []
@@ -175,6 +183,7 @@ def register_auth_routes(app: FastAPI) -> None:
         ttl = clamp_int(get("web.session_ttl_seconds", 43200), 43200, minimum=60, maximum=604800)
         session = await session_manager.create(username, ttl)
         logging_level = _resolved_logging_level()
+        threads_list_limit = _resolved_threads_list_limit()
         response.set_cookie(
             key=COOKIE_NAME,
             value=session.token,
@@ -188,6 +197,7 @@ def register_auth_routes(app: FastAPI) -> None:
             "user_id": session.user_id,
             "logging_level": logging_level,
             "debug_logging": logging_level == "DEBUG",
+            "threads_list_limit": threads_list_limit,
         }
 
     @app.post("/api/auth/logout")
@@ -201,11 +211,13 @@ def register_auth_routes(app: FastAPI) -> None:
     async def me(request: Request) -> dict[str, Any]:
         session = await session_from_request(request)
         logging_level = _resolved_logging_level()
+        threads_list_limit = _resolved_threads_list_limit()
         return {
             "username": session.username,
             "user_id": session.user_id,
             "logging_level": logging_level,
             "debug_logging": logging_level == "DEBUG",
+            "threads_list_limit": threads_list_limit,
         }
 
 
@@ -261,11 +273,12 @@ def register_thread_routes(app: FastAPI) -> None:
         request: Request,
         archived: bool = False,
         offset: int = 0,
-        limit: int = 10,
+        limit: int | None = None,
         current_profile: bool = True,
     ) -> dict[str, Any]:
         session = await session_from_request(request)
-        args = ["--limit", str(max(1, min(100, limit))), "--offset", str(max(0, offset))]
+        resolved_limit = _resolved_threads_list_limit() if limit is None else max(1, min(100, limit))
+        args = ["--limit", str(resolved_limit), "--offset", str(max(0, offset))]
         if archived:
             args.append("--archived")
         if current_profile:
@@ -277,12 +290,13 @@ def register_thread_routes(app: FastAPI) -> None:
         request: Request,
         archived: bool = False,
         offset: int = 0,
-        limit: int = 20,
+        limit: int | None = None,
         project_key: str = "",
     ) -> dict[str, Any]:
         session = await session_from_request(request)
         await wait_for_codex()
-        safe_limit = max(1, min(100, limit))
+        resolved_limit = _resolved_threads_list_limit() if limit is None else limit
+        safe_limit = max(1, min(100, resolved_limit))
         safe_offset = max(0, offset)
         params: dict[str, Any] = {"limit": min(100, safe_limit + safe_offset)}
         if archived:

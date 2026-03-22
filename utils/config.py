@@ -74,6 +74,7 @@ app_server_event_denylist = []
 [display]
 max_message_length = 4000
 send_progress = true
+threads_list_limit = 20
 """
 
 def _get_config_path() -> Path:

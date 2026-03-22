@@ -179,7 +179,12 @@ class ThreadCommands:
             return value
 
         usage = "Usage: /threads [--archived] [--full] [--by-profile] [--current-profile] [--limit N] [--offset N]"
-        params: dict[str, Any] = {"limit": 5}
+        configured_default_limit = get("display.threads_list_limit", 5)
+        try:
+            default_limit = max(1, min(100, int(configured_default_limit)))
+        except (TypeError, ValueError):
+            default_limit = 5
+        params: dict[str, Any] = {"limit": default_limit}
         show_full_id = True
         offset: int | None = None
         archived_mode = False
