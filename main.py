@@ -186,7 +186,13 @@ def main():
     logger.info("Using config file %s", get_config_path())
 
     web_enabled, web_host, web_port, web_endpoint, ssl_enabled, ssl_certfile, ssl_keyfile = _parse_web_endpoint()
-    telegram_enabled = parse_bool(get("telegram.enabled", True), default=True)
+    telegram_enabled_env = os.environ.get("CODEX_WEB_ONLY", "").lower()
+    if telegram_enabled_env == "1":
+        telegram_enabled = False
+        if not web_enabled:
+            web_enabled = True
+    else:
+        telegram_enabled = parse_bool(get("telegram.enabled", True), default=True)
     logger.info("Web endpoint configured: %s (enabled=%s)", web_endpoint, web_enabled)
     logger.info("Telegram channel enabled=%s", telegram_enabled)
 

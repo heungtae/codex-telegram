@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "Bridge for controlling the Codex App Server from Telegram and Web UI"
 readme = "README.md"
 requires-python = ">=3.11"
-license = "Apache-2.0"
+license = { file = "LICENSE" }
 authors = [
   { name = "heungtae" }
 ]
@@ -44,6 +44,10 @@ version = { attr = "codex_telegram.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["bot", "codex", "codex.*", "codex_telegram", "models", "utils", "web"]
+include = ["app_runtime", "bot", "codex", "codex.*", "codex_telegram", "models", "utils", "web"]
 exclude = ["tests*"]
 namespaces = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = ["codex_source", "web/frontend", "node_modules"]

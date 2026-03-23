@@ -69,6 +69,10 @@ apply_to_methods = ["*"]
 [logging]
 level = "INFO"
 
+[updates]
+pypi_check = true
+pypi_check_verify_ssl = true
+
 [telegram.forwarding]
 app_server_event_level = "INFO"
 app_server_event_allowlist = []
@@ -81,6 +85,9 @@ threads_list_limit = 20
 """
 
 def _get_config_path() -> Path:
+    env_config_path = os.environ.get("CODEX_CONFIG_PATH")
+    if env_config_path:
+        return Path(env_config_path)
     config_dir = Path.home() / ".config" / "codex-telegram"
     return config_dir / "conf.toml"
 

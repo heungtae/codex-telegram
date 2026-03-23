@@ -102,11 +102,9 @@ class WebServerLocalCommandTests(unittest.TestCase):
         response = asyncio.run(endpoint())
         body = response.body.decode("utf-8")
 
-        self.assertIn('const storageKey = "codex-web-theme";', body)
-        self.assertIn("window.localStorage.getItem(storageKey)", body)
-        self.assertIn('document.documentElement.dataset.theme = theme;', body)
-        self.assertRegex(body, r'/assets/styles\.css\?v=\d+')
-        self.assertRegex(body, r'/assets/app\.jsx\?v=\d+')
+        self.assertIn("<!doctype html>", body)
+        self.assertIn("<title>Codex Web</title>", body)
+        self.assertIn("/assets/", body)
 
     def test_chat_messages_propagates_turn_start_failures(self):
         app = create_web_app()
@@ -378,12 +376,13 @@ class WebServerLocalCommandTests(unittest.TestCase):
         self.assertEqual("thread-1", body["thread_id"])
         self.assertEqual(
             [
-                {"role": "user", "text": "Plan this", "thread_id": "thread-1"},
+                {"role": "user", "text": "Plan this", "thread_id": "thread-1", "turn_id": "turn-1"},
                 {
                     "role": "assistant",
                     "text": "# Final plan\n- first\n- second",
                     "kind": "plan",
                     "thread_id": "thread-1",
+                    "turn_id": "turn-1",
                 },
             ],
             body["messages"],

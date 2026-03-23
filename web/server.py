@@ -7,7 +7,9 @@ from codex_telegram import __version__
 from utils.config import get_guardian_settings, save_guardian_settings
 from utils.local_command import run_bang_command
 from web import routes as route_module
-from web.dependencies import resolved_assets_dir
+from web.dependencies import COOKIE_NAME, resolved_assets_dir
+
+__all__ = ["create_web_app", "COOKIE_NAME"]
 
 logger = logging.getLogger("codex-telegram.web")
 
