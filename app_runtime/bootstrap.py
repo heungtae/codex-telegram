@@ -14,13 +14,21 @@ logger = logging.getLogger("codex-telegram")
 async def _check_update(*, verify_ssl: bool) -> None:
     try:
         version_info = await check_latest_version(verify_ssl=verify_ssl)
-        if version_info is not None and version_info.is_outdated:
+        if version_info is None:
+            logger.info("PyPI update check did not return version information.")
+            return
+        if version_info.is_outdated:
             logger.warning(
                 "A newer version of codex-telegram is available: %s (current: %s). "
                 "Run: pip install --upgrade codex-telegram",
                 version_info.latest,
                 version_info.current,
             )
+            return
+        logger.info(
+            "codex-telegram is up to date at version %s.",
+            version_info.current,
+        )
     except Exception as e:
         logger.warning("Failed to check for updates: %s", e)
 
@@ -77,6 +85,7 @@ async def post_init(
             default=True,
         )
         if update_check_enabled:
+            logger.info("Checking PyPI for codex-telegram updates...")
             asyncio.create_task(_check_update(verify_ssl=update_check_verify_ssl))
         state.update_notified = True
 
@@ -94,6 +103,7 @@ async def post_shutdown(
         state_module.approval_guardian = None
     state_module.command_router = None
     state_module.codex_ready.clear()
+    state_module.update_notified = False
 
 
 async def run_without_telegram(
