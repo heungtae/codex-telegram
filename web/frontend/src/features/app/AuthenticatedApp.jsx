@@ -2567,6 +2567,32 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     };
   };
 
+  const copyWorkspacePathToClipboard = useCallback(async (path) => {
+    const text = normalizeWorkspacePath(path);
+    if (!text) {
+      return;
+    }
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.setAttribute("readonly", "true");
+        textarea.style.position = "fixed";
+        textarea.style.left = "-9999px";
+        textarea.style.top = "-9999px";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+      }
+      showToast(`Copied ${text}`, "success");
+    } catch (_err) {
+      showToast("Failed to copy path.", "error");
+    }
+  }, [showToast]);
+
   const renderWorkspaceTree = (path = "", depth = 0) => {
     const normalizedPath = normalizeWorkspacePath(path);
     const items = Array.isArray(workspaceTree[normalizedPath]) ? workspaceTree[normalizedPath] : [];
@@ -2586,8 +2612,17 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
               type="button"
               className={`workspace-tree-item directory ${compactEntry.isExpanded ? "expanded" : ""} ${isSelected ? "selected" : ""} ${statusClassName(compactEntry.statusCode)}`}
               style={{ paddingLeft: `${12 + depth * 16}px` }}
+              title={compactEntry.leafPath}
               onClick={() => {
                 toggleWorkspaceDirectory(compactEntry.leafPath);
+              }}
+              onKeyDown={(event) => {
+                const ctrlKey = event.metaKey || event.ctrlKey;
+                if (ctrlKey && event.key.toLowerCase() === "c") {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  copyWorkspacePathToClipboard(compactEntry.leafPath).catch(() => {});
+                }
               }}
             >
               <span className="workspace-tree-icon caret">
@@ -2611,8 +2646,17 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
             type="button"
             className={`workspace-tree-item file ${isSelected ? "selected" : ""} ${statusClassName(statusCode)}`}
             style={{ paddingLeft: `${12 + depth * 16}px` }}
+            title={itemPath}
             onClick={() => {
               openWorkspaceFile(itemPath, statusCode).catch(() => {});
+            }}
+            onKeyDown={(event) => {
+              const ctrlKey = event.metaKey || event.ctrlKey;
+              if (ctrlKey && event.key.toLowerCase() === "c") {
+                event.preventDefault();
+                event.stopPropagation();
+                copyWorkspacePathToClipboard(itemPath).catch(() => {});
+              }
             }}
           >
             <span className="workspace-tree-icon caret" />
@@ -2664,7 +2708,16 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
                   key={`deleted:${path}`}
                   type="button"
                   className="workspace-tree-item file deleted"
+                  title={path}
                   onClick={() => openWorkspaceFile(path, value?.code || "D").catch(() => {})}
+                  onKeyDown={(event) => {
+                    const ctrlKey = event.metaKey || event.ctrlKey;
+                    if (ctrlKey && event.key.toLowerCase() === "c") {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      copyWorkspacePathToClipboard(path).catch(() => {});
+                    }
+                  }}
                 >
                   <span className="workspace-tree-icon caret" />
                   <span className="workspace-tree-icon glyph"><FileIcon /></span>

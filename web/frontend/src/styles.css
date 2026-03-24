@@ -1260,9 +1260,9 @@ kbd {
   border-radius: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-height: 34px;
-  padding: 3px 8px;
+  gap: 6px;
+  min-height: 18px;
+  padding: 1px 8px;
   color: var(--text);
   cursor: pointer;
   text-align: left;
