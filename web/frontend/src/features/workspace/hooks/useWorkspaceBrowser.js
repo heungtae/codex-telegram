@@ -25,6 +25,9 @@ export default function useWorkspaceBrowser({
   const [workspacePreview, setWorkspacePreview] = useState(null);
   const workspaceTreeRef = useRef({});
   const workspaceByThreadIdRef = useRef({});
+  const workspaceLoadedPathRef = useRef("");
+  const workspaceContextKeyRef = useRef("");
+  const workspaceLoadRequestRef = useRef(0);
 
   useEffect(() => {
     workspaceTreeRef.current = workspaceTree;
@@ -34,54 +37,69 @@ export default function useWorkspaceBrowser({
     workspaceByThreadIdRef.current = workspaceByThreadId;
   }, [workspaceByThreadId]);
 
-  const ensureWorkspaceBucket = useCallback((threadId) => {
+  const resolveWorkspaceStateId = useCallback((threadId = "") => {
     const normalizedThreadId = normalizeThreadId(threadId);
-    if (!normalizedThreadId) {
+    if (normalizedThreadId) {
+      return normalizedThreadId;
+    }
+    if (activeProjectTabId) {
+      return `project:${activeProjectTabId}`;
+    }
+    if (workspacePath) {
+      return `workspace:${workspacePath}`;
+    }
+    return "";
+  }, [activeProjectTabId, workspacePath]);
+
+  const ensureWorkspaceBucket = useCallback((threadId) => {
+    const stateId = resolveWorkspaceStateId(threadId);
+    if (!stateId) {
       return;
     }
     setWorkspaceByThreadId((prev) => {
-      const existing = prev[normalizedThreadId];
+      const existing = prev[stateId];
       if (existing && existing.workspacePath === workspacePath) {
         return prev;
       }
-      return { ...prev, [normalizedThreadId]: createEmptyWorkspaceState(workspacePath) };
+      return { ...prev, [stateId]: createEmptyWorkspaceState(workspacePath) };
     });
-  }, [workspacePath]);
+  }, [resolveWorkspaceStateId, workspacePath]);
 
   const resetWorkspaceBucket = useCallback((threadId) => {
-    const normalizedThreadId = normalizeThreadId(threadId);
-    if (!normalizedThreadId) {
+    const stateId = resolveWorkspaceStateId(threadId);
+    if (!stateId) {
       return;
     }
-    setWorkspaceByThreadId((prev) => ({ ...prev, [normalizedThreadId]: createEmptyWorkspaceState(workspacePath) }));
-  }, [workspacePath]);
+    setWorkspaceByThreadId((prev) => ({ ...prev, [stateId]: createEmptyWorkspaceState(workspacePath) }));
+  }, [resolveWorkspaceStateId, workspacePath]);
 
   const removeWorkspaceBucket = useCallback((threadId) => {
-    const normalizedThreadId = normalizeThreadId(threadId);
-    if (!normalizedThreadId) {
+    const stateId = resolveWorkspaceStateId(threadId);
+    if (!stateId) {
       return;
     }
     setWorkspaceByThreadId((prev) => {
-      if (!Object.prototype.hasOwnProperty.call(prev, normalizedThreadId)) {
+      if (!Object.prototype.hasOwnProperty.call(prev, stateId)) {
         return prev;
       }
       const next = { ...prev };
-      delete next[normalizedThreadId];
+      delete next[stateId];
       return next;
     });
-  }, []);
+  }, [resolveWorkspaceStateId]);
 
   const restoreWorkspaceForThread = useCallback((threadId) => {
-    const normalizedThreadId = normalizeThreadId(threadId);
-    const workspaceState = normalizedThreadId ? workspaceByThreadIdRef.current[normalizedThreadId] : null;
+    const stateId = resolveWorkspaceStateId(threadId);
+    const workspaceState = stateId ? workspaceByThreadIdRef.current[stateId] : null;
     const shouldRestore = workspaceState && workspaceState.workspacePath === workspacePath;
     const nextState = shouldRestore ? workspaceState : createEmptyWorkspaceState(workspacePath);
+    workspaceLoadedPathRef.current = shouldRestore ? workspaceState.workspacePath : "";
     setWorkspaceTree(nextState.tree || {});
     setExpandedWorkspaceDirs(nextState.expandedDirs || { "": true });
     setWorkspaceStatus(nextState.status || { is_git: false, items: {} });
     setWorkspaceError(nextState.error || "");
     setWorkspacePreview(nextState.preview || null);
-  }, [workspacePath]);
+  }, [resolveWorkspaceStateId, workspacePath]);
 
   const workspaceContextQuery = useCallback((extra = {}) => {
     const params = new URLSearchParams();
@@ -105,37 +123,60 @@ export default function useWorkspaceBrowser({
   }, [activeProjectKey, activeProjectTabId, activeThread, threadProjectTabIdByThreadId]);
 
   const loadWorkspaceTree = useCallback(async (path = "", options = {}) => {
-    const { depth = WORKSPACE_TREE_LOAD_DEPTH, force = false } = options;
+    const {
+      depth = WORKSPACE_TREE_LOAD_DEPTH,
+      force = false,
+      requestId = workspaceLoadRequestRef.current,
+    } = options;
     const normalizedPath = normalizeWorkspacePath(path);
     const cachedTree = workspaceTreeRef.current;
     if (!force && cachedTree[normalizedPath]) {
       return cachedTree[normalizedPath];
     }
-    const query = new URLSearchParams({
-      path: normalizedPath,
-      depth: String(depth),
-    });
-    const ctx = workspaceContextQuery();
-    if (ctx) {
-      const ctxParams = new URLSearchParams(ctx);
-      ctxParams.forEach((value, key) => query.set(key, value));
+    try {
+      const query = new URLSearchParams({
+        path: normalizedPath,
+        depth: String(depth),
+      });
+      const ctx = workspaceContextQuery();
+      if (ctx) {
+        const ctxParams = new URLSearchParams(ctx);
+        ctxParams.forEach((value, key) => query.set(key, value));
+      }
+      const result = await api(`/api/workspace/tree?${query.toString()}`);
+      if (requestId !== workspaceLoadRequestRef.current) {
+        return [];
+      }
+      const items = Array.isArray(result.items) ? result.items : [];
+      workspaceLoadedPathRef.current = workspacePath;
+      setWorkspaceTree((prev) => ({ ...prev, [normalizedPath]: items }));
+      return items;
+    } catch (err) {
+      if (requestId !== workspaceLoadRequestRef.current) {
+        return [];
+      }
+      throw err;
     }
-    const result = await api(`/api/workspace/tree?${query.toString()}`);
-    const items = Array.isArray(result.items) ? result.items : [];
-    setWorkspaceTree((prev) => ({ ...prev, [normalizedPath]: items }));
-    return items;
   }, [workspaceContextQuery]);
 
   const loadWorkspaceStatus = useCallback(async () => {
+    const requestId = workspaceLoadRequestRef.current;
     try {
       const ctx = workspaceContextQuery();
       const result = await api(`/api/workspace/status${ctx ? `?${ctx}` : ""}`);
+      if (requestId !== workspaceLoadRequestRef.current) {
+        return null;
+      }
       setWorkspaceStatus({
         is_git: !!result.is_git,
         items: result && typeof result.items === "object" ? result.items : {},
       });
+      workspaceLoadedPathRef.current = workspacePath;
       setWorkspaceError("");
     } catch (err) {
+      if (requestId !== workspaceLoadRequestRef.current) {
+        return null;
+      }
       setWorkspaceStatus({ is_git: false, items: {} });
       setWorkspaceError(err.message || "Failed to load workspace status.");
     }
@@ -236,13 +277,16 @@ export default function useWorkspaceBrowser({
   }, [expandedWorkspaceDirs, loadWorkspaceTree]);
 
   useEffect(() => {
-    const threadId = normalizeThreadId(activeThread);
-    if (!threadId) {
+    const stateId = resolveWorkspaceStateId(activeThread);
+    if (!stateId) {
+      return;
+    }
+    if (workspaceLoadedPathRef.current !== workspacePath) {
       return;
     }
     setWorkspaceByThreadId((prev) => ({
       ...prev,
-      [threadId]: {
+      [stateId]: {
         workspacePath,
         tree: workspaceTree,
         expandedDirs: expandedWorkspaceDirs,
@@ -259,6 +303,7 @@ export default function useWorkspaceBrowser({
     workspaceError,
     workspacePreview,
     workspacePath,
+    resolveWorkspaceStateId,
   ]);
 
   useEffect(() => {
@@ -272,28 +317,37 @@ export default function useWorkspaceBrowser({
       setWorkspaceStatus({ is_git: false, items: {} });
       setWorkspacePreview(null);
       setWorkspaceError("");
+      workspaceLoadedPathRef.current = "";
       return;
     }
-    const activeThreadId = normalizeThreadId(activeThread);
-    if (!activeThreadId) {
+    const workspaceStateId = resolveWorkspaceStateId(activeThread);
+    if (!workspaceStateId) {
       setWorkspaceTree({});
       setExpandedWorkspaceDirs({ "": true });
       setWorkspaceStatus({ is_git: false, items: {} });
       setWorkspacePreview(null);
       setWorkspaceError("");
+      workspaceLoadedPathRef.current = "";
       return;
     }
-    ensureWorkspaceBucket(activeThreadId);
-    const existing = workspaceByThreadIdRef.current[activeThreadId];
+    const workspaceContextKey = `${workspaceStateId}::${workspacePath}`;
+    if (workspaceContextKeyRef.current !== workspaceContextKey) {
+      workspaceContextKeyRef.current = workspaceContextKey;
+      workspaceLoadRequestRef.current += 1;
+    }
+    ensureWorkspaceBucket(workspaceStateId);
+    const existing = workspaceByThreadIdRef.current[workspaceStateId];
     const hasExistingTree =
       existing &&
       existing.workspacePath === workspacePath &&
       existing.tree &&
       Object.keys(existing.tree).length > 0;
     if (hasExistingTree) {
+      workspaceLoadedPathRef.current = workspacePath;
       return;
     }
-    loadWorkspaceTree("", { force: true, depth: WORKSPACE_TREE_LOAD_DEPTH }).catch((err) => {
+    const requestId = workspaceLoadRequestRef.current;
+    loadWorkspaceTree("", { force: true, depth: WORKSPACE_TREE_LOAD_DEPTH, requestId }).catch((err) => {
       setWorkspaceTree({});
       setWorkspaceError(err.message || "Failed to load workspace tree.");
     });
@@ -308,6 +362,7 @@ export default function useWorkspaceBrowser({
     loadWorkspaceStatus,
     ensureWorkspaceBucket,
     workspacePath,
+    resolveWorkspaceStateId,
   ]);
 
   return {
