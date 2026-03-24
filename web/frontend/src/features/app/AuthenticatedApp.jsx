@@ -658,6 +658,32 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     setApprovalItems(filtered.length ? [filtered[filtered.length - 1]] : []);
   };
 
+  const resolveCurrentThreadId = (projectTabId = activeProjectTabId) => {
+    const normalizedProjectTabId = normalizeThreadId(projectTabId);
+    const activeThreadId = normalizeThreadId(activeThread);
+    if (
+      activeThreadId &&
+      (
+        !normalizedProjectTabId ||
+        threadProjectTabIdByThreadId[activeThreadId] === normalizedProjectTabId ||
+        !threadProjectTabIdByThreadId[activeThreadId]
+      )
+    ) {
+      return activeThreadId;
+    }
+    if (!normalizedProjectTabId) {
+      return "";
+    }
+    const selectedThreadId = normalizeThreadId(activeThreadTabIdByProjectTabId[normalizedProjectTabId]) || "";
+    if (selectedThreadId) {
+      return selectedThreadId;
+    }
+    const openedThreads = Array.isArray(threadTabsByProjectTabId[normalizedProjectTabId])
+      ? threadTabsByProjectTabId[normalizedProjectTabId]
+      : [];
+    return normalizeThreadId(openedThreads[0]?.id) || "";
+  };
+
   const normalizeThreadMessages = (result, normalizedThreadId) => {
     const list = Array.isArray(result?.messages) && result.messages.length > 0
       ? result.messages
@@ -1041,8 +1067,11 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       return;
     }
     const text = input.trim();
-    const activeThreadId = normalizeThreadId(activeThread);
+    const activeThreadId = resolveCurrentThreadId();
     if (activeThreadId) {
+      if (activeThreadId !== normalizeThreadId(activeThread) && activeProjectTabId) {
+        setActiveThreadForProjectTab(activeProjectTabId, activeThreadId);
+      }
       updateThreadUi(activeThreadId, { input: "" });
     }
     pendingComposerFocusRef.current = true;
@@ -1211,7 +1240,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     if (!cmd) {
       return;
     }
-    const commandThreadId = normalizeThreadId(activeThread);
+    const commandThreadId = resolveCurrentThreadId();
     appendMessageToThread(commandThreadId, { role: "user", text: cmd, turnId: "" });
     setStatusForThread(commandThreadId, "running");
     const result = await api("/api/command", {
@@ -1931,7 +1960,10 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     if (!activeProjectTabId) {
       return;
     }
-    const selectedThreadId = normalizeThreadId(activeThreadTabIdByProjectTabId[activeProjectTabId]) || "";
+    const selectedThreadId = resolveCurrentThreadId(activeProjectTabId);
+    if (selectedThreadId) {
+      setActiveThreadForProjectTab(activeProjectTabId, selectedThreadId);
+    }
     restoreWorkspaceForThread(selectedThreadId);
     if (selectedThreadId) {
       viewThread(selectedThreadId).catch(() => {});
