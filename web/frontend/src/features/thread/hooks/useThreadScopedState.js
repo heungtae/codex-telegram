@@ -32,17 +32,19 @@ export default function useThreadScopedState(activeThread) {
   }, [activeThread]);
 
   useEffect(() => {
-    const threadId = normalizeThreadId(activeThread);
+    const threadId = normalizeThreadId(activeThreadRef.current);
     if (!threadId) {
       return;
     }
+    // Cache snapshots when the visible message list changes.
+    // Switching tabs alone should not rewrite one thread's cache with another thread's messages.
     setMessagesByThreadId((prev) => {
       if (prev[threadId] === messages) {
         return prev;
       }
       return { ...prev, [threadId]: messages };
     });
-  }, [activeThread, messages]);
+  }, [messages]);
 
    useEffect(() => {
      const threadId = normalizeThreadId(activeThread);
