@@ -39,6 +39,7 @@ import WorkspacePreviewPanel from "../workspace/components/WorkspacePreviewPanel
 import useWorkspaceBrowser from "../workspace/hooks/useWorkspaceBrowser";
 
 function AuthenticatedApp({ me, theme, onToggleTheme }) {
+  const WORKSPACE_TREE_LOAD_DEPTH = 4;
   const PALETTE_LIMIT = 10;
   const SIDEBAR_MIN = 260;
   const SIDEBAR_MAX = 620;
@@ -2516,6 +2517,56 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     .filter(([path, value]) => value?.code === "D" && !workspaceTree[""]?.some((item) => item.path === path))
     .sort((a, b) => a[0].localeCompare(b[0]));
 
+  const getWorkspaceTreeChildren = (item) => {
+    if (!item || item.type !== "directory") {
+      return [];
+    }
+    const itemPath = normalizeWorkspacePath(item.path);
+    const cachedChildren = Array.isArray(workspaceTree[itemPath]) ? workspaceTree[itemPath] : [];
+    if (cachedChildren.length) {
+      return cachedChildren;
+    }
+    return Array.isArray(item.children) ? item.children : [];
+  };
+
+  const collectCompactWorkspaceEntry = (item) => {
+    const segments = [];
+    let currentItem = item;
+    let currentChildren = getWorkspaceTreeChildren(currentItem);
+
+    while (currentItem && currentItem.type === "directory") {
+      segments.push(currentItem);
+      if (!Array.isArray(currentChildren) || currentChildren.length !== 1) {
+        break;
+      }
+      const nextItem = currentChildren[0];
+      if (!nextItem || nextItem.type !== "directory") {
+        break;
+      }
+      currentItem = nextItem;
+      currentChildren = getWorkspaceTreeChildren(currentItem);
+    }
+
+    const leafItem = segments[segments.length - 1] || item;
+    const leafPath = normalizeWorkspacePath(leafItem.path);
+    const leafChildren = getWorkspaceTreeChildren(leafItem);
+    const statusCode = segments.reduce((best, segment) => {
+      const segmentPath = normalizeWorkspacePath(segment.path);
+      const segmentCode = workspaceDirectoryStatus[segmentPath] || workspaceStatusItems[segmentPath]?.code || "";
+      return statusPriority(segmentCode) > statusPriority(best) ? segmentCode : best;
+    }, "");
+
+    return {
+      leafItem,
+      leafPath,
+      leafChildren,
+      segments,
+      statusCode,
+      label: segments.map((segment) => segment.name).join("/"),
+      isExpanded: !!expandedWorkspaceDirs[leafPath],
+    };
+  };
+
   const renderWorkspaceTree = (path = "", depth = 0) => {
     const normalizedPath = normalizeWorkspacePath(path);
     const items = Array.isArray(workspaceTree[normalizedPath]) ? workspaceTree[normalizedPath] : [];
@@ -2525,35 +2576,50 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     return items.map((item) => {
       const itemPath = normalizeWorkspacePath(item.path);
       const isDirectory = item.type === "directory";
-      const isExpanded = !!expandedWorkspaceDirs[itemPath];
-      const statusCode = isDirectory
-        ? (workspaceDirectoryStatus[itemPath] || workspaceStatusItems[itemPath]?.code || "")
-        : (workspaceStatusItems[itemPath]?.code || "");
+      if (isDirectory) {
+        const compactEntry = collectCompactWorkspaceEntry(item);
+        const hasChildren = !!compactEntry.leafItem.has_children || compactEntry.leafChildren.length > 0;
+        const isSelected = workspacePreview?.path === compactEntry.leafPath;
+        return (
+          <div key={compactEntry.leafPath} className="workspace-tree-node">
+            <button
+              type="button"
+              className={`workspace-tree-item directory ${compactEntry.isExpanded ? "expanded" : ""} ${isSelected ? "selected" : ""} ${statusClassName(compactEntry.statusCode)}`}
+              style={{ paddingLeft: `${12 + depth * 16}px` }}
+              onClick={() => {
+                toggleWorkspaceDirectory(compactEntry.leafPath);
+              }}
+            >
+              <span className="workspace-tree-icon caret">
+                {hasChildren ? <ChevronIcon expanded={compactEntry.isExpanded} /> : null}
+              </span>
+              <span className="workspace-tree-icon glyph">
+                <FolderIcon open={compactEntry.isExpanded} />
+              </span>
+              <span className="workspace-tree-label workspace-tree-label-compact">{compactEntry.label}</span>
+              {compactEntry.statusCode ? <span className="workspace-tree-badge">{compactEntry.statusCode}</span> : null}
+            </button>
+            {compactEntry.isExpanded ? renderWorkspaceTree(compactEntry.leafPath, depth + compactEntry.segments.length) : null}
+          </div>
+        );
+      }
+      const statusCode = workspaceStatusItems[itemPath]?.code || "";
       const isSelected = workspacePreview?.path === itemPath;
       return (
         <div key={itemPath} className="workspace-tree-node">
           <button
             type="button"
-            className={`workspace-tree-item ${isDirectory ? "directory" : "file"} ${isSelected ? "selected" : ""} ${statusClassName(statusCode)}`}
+            className={`workspace-tree-item file ${isSelected ? "selected" : ""} ${statusClassName(statusCode)}`}
             style={{ paddingLeft: `${12 + depth * 16}px` }}
             onClick={() => {
-              if (isDirectory) {
-                toggleWorkspaceDirectory(itemPath);
-                return;
-              }
               openWorkspaceFile(itemPath, statusCode).catch(() => {});
             }}
           >
-            <span className="workspace-tree-icon caret">
-              {isDirectory && item.has_children ? <ChevronIcon expanded={isExpanded} /> : null}
-            </span>
-            <span className="workspace-tree-icon glyph">
-              {isDirectory ? <FolderIcon open={isExpanded} /> : <FileIcon />}
-            </span>
+            <span className="workspace-tree-icon caret" />
+            <span className="workspace-tree-icon glyph"><FileIcon /></span>
             <span className="workspace-tree-label">{item.name}</span>
             {statusCode ? <span className="workspace-tree-badge">{statusCode}</span> : null}
           </button>
-          {isDirectory && isExpanded ? renderWorkspaceTree(itemPath, depth + 1) : null}
         </div>
       );
     });
@@ -2573,7 +2639,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
           className="workspace-refresh"
           type="button"
           onClick={() => {
-            loadWorkspaceTree("", { force: true }).catch((err) => {
+            loadWorkspaceTree("", { force: true, depth: WORKSPACE_TREE_LOAD_DEPTH }).catch((err) => {
               setWorkspaceError(err.message || "Failed to refresh workspace tree.");
             });
             loadWorkspaceStatus().catch(() => {});

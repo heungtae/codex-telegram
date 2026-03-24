@@ -1308,6 +1308,11 @@ kbd {
   font-size: 13px;
 }
 
+.workspace-tree-label-compact {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
 .workspace-panel.desktop {
   margin-top: 12px;
   height: calc(100% - 12px);

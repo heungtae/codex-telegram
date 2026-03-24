@@ -15,6 +15,7 @@ export default function useWorkspaceBrowser({
   activeProjectTabPath,
   sessionWorkspace,
 }) {
+  const WORKSPACE_TREE_LOAD_DEPTH = 4;
   const workspacePath = activeProjectTabPath || sessionWorkspace || "";
   const [workspaceByThreadId, setWorkspaceByThreadId] = useState({});
   const [workspaceTree, setWorkspaceTree] = useState({});
@@ -104,7 +105,7 @@ export default function useWorkspaceBrowser({
   }, [activeProjectKey, activeProjectTabId, activeThread, threadProjectTabIdByThreadId]);
 
   const loadWorkspaceTree = useCallback(async (path = "", options = {}) => {
-    const { depth = 1, force = false } = options;
+    const { depth = WORKSPACE_TREE_LOAD_DEPTH, force = false } = options;
     const normalizedPath = normalizeWorkspacePath(path);
     const cachedTree = workspaceTreeRef.current;
     if (!force && cachedTree[normalizedPath]) {
@@ -292,7 +293,7 @@ export default function useWorkspaceBrowser({
     if (hasExistingTree) {
       return;
     }
-    loadWorkspaceTree("", { force: true }).catch((err) => {
+    loadWorkspaceTree("", { force: true, depth: WORKSPACE_TREE_LOAD_DEPTH }).catch((err) => {
       setWorkspaceTree({});
       setWorkspaceError(err.message || "Failed to load workspace tree.");
     });
