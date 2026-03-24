@@ -513,6 +513,11 @@ def register_thread_routes(app: FastAPI) -> None:
         if not normalized_thread_id:
             raise HTTPException(status_code=400, detail="thread_id is required")
         user_manager.bind_thread_subscriber(session.user_id, normalized_thread_id)
+        user_manager.set_active_thread(
+            session.user_id,
+            normalized_thread_id,
+            project_key=user_manager.get_thread_project(normalized_thread_id),
+        )
         await wait_for_codex()
         try:
             result = await state.codex_client.call(

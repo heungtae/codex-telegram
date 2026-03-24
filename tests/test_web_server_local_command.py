@@ -660,6 +660,42 @@ path_glob_any = ["helm/**"]
         asyncio.run(endpoint(request, "thread-sub"))
 
         self.assertIn(self.session.user_id, user_manager.find_user_ids_by_thread("thread-sub"))
+        self.assertEqual("thread-sub", user_manager.get(self.session.user_id).active_thread_id)
+
+    def test_chat_messages_uses_active_thread_when_payload_thread_id_is_missing(self):
+        app = create_web_app()
+        endpoint = next(
+            route.endpoint
+            for route in app.routes
+            if getattr(route, "path", None) == "/api/chat/messages"
+        )
+        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+        state_user = user_manager.get(self.session.user_id)
+        state_user.active_thread_id = "thread-active"
+        state_user.set_collaboration_mode_mask(
+            {"name": "build", "mode": "default", "model": "gpt-5.3-codex", "reasoning_effort": "medium"}
+        )
+        state.codex_client.call = AsyncMock(return_value={"turn": {"id": "turn-new"}})
+
+        body = asyncio.run(endpoint({"text": "hello"}, request))
+
+        self.assertTrue(body["ok"])
+        self.assertEqual("thread-active", body["thread_id"])
+        state.codex_client.call.assert_awaited_once_with(
+            "turn/start",
+            {
+                "threadId": "thread-active",
+                "collaborationMode": {
+                    "mode": "default",
+                    "settings": {
+                        "model": "gpt-5.3-codex",
+                        "reasoning_effort": "medium",
+                        "developer_instructions": None,
+                    },
+                },
+                "input": [{"type": "text", "text": "hello"}],
+            },
+        )
 
     def test_thread_read_marks_non_default_assistant_messages_as_subagent(self):
         app = create_web_app()
