@@ -101,8 +101,9 @@ export function buildProjectTabId(projectKey) {
   return projectKey ? `project:${projectKey}` : "";
 }
 
-export function createEmptyWorkspaceState() {
+export function createEmptyWorkspaceState(workspacePath = "") {
   return {
+    workspacePath,
     tree: {},
     expandedDirs: { "": true },
     status: { is_git: false, items: {} },

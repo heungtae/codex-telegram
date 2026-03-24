@@ -15,6 +15,7 @@ export default function useWorkspaceBrowser({
   activeProjectTabPath,
   sessionWorkspace,
 }) {
+  const workspacePath = activeProjectTabPath || sessionWorkspace || "";
   const [workspaceByThreadId, setWorkspaceByThreadId] = useState({});
   const [workspaceTree, setWorkspaceTree] = useState({});
   const [expandedWorkspaceDirs, setExpandedWorkspaceDirs] = useState({ "": true });
@@ -38,20 +39,21 @@ export default function useWorkspaceBrowser({
       return;
     }
     setWorkspaceByThreadId((prev) => {
-      if (prev[normalizedThreadId]) {
+      const existing = prev[normalizedThreadId];
+      if (existing && existing.workspacePath === workspacePath) {
         return prev;
       }
-      return { ...prev, [normalizedThreadId]: createEmptyWorkspaceState() };
+      return { ...prev, [normalizedThreadId]: createEmptyWorkspaceState(workspacePath) };
     });
-  }, []);
+  }, [workspacePath]);
 
   const resetWorkspaceBucket = useCallback((threadId) => {
     const normalizedThreadId = normalizeThreadId(threadId);
     if (!normalizedThreadId) {
       return;
     }
-    setWorkspaceByThreadId((prev) => ({ ...prev, [normalizedThreadId]: createEmptyWorkspaceState() }));
-  }, []);
+    setWorkspaceByThreadId((prev) => ({ ...prev, [normalizedThreadId]: createEmptyWorkspaceState(workspacePath) }));
+  }, [workspacePath]);
 
   const removeWorkspaceBucket = useCallback((threadId) => {
     const normalizedThreadId = normalizeThreadId(threadId);
@@ -70,15 +72,15 @@ export default function useWorkspaceBrowser({
 
   const restoreWorkspaceForThread = useCallback((threadId) => {
     const normalizedThreadId = normalizeThreadId(threadId);
-    const workspaceState = normalizedThreadId
-      ? (workspaceByThreadIdRef.current[normalizedThreadId] || createEmptyWorkspaceState())
-      : createEmptyWorkspaceState();
-    setWorkspaceTree(workspaceState.tree || {});
-    setExpandedWorkspaceDirs(workspaceState.expandedDirs || { "": true });
-    setWorkspaceStatus(workspaceState.status || { is_git: false, items: {} });
-    setWorkspaceError(workspaceState.error || "");
-    setWorkspacePreview(workspaceState.preview || null);
-  }, []);
+    const workspaceState = normalizedThreadId ? workspaceByThreadIdRef.current[normalizedThreadId] : null;
+    const shouldRestore = workspaceState && workspaceState.workspacePath === workspacePath;
+    const nextState = shouldRestore ? workspaceState : createEmptyWorkspaceState(workspacePath);
+    setWorkspaceTree(nextState.tree || {});
+    setExpandedWorkspaceDirs(nextState.expandedDirs || { "": true });
+    setWorkspaceStatus(nextState.status || { is_git: false, items: {} });
+    setWorkspaceError(nextState.error || "");
+    setWorkspacePreview(nextState.preview || null);
+  }, [workspacePath]);
 
   const workspaceContextQuery = useCallback((extra = {}) => {
     const params = new URLSearchParams();
@@ -240,6 +242,7 @@ export default function useWorkspaceBrowser({
     setWorkspaceByThreadId((prev) => ({
       ...prev,
       [threadId]: {
+        workspacePath,
         tree: workspaceTree,
         expandedDirs: expandedWorkspaceDirs,
         status: workspaceStatus,
@@ -254,14 +257,14 @@ export default function useWorkspaceBrowser({
     workspaceStatus,
     workspaceError,
     workspacePreview,
+    workspacePath,
   ]);
 
   useEffect(() => {
     restoreWorkspaceForThread(activeThread);
-  }, [activeThread, restoreWorkspaceForThread]);
+  }, [activeThread, workspacePath, restoreWorkspaceForThread]);
 
   useEffect(() => {
-    const workspacePath = activeProjectTabPath || sessionWorkspace || "";
     if (!workspacePath) {
       setWorkspaceTree({});
       setExpandedWorkspaceDirs({ "": true });
@@ -281,7 +284,11 @@ export default function useWorkspaceBrowser({
     }
     ensureWorkspaceBucket(activeThreadId);
     const existing = workspaceByThreadIdRef.current[activeThreadId];
-    const hasExistingTree = existing && existing.tree && Object.keys(existing.tree).length > 0;
+    const hasExistingTree =
+      existing &&
+      existing.workspacePath === workspacePath &&
+      existing.tree &&
+      Object.keys(existing.tree).length > 0;
     if (hasExistingTree) {
       return;
     }
@@ -299,6 +306,7 @@ export default function useWorkspaceBrowser({
     loadWorkspaceTree,
     loadWorkspaceStatus,
     ensureWorkspaceBucket,
+    workspacePath,
   ]);
 
   return {
