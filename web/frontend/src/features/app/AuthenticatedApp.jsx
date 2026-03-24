@@ -113,6 +113,12 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   const [projectSearchQuery, setProjectSearchQuery] = useState("");
   const [pendingProjectTarget, setPendingProjectTarget] = useState("");
   const [turnNotificationEnabled, setTurnNotificationEnabled] = useState(() => readTurnNotificationEnabled());
+  const [toastNotification, setToastNotification] = useState(null);
+
+  const showToast = useCallback((message, type = "info") => {
+    setToastNotification({ message, type });
+    setTimeout(() => setToastNotification(null), 5000);
+  }, []);
   const debugLoggingEnabled =
     (typeof me?.logging_level === "string" && me.logging_level.toUpperCase() === "DEBUG") ||
     me?.debug_logging === true;
@@ -513,6 +519,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       osc.start(now);
       osc.stop(now + 0.15);
     } catch (_err) {}
+    showToast("Turn completed!", "success");
   };
 
   const loadThreads = async (options = {}) => {
@@ -3403,6 +3410,11 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
           ) : null}
         </div>
       </main>
+      {toastNotification ? (
+        <div className="toast-notification">
+          <span className="toast-message">{toastNotification.message}</span>
+        </div>
+      ) : null}
     </div>
   );
 }

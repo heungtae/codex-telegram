@@ -1262,7 +1262,7 @@ kbd {
   align-items: center;
   gap: 8px;
   min-height: 34px;
-  padding: 6px 8px;
+  padding: 3px 8px;
   color: var(--text);
   cursor: pointer;
   text-align: left;
@@ -2908,4 +2908,30 @@ kbd {
     min-width: 74px;
     padding: 7px 8px;
   }
+}
+
+.toast-notification {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--panel);
+  border: 1px solid var(--brand);
+  border-radius: var(--radius-lg);
+  padding: 16px 24px;
+  box-shadow: var(--shadow-md);
+  z-index: 9999;
+  animation: shake 0.5s ease-in-out;
+}
+
+.toast-message {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 500;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translate(-50%, -50%) translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translate(-50%, -50%) translateX(-8px); }
+  20%, 40%, 60%, 80% { transform: translate(-50%, -50%) translateX(8px); }
 }
