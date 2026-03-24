@@ -1,11 +1,28 @@
+import asyncio
 import unittest
+import threading
 from unittest.mock import patch
+from types import SimpleNamespace
 
 from codex.client import CodexClient
-from codex.protocol import JSONRPCRequest
+from codex.protocol import JSONRPCRequest, JSONRPCNotification
 
 
 class CodexClientServerRequestTests(unittest.IsolatedAsyncioTestCase):
+    def test_write_does_not_require_flush_on_asyncio_stream_writer(self):
+        client = CodexClient()
+        written = []
+
+        class _DummyStdin:
+            def write(self, data):
+                written.append(data)
+
+        client._proc = SimpleNamespace(stdin=_DummyStdin())
+
+        client._write(JSONRPCNotification(method="initialized"))
+
+        self.assertEqual([b'{"method": "initialized"}\n'], written)
+
     async def test_tool_request_user_input_auto_approve_maps_to_approve_once(self):
         client = CodexClient()
         written = []
@@ -73,6 +90,45 @@ class CodexClientServerRequestTests(unittest.IsolatedAsyncioTestCase):
         response = written[0].to_dict()
         answers = ((response.get("result") or {}).get("answers") or {})
         self.assertEqual({"answers": ["Approve this Session"]}, answers.get("q2"))
+
+    async def test_submit_approval_decision_is_thread_safe(self):
+        client = CodexClient()
+        written = []
+        client._write = lambda msg: written.append(msg)  # type: ignore[method-assign]
+        req = JSONRPCRequest(
+            method="item/commandExecution/requestApproval",
+            id=42,
+            params={"threadId": "thread-1"},
+        )
+
+        with patch(
+            "codex.client.get",
+            side_effect=lambda key, default=None: "interactive" if key == "approval.mode" else "approve" if key == "approval.auto_response" else default,
+        ):
+            task = asyncio.create_task(client._handle_server_request(req))
+            for _ in range(100):
+                if 42 in client._pending_approvals:
+                    break
+                await asyncio.sleep(0.01)
+            else:
+                self.fail("approval request was not registered")
+
+            accepted = {}
+
+            def approve_from_thread():
+                accepted["value"] = client.submit_approval_decision(42, "approve")
+
+            thread = threading.Thread(target=approve_from_thread)
+            thread.start()
+            thread.join()
+
+            await asyncio.wait_for(task, timeout=1.0)
+
+        self.assertTrue(accepted["value"])
+        self.assertEqual(1, len(written))
+        response = written[0].to_dict()
+        self.assertEqual(42, response.get("id"))
+        self.assertEqual({"decision": "accept"}, response.get("result"))
 
     async def test_tool_request_user_input_prefers_option_value_when_present(self):
         client = CodexClient()

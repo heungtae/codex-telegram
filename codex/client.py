@@ -1,5 +1,6 @@
 import asyncio
 import inspect
+from dataclasses import dataclass
 from typing import Any, Callable
 import logging
 
@@ -10,6 +11,12 @@ from utils.config import get
 logger = logging.getLogger("codex-telegram.codex")
 
 
+@dataclass(slots=True)
+class _ApprovalWaiter:
+    future: asyncio.Future[str]
+    loop: asyncio.AbstractEventLoop
+
+
 class CodexClient:
     def __init__(self):
         self.protocol = Protocol()
@@ -17,7 +24,7 @@ class CodexClient:
         self._reader_task: asyncio.Task | None = None
         self._stderr_task: asyncio.Task | None = None
         self._pending: dict[int, asyncio.Future[JSONRPCResponse]] = {}
-        self._pending_approvals: dict[int, asyncio.Future[str]] = {}
+        self._pending_approvals: dict[int, _ApprovalWaiter] = {}
         self._event_handlers: dict[str, list[Callable]] = {}
         self._any_event_handlers: list[Callable] = []
         self._approval_handlers: list[Callable] = []
@@ -114,10 +121,18 @@ class CodexClient:
         self._approval_handlers.append(handler)
 
     def submit_approval_decision(self, request_id: int, decision: str) -> bool:
-        future = self._pending_approvals.get(request_id)
-        if future is None or future.done():
+        waiter = self._pending_approvals.get(request_id)
+        if waiter is None or waiter.future.done():
             return False
-        future.set_result(decision)
+
+        def _resolve() -> None:
+            if not waiter.future.done():
+                waiter.future.set_result(decision)
+
+        if waiter.loop.is_running():
+            waiter.loop.call_soon_threadsafe(_resolve)
+        else:
+            _resolve()
         return True
     
     def _write(self, msg: JSONRPCRequest | JSONRPCNotification | JSONRPCResponse):
@@ -125,7 +140,6 @@ class CodexClient:
         logger.debug("app-server stdin: %s", data)
         if self._proc and self._proc.stdin:
             self._proc.stdin.write(data.encode() + b"\n")
-            self._proc.stdin.flush()
 
     def _fail_pending(self, exc: Exception) -> None:
         for future in self._pending.values():
@@ -133,8 +147,8 @@ class CodexClient:
                 future.set_exception(exc)
         self._pending.clear()
         for future in self._pending_approvals.values():
-            if not future.done():
-                future.set_result("deny")
+            if not future.future.done():
+                future.future.set_result("deny")
         self._pending_approvals.clear()
     
     async def _read_stdout_stream(self):
@@ -500,8 +514,9 @@ class CodexClient:
                         )
                         return
 
-                future: asyncio.Future[str] = asyncio.Future()
-                self._pending_approvals[req_id] = future
+                loop = asyncio.get_running_loop()
+                future: asyncio.Future[str] = loop.create_future()
+                self._pending_approvals[req_id] = _ApprovalWaiter(future=future, loop=loop)
                 await self._emit_approval_request(method, req_id, params)
 
                 decision_choice = self._default_choice(auto_mode)
