@@ -704,6 +704,10 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     }
   };
 
+  const closeApproval = () => {
+    setApprovalItems([]);
+  };
+
   const startThread = async (options = {}) => {
     const replaceCurrentTab = !!options.replaceCurrentTab;
     let nextThreadId = "";
@@ -1653,6 +1657,9 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       loadProjects().catch(() => {});
       loadSessionSummary().catch(() => {});
       loadWorkspaceStatus().catch(() => {});
+      if (approvalItems.length) {
+        setApprovalItems([]);
+      }
     });
     es.addEventListener("turn_failed", (ev) => {
       const data = safeParseSseData("turn_failed", ev);
@@ -2522,30 +2529,117 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
         ? (workspaceDirectoryStatus[itemPath] || workspaceStatusItems[itemPath]?.code || "")
         : (workspaceStatusItems[itemPath]?.code || "");
       const isSelected = workspacePreview?.path === itemPath;
+      const singleDirChain = [];
+      if (isDirectory && isExpanded && item.has_children) {
+        let checkPath = itemPath;
+        let chainDepth = 0;
+        while (chainDepth < 10) {
+          const childItems = workspaceTree[checkPath];
+          if (!childItems || childItems.length !== 1) break;
+          const onlyChild = childItems[0];
+          if (onlyChild.type !== "directory") break;
+          if (!onlyChild.has_children) {
+            singleDirChain.push({ name: onlyChild.name, path: onlyChild.path });
+            break;
+          }
+          singleDirChain.push({ name: onlyChild.name, path: onlyChild.path });
+          checkPath = normalizeWorkspacePath(`${checkPath}/${onlyChild.name}`);
+          chainDepth++;
+        }
+      }
+      const displayChain = isDirectory && singleDirChain.length > 0 ? [item, ...singleDirChain] : [item];
       return (
         <div key={itemPath} className="workspace-tree-node">
-          <button
-            type="button"
-            className={`workspace-tree-item ${isDirectory ? "directory" : "file"} ${isSelected ? "selected" : ""} ${statusClassName(statusCode)}`}
-            style={{ paddingLeft: `${12 + depth * 16}px` }}
-            onClick={() => {
-              if (isDirectory) {
-                toggleWorkspaceDirectory(itemPath);
-                return;
-              }
-              openWorkspaceFile(itemPath, statusCode).catch(() => {});
-            }}
-          >
-            <span className="workspace-tree-icon caret">
-              {isDirectory && item.has_children ? <ChevronIcon expanded={isExpanded} /> : null}
-            </span>
-            <span className="workspace-tree-icon glyph">
-              {isDirectory ? <FolderIcon open={isExpanded} /> : <FileIcon />}
-            </span>
-            <span className="workspace-tree-label">{item.name}</span>
-            {statusCode ? <span className="workspace-tree-badge">{statusCode}</span> : null}
-          </button>
-          {isDirectory && isExpanded ? renderWorkspaceTree(itemPath, depth + 1) : null}
+          {displayChain.map((chainItem, chainIndex) => {
+            const chainItemPath = normalizeWorkspacePath(chainItem.path);
+            const chainIsDirectory = chainItem.type === "directory";
+            const chainIsExpanded = chainIndex === 0 ? isExpanded : !!expandedWorkspaceDirs[chainItemPath];
+            const isLast = chainIndex === displayChain.length - 1;
+            const chainStatusCode = chainIsDirectory
+              ? (workspaceDirectoryStatus[chainItemPath] || workspaceStatusItems[chainItemPath]?.code || "")
+              : (workspaceStatusItems[chainItemPath]?.code || "");
+            const isChainSelected = workspacePreview?.path === chainItemPath;
+            const displayName = singleDirChain.length > 0 && !isLast
+              ? displayChain.slice(0, chainIndex + 1).map(c => c.name).join("/")
+              : chainItem.name;
+            return (
+              <button
+                key={chainItemPath}
+                type="button"
+                className={`workspace-tree-item ${chainIsDirectory ? "directory" : "file"} ${isChainSelected ? "selected" : ""} ${statusClassName(chainStatusCode)}`}
+                style={{ paddingLeft: `${12 + (depth + chainIndex) * 16}px` }}
+                onClick={() => {
+                  if (chainIsDirectory) {
+                    if (isLast) {
+                      toggleWorkspaceDirectory(chainItemPath);
+                    }
+                    return;
+                  }
+                  openWorkspaceFile(chainItemPath, chainStatusCode).catch(() => {});
+                }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  navigator.clipboard.writeText(chainItemPath);
+                }}
+              >
+                <span className="workspace-tree-icon caret">
+                  {chainIsDirectory && chainItem.has_children ? <ChevronIcon expanded={chainIsExpanded} /> : null}
+                </span>
+                <span className="workspace-tree-icon glyph">
+                  {chainIsDirectory ? <FolderIcon open={chainIsExpanded} /> : <FileIcon />}
+                </span>
+                <span className="workspace-tree-label">{displayName}</span>
+                {chainStatusCode ? <span className="workspace-tree-badge">{chainStatusCode}</span> : null}
+              </button>
+            );
+          })}
+          {isDirectory && isExpanded && singleDirChain.length === 0 ? renderWorkspaceTree(itemPath, depth + 1) : null}
+          {isDirectory && isExpanded && singleDirChain.length > 0 ? (
+            <div key={`${itemPath}-chain-end`}>
+              {(() => {
+                const lastChainItem = singleDirChain[singleDirChain.length - 1];
+                const lastPath = normalizeWorkspacePath(lastChainItem.path);
+                const lastChildren = workspaceTree[lastPath] || [];
+                return lastChildren.map((child) => {
+                  const childPath = normalizeWorkspacePath(child.path);
+                  const childIsDirectory = child.type === "directory";
+                  const childIsExpanded = !!expandedWorkspaceDirs[childPath];
+                  const childStatusCode = childIsDirectory
+                    ? (workspaceDirectoryStatus[childPath] || workspaceStatusItems[childPath]?.code || "")
+                    : (workspaceStatusItems[childPath]?.code || "");
+                  const isChildSelected = workspacePreview?.path === childPath;
+                  return (
+                    <button
+                      key={childPath}
+                      type="button"
+                      className={`workspace-tree-item ${childIsDirectory ? "directory" : "file"} ${isChildSelected ? "selected" : ""} ${statusClassName(childStatusCode)}`}
+                      style={{ paddingLeft: `${12 + (depth + singleDirChain.length) * 16}px` }}
+                      onClick={() => {
+                        if (childIsDirectory) {
+                          toggleWorkspaceDirectory(childPath);
+                          return;
+                        }
+                        openWorkspaceFile(childPath, childStatusCode).catch(() => {});
+                      }}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        navigator.clipboard.writeText(childPath);
+                      }}
+                    >
+                      <span className="workspace-tree-icon caret">
+                        {childIsDirectory && child.has_children ? <ChevronIcon expanded={childIsExpanded} /> : null}
+                      </span>
+                      <span className="workspace-tree-icon glyph">
+                        {childIsDirectory ? <FolderIcon open={childIsExpanded} /> : <FileIcon />}
+                      </span>
+                      <span className="workspace-tree-label">{child.name}</span>
+                      {childStatusCode ? <span className="workspace-tree-badge">{childStatusCode}</span> : null}
+                    </button>
+                  );
+                });
+              })()}
+            </div>
+          ) : null}
         </div>
       );
     });
@@ -2591,6 +2685,10 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
                   type="button"
                   className="workspace-tree-item file deleted"
                   onClick={() => openWorkspaceFile(path, value?.code || "D").catch(() => {})}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    navigator.clipboard.writeText(path);
+                  }}
                 >
                   <span className="workspace-tree-icon caret" />
                   <span className="workspace-tree-icon glyph"><FileIcon /></span>
@@ -3101,6 +3199,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
                 approvalItems={approvalItems}
                 approvalBusyId={approvalBusyId}
                 onSubmitApproval={submitApproval}
+                onClose={closeApproval}
               />
               <ChatMessageFeed renderItems={renderItems} />
             </div>
@@ -3182,6 +3281,13 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
                       return;
                     }
                     if (e.isComposing) {
+                      return;
+                    }
+                    const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
+                    const ctrlKey = isMac ? e.metaKey : e.ctrlKey;
+                    if (ctrlKey && (e.key === "c" || e.key === "C") && status === "running") {
+                      e.preventDefault();
+                      interrupt();
                       return;
                     }
                     composerFocusWantedRef.current = true;

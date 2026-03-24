@@ -62,7 +62,7 @@ def workspace_suggestions(workspace: str, prefix: str, limit: int) -> list[str]:
     partial_lower = partial.lower()
     recursive_mode = not base_rel and "/" not in normalized_prefix and bool(partial_lower)
 
-    if recursive_mode:
+    if recursive_mode or (base_rel and partial_lower):
         max_scan = 4000
         scanned = 0
         try:

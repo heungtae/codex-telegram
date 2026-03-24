@@ -216,19 +216,46 @@ export default function useWorkspaceBrowser({
     }
   }, [workspaceContextQuery]);
 
-  const toggleWorkspaceDirectory = useCallback((path) => {
+  const toggleWorkspaceDirectory = useCallback(async (path) => {
     const normalizedPath = normalizeWorkspacePath(path);
     const isExpanded = !!expandedWorkspaceDirs[normalizedPath];
     if (isExpanded) {
       setExpandedWorkspaceDirs((prev) => ({ ...prev, [normalizedPath]: false }));
       return;
     }
-    setExpandedWorkspaceDirs((prev) => ({ ...prev, [normalizedPath]: true }));
+    const dirsToExpand = [normalizedPath];
     const cachedTree = workspaceTreeRef.current;
-    if (!cachedTree[normalizedPath]) {
-      loadWorkspaceTree(normalizedPath).catch((err) => {
-        setWorkspaceError(err.message || "Failed to load workspace tree.");
-      });
+    let currentPath = normalizedPath;
+    while (!cachedTree[currentPath]) {
+      const parentPath = currentPath.includes("/") ? currentPath.substring(0, currentPath.lastIndexOf("/")) : "";
+      if (parentPath === "" || parentPath === currentPath) break;
+      try {
+        await loadWorkspaceTree(currentPath);
+      } catch {}
+      if (cachedTree[currentPath]) {
+        const items = cachedTree[currentPath];
+        if (!items || items.length === 0) break;
+        const onlyDir = items.find((item) => item.type === "directory");
+        if (!onlyDir || items.filter((i) => i.type === "directory").length !== 1) break;
+        currentPath = normalizeWorkspacePath(`${currentPath}/${onlyDir.name}`);
+        dirsToExpand.push(currentPath);
+      } else {
+        break;
+      }
+    }
+    setExpandedWorkspaceDirs((prev) => {
+      const next = { ...prev };
+      for (const dir of dirsToExpand) {
+        next[dir] = true;
+      }
+      return next;
+    });
+    for (const dir of dirsToExpand) {
+      if (!cachedTree[dir]) {
+        loadWorkspaceTree(dir).catch((err) => {
+          setWorkspaceError(err.message || "Failed to load workspace tree.");
+        });
+      }
     }
   }, [expandedWorkspaceDirs, loadWorkspaceTree]);
 
