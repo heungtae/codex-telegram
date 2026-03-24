@@ -1662,43 +1662,12 @@ kbd {
 .approval-stack {
   position: sticky;
   top: 0;
-  z-index: 4;
+  z-index: 3;
   display: flex;
   flex-direction: column;
   gap: 10px;
   margin-bottom: 14px;
   padding-bottom: 6px;
-}
-
-.approval-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 3;
-}
-
-.approval-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 6px;
-}
-
-.approval-close {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  font-size: 16px;
-  cursor: pointer;
-  padding: 0 4px;
-  line-height: 1;
-}
-
-.approval-close:hover {
-  color: var(--text);
 }
 
 .msg-row {
