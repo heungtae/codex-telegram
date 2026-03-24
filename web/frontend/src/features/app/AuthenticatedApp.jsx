@@ -92,6 +92,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   const selectProjectRef = useRef(null);
   const focusComposerRef = useRef(null);
   const setInputForActiveThreadRef = useRef(null);
+  const inputHistoryIndexRef = useRef(-1);
   const [paletteSelectedIndex, setPaletteSelectedIndex] = useState(0);
   const [sidebarWidth, setSidebarWidth] = useState(340);
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
@@ -3262,6 +3263,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
                   onChange={(e) => {
                     composerFocusWantedRef.current = true;
                     rememberComposerSelection(e.currentTarget);
+                    inputHistoryIndexRef.current = -1;
                     setInputForActiveThread(e.target.value);
                   }}
                   onFocus={(e) => {
@@ -3320,6 +3322,41 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
                       setPaletteSelectedIndex((prev) =>
                         (prev - 1 + paletteItems.length) % paletteItems.length
                       );
+                      return;
+                    }
+                    if (!paletteOpen && e.key === "ArrowUp") {
+                      e.preventDefault();
+                      const activeThreadId = normalizeThreadId(activeThread);
+                      const threadMessages = messagesByThreadId[activeThreadId] || [];
+                      const userMessages = threadMessages
+                        .filter((m) => m?.role === "user" && typeof m?.text === "string" && m.text.trim())
+                        .map((m) => m.text);
+                      if (userMessages.length === 0) {
+                        return;
+                      }
+                      const newIndex = Math.min(inputHistoryIndexRef.current + 1, userMessages.length - 1);
+                      inputHistoryIndexRef.current = newIndex;
+                      setInputForActiveThread(userMessages[userMessages.length - 1 - newIndex]);
+                      return;
+                    }
+                    if (!paletteOpen && e.key === "ArrowDown") {
+                      e.preventDefault();
+                      if (inputHistoryIndexRef.current <= 0) {
+                        inputHistoryIndexRef.current = -1;
+                        setInputForActiveThread("");
+                        return;
+                      }
+                      const activeThreadId = normalizeThreadId(activeThread);
+                      const threadMessages = messagesByThreadId[activeThreadId] || [];
+                      const userMessages = threadMessages
+                        .filter((m) => m?.role === "user" && typeof m?.text === "string" && m.text.trim())
+                        .map((m) => m.text);
+                      if (userMessages.length === 0) {
+                        return;
+                      }
+                      const newIndex = inputHistoryIndexRef.current - 1;
+                      inputHistoryIndexRef.current = newIndex;
+                      setInputForActiveThread(userMessages[userMessages.length - 1 - newIndex]);
                       return;
                     }
                     if (paletteOpen && e.key === "Escape") {

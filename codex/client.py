@@ -125,6 +125,7 @@ class CodexClient:
         logger.debug("app-server stdin: %s", data)
         if self._proc and self._proc.stdin:
             self._proc.stdin.write(data.encode() + b"\n")
+            self._proc.stdin.flush()
 
     def _fail_pending(self, exc: Exception) -> None:
         for future in self._pending.values():
