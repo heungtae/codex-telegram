@@ -99,6 +99,18 @@ export CODEX_WEB_PASSWORD="your_password"
 codex-telegram
 ```
 
+If you want to rebuild the web UI before launching the app, use:
+
+```bash
+./run_build_and_main.sh
+```
+
+Or:
+
+```bash
+make run
+```
+
 ### 4. Open Web UI
 
 ```text
@@ -114,7 +126,7 @@ pip install -e .
 cd web/frontend && npm install && npm run build && cd ../..
 cp conf.toml.example ~/.config/codex-telegram/conf.toml
 # Edit config, then run:
-python3 main.py
+./run_build_and_main.sh
 ```
 
 ## Documentation
