@@ -163,7 +163,6 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   const activeProjectTabSnapshot = projectTabs.find((tab) => tab.id === activeProjectTabId) || null;
   const {
     ensureWorkspaceBucket,
-    resetWorkspaceBucket,
     removeWorkspaceBucket,
     restoreWorkspaceForThread,
     workspaceTree,
@@ -811,9 +810,6 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     }
     const existingTabForTarget = projectTabs.find((tab) => tab.key === normalizedTarget);
     if (!forcedMode && existingTabForTarget) {
-      if (activeThread) {
-        resetWorkspaceBucket(activeThread);
-      }
       setActiveProjectTabId(existingTabForTarget.id);
       if (isMobileLayout) {
         setIsSidebarOpen(false);
