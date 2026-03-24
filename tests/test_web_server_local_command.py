@@ -4,7 +4,7 @@ import os
 import subprocess
 import tempfile
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, call, patch
 
 from fastapi import HTTPException
 
@@ -959,6 +959,7 @@ path_glob_any = ["helm/**"]
         state.codex_client.call = AsyncMock(
             side_effect=[
                 CodexError(-32600, "thread not found: stale-thread"),
+                CodexError(-32600, "thread not found: stale-thread"),
                 {"thread": {"id": "thread-new"}},
                 {"turn": {"id": "turn-new"}},
             ]
@@ -971,6 +972,68 @@ path_glob_any = ["helm/**"]
         self.assertEqual("turn-new", body["turn_id"])
         self.assertEqual(self.session.user_id, user_manager.find_user_id_by_turn("turn-new"))
         self.assertEqual("thread-new", user_manager.get_turn_thread("turn-new"))
+
+    def test_chat_messages_retries_requested_thread_by_resuming_before_creating_new_thread(self):
+        app = create_web_app()
+        endpoint = next(
+            route.endpoint
+            for route in app.routes
+            if getattr(route, "path", None) == "/api/chat/messages"
+        )
+        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+        state_user = user_manager.get(self.session.user_id)
+        state_user.set_collaboration_mode_mask(
+            {"name": "build", "mode": "default", "model": "gpt-5.3-codex", "reasoning_effort": "medium"}
+        )
+        state.codex_client.call = AsyncMock(
+            side_effect=[
+                CodexError(-32600, "thread not found: thread-existing"),
+                {},
+                {"turn": {"id": "turn-existing"}},
+            ]
+        )
+
+        body = asyncio.run(endpoint({"text": "hello", "thread_id": "thread-existing"}, request))
+
+        self.assertTrue(body["ok"])
+        self.assertEqual("thread-existing", body["thread_id"])
+        self.assertEqual("turn-existing", body["turn_id"])
+        self.assertEqual(
+            [
+                call(
+                    "turn/start",
+                    {
+                        "threadId": "thread-existing",
+                        "collaborationMode": {
+                            "mode": "default",
+                            "settings": {
+                                "model": "gpt-5.3-codex",
+                                "reasoning_effort": "medium",
+                                "developer_instructions": None,
+                            },
+                        },
+                        "input": [{"type": "text", "text": "hello"}],
+                    },
+                ),
+                call("thread/resume", {"threadId": "thread-existing"}),
+                call(
+                    "turn/start",
+                    {
+                        "threadId": "thread-existing",
+                        "collaborationMode": {
+                            "mode": "default",
+                            "settings": {
+                                "model": "gpt-5.3-codex",
+                                "reasoning_effort": "medium",
+                                "developer_instructions": None,
+                            },
+                        },
+                        "input": [{"type": "text", "text": "hello"}],
+                    },
+                ),
+            ],
+            state.codex_client.call.await_args_list,
+        )
 
     def test_workspace_tree_status_file_and_diff_endpoints(self):
         with tempfile.TemporaryDirectory(prefix="codex-web-workspace-") as workspace:

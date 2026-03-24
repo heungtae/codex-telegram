@@ -478,12 +478,26 @@ def register_thread_routes(app: FastAPI) -> None:
                 and "thread not found" in str(exc.message or "").lower()
                 and payload_thread_id
             ):
-                thread_id = await start_thread_for_context()
-                if payload_project_key:
-                    user_manager.bind_thread_project(thread_id, payload_project_key)
-                user_manager.bind_thread_owner(session.user_id, thread_id)
-                params["threadId"] = thread_id
-                result = await state.codex_client.call("turn/start", params)
+                resumed_existing_thread = False
+                try:
+                    await state.codex_client.call("thread/resume", {"threadId": payload_thread_id})
+                    thread_id = payload_thread_id
+                    user_manager.set_active_thread(session.user_id, thread_id, project_key=payload_project_key or None)
+                    if payload_project_key:
+                        user_manager.bind_thread_project(thread_id, payload_project_key)
+                    user_manager.bind_thread_owner(session.user_id, thread_id)
+                    params["threadId"] = thread_id
+                    result = await state.codex_client.call("turn/start", params)
+                    resumed_existing_thread = True
+                except CodexError:
+                    resumed_existing_thread = False
+                if not resumed_existing_thread:
+                    thread_id = await start_thread_for_context()
+                    if payload_project_key:
+                        user_manager.bind_thread_project(thread_id, payload_project_key)
+                    user_manager.bind_thread_owner(session.user_id, thread_id)
+                    params["threadId"] = thread_id
+                    result = await state.codex_client.call("turn/start", params)
             else:
                 raise
         turn = result.get("turn", {}) if isinstance(result, dict) else {}
