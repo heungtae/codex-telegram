@@ -1261,7 +1261,7 @@ kbd {
   display: flex;
   align-items: center;
   gap: 6px;
-  min-height: 18px;
+  min-height: 23px;
   padding: 1px 8px;
   color: var(--text);
   cursor: pointer;
