@@ -5,14 +5,15 @@ from typing import Any, Awaitable, Callable
 from telegram.ext import Application
 
 from models import state
+from utils.normalize import parse_bool
 from utils.pypi_check import check_latest_version
 
 logger = logging.getLogger("codex-telegram")
 
 
-async def _check_update() -> None:
+async def _check_update(*, verify_ssl: bool) -> None:
     try:
-        version_info = await check_latest_version()
+        version_info = await check_latest_version(verify_ssl=verify_ssl)
         if version_info is not None and version_info.is_outdated:
             logger.warning(
                 "A newer version of codex-telegram is available: %s (current: %s). "
@@ -70,7 +71,13 @@ async def post_init(
     logger.info("Codex initialized")
 
     if not state.update_notified:
-        asyncio.create_task(_check_update())
+        update_check_enabled = parse_bool(get_config_value("updates.pypi_check", True), default=True)
+        update_check_verify_ssl = parse_bool(
+            get_config_value("updates.pypi_check_verify_ssl", True),
+            default=True,
+        )
+        if update_check_enabled:
+            asyncio.create_task(_check_update(verify_ssl=update_check_verify_ssl))
         state.update_notified = True
 
 

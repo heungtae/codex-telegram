@@ -21,9 +21,9 @@ class VersionInfo:
     release_url: str
 
 
-async def check_latest_version(timeout: float = 10.0) -> Optional[VersionInfo]:
+async def check_latest_version(timeout: float = 10.0, *, verify_ssl: bool = True) -> Optional[VersionInfo]:
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(verify=verify_ssl) as client:
             response = await client.get(PYPI_URL, timeout=timeout)
             response.raise_for_status()
             data = response.json()

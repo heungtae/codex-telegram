@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import AsyncMock, patch, MagicMock
 
+from codex_telegram import __version__
 from utils.pypi_check import _compare_versions, check_latest_version, format_update_message, VersionInfo
 
 
@@ -61,7 +62,7 @@ class CheckLatestVersionTests(unittest.TestCase):
         result = asyncio.run(check_latest_version())
 
         self.assertIsNotNone(result)
-        self.assertEqual(result.current, "0.4.4")
+        self.assertEqual(result.current, __version__)
         self.assertEqual(result.latest, "0.5.0")
         self.assertTrue(result.is_outdated)
 
@@ -91,7 +92,7 @@ class CheckLatestVersionTests(unittest.TestCase):
         result = asyncio.run(check_latest_version())
 
         self.assertIsNotNone(result)
-        self.assertEqual(result.current, "0.4.4")
+        self.assertEqual(result.current, __version__)
         self.assertEqual(result.latest, "0.4.1")
         self.assertFalse(result.is_outdated)
 

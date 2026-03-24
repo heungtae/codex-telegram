@@ -342,6 +342,20 @@ match_question_any = ["network", "internet", "http", "https", "download", "fetch
 level = "INFO"
 
 # -----------------------------------------------------------------------------
+# Update Check Configuration
+# -----------------------------------------------------------------------------
+# Controls whether codex-telegram checks PyPI for updates on startup.
+# If you see SSL errors like "CERTIFICATE_VERIFY_FAILED", either install
+# proper CA certificates on the host, or disable the check/verification below.
+# Disabling SSL verification is not recommended for production.
+
+[updates]
+# Enable PyPI update checks on startup (recommended).
+pypi_check = true
+# Verify TLS certificates when contacting PyPI (recommended).
+pypi_check_verify_ssl = true
+
+# -----------------------------------------------------------------------------
 # Telegram Event Forwarding
 # -----------------------------------------------------------------------------
 # Configure which Codex app-server events are forwarded to Telegram.
