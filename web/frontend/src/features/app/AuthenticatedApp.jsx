@@ -2252,6 +2252,18 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       }
       const target = event.target;
       const isInputFocused = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+      const selection =
+        typeof window.getSelection === "function"
+          ? window.getSelection()
+          : null;
+      const hasSelectedText = !!selection && !selection.isCollapsed && `${selection}`.trim().length > 0;
+      const key = typeof event.key === "string" ? event.key.toLowerCase() : "";
+      if ((key === "c" || key === "x") && hasSelectedText) {
+        return;
+      }
+      if (key === "a" && !isInputFocused) {
+        return;
+      }
       if (isInputFocused && !event.shiftKey && event.key !== "Enter") {
         return;
       }
