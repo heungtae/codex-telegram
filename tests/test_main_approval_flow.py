@@ -367,6 +367,49 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("system_message", second["type"])
         bot.send_message.assert_not_awaited()
 
+    async def test_error_notification_is_forwarded_to_web_and_telegram(self):
+        client = _DummyCodexClient(submit_result=True)
+        router = SimpleNamespace(projects=SimpleNamespace(resolve_effective_project=Mock(return_value=None)))
+        guardian = SimpleNamespace(stop=AsyncMock())
+        bot = SimpleNamespace(send_message=AsyncMock())
+        telegram_app = SimpleNamespace(bot=bot)
+        guardian_settings = {
+            "enabled": False,
+            "apply_to_methods": ["*"],
+            "failure_policy": "manual_fallback",
+            "explainability": "decision_only",
+            "timeout_seconds": 5,
+            "rules": [],
+        }
+
+        with patch("main.setup_codex", new=AsyncMock(return_value=client)), \
+             patch("main.CommandRouter", return_value=router), \
+             patch("main.ApprovalGuardianService", return_value=guardian), \
+             patch("main.get", side_effect=self._config_getter()), \
+             patch("main.get_guardian_settings", return_value=guardian_settings):
+            await app_main.post_init(telegram_app)
+            user_manager.bind_thread_owner(1, "thread-1")
+            queue = await event_hub.subscribe(1)
+            try:
+                await client._any_handler(
+                    "error",
+                    {
+                        "threadId": "thread-1",
+                        "message": "app-server failed to parse response",
+                    },
+                )
+                first = await queue.get()
+            finally:
+                await event_hub.unsubscribe(1, queue)
+
+        self.assertEqual("system_message", first["type"])
+        self.assertEqual("thread-1", first["thread_id"])
+        self.assertIn("app-server failed to parse response", first["text"])
+        bot.send_message.assert_awaited_once()
+        kwargs = bot.send_message.await_args.kwargs
+        self.assertEqual(1, kwargs["chat_id"])
+        self.assertIn("app-server failed to parse response", kwargs["text"])
+
     async def test_turn_completed_without_thread_id_uses_turn_owner_for_telegram(self):
         client = _DummyCodexClient(submit_result=True)
         router = SimpleNamespace(projects=SimpleNamespace(resolve_effective_project=Mock(return_value=None)))

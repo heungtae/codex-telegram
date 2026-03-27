@@ -771,7 +771,21 @@ def build_event_forwarder(app, config: ForwardingConfig):
                     actual_mode,
                     params,
                 )
-        elif method in {"turn/completed", "turn/failed", "turn/cancelled"} and target_user_ids:
+        if method == "error" and target_user_ids:
+            message = format_event(method, params, config.rules)
+            if message and message.strip():
+                for uid in target_user_ids:
+                    await publish_system_message(uid, thread_id, turn_id, message)
+                    if uid > 0 and app is not None:
+                        try:
+                            await app.bot.send_message(
+                                chat_id=uid,
+                                text=truncate_telegram_text(message, f"\n\nturnId: {turn_id or 'unknown'}"),
+                            )
+                        except Exception:
+                            logger.exception("Failed to forward app-server error to Telegram")
+            return
+        if method in {"turn/completed", "turn/failed", "turn/cancelled"} and target_user_ids:
             for uid in target_user_ids:
                 state_user = user_manager.get(uid)
                 if turn_id:
