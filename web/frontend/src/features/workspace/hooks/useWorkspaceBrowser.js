@@ -6,6 +6,7 @@ import {
   normalizeThreadId,
   normalizeWorkspacePath,
 } from "../../common/utils";
+import { collectWorkspaceRefreshPaths } from "../workspaceRefresh";
 
 export default function useWorkspaceBrowser({
   activeThread,
@@ -181,6 +182,23 @@ export default function useWorkspaceBrowser({
       setWorkspaceError(err.message || "Failed to load workspace status.");
     }
   }, [workspaceContextQuery]);
+
+  const refreshWorkspaceBrowser = useCallback(async () => {
+    if (!workspacePath) {
+      return;
+    }
+    const requestId = workspaceLoadRequestRef.current + 1;
+    workspaceLoadRequestRef.current = requestId;
+    const uniquePaths = collectWorkspaceRefreshPaths(workspaceTreeRef.current);
+    const treeResults = await Promise.allSettled(
+      uniquePaths.map((path) => loadWorkspaceTree(path, { force: true, depth: WORKSPACE_TREE_LOAD_DEPTH, requestId }))
+    );
+    await loadWorkspaceStatus();
+    const failedResult = treeResults.find((result) => result.status === "rejected");
+    if (failedResult) {
+      throw failedResult.reason;
+    }
+  }, [loadWorkspaceStatus, loadWorkspaceTree, workspacePath]);
 
   const openWorkspaceFile = useCallback(async (path, statusCode = "") => {
     const normalizedPath = normalizeWorkspacePath(path);
@@ -370,6 +388,7 @@ export default function useWorkspaceBrowser({
     resetWorkspaceBucket,
     removeWorkspaceBucket,
     restoreWorkspaceForThread,
+    refreshWorkspaceBrowser,
     workspaceTree,
     expandedWorkspaceDirs,
     workspaceStatus,

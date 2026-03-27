@@ -37,9 +37,9 @@ import TopTabs from "../tabs/components/TopTabs";
 import useThreadScopedState from "../thread/hooks/useThreadScopedState";
 import WorkspacePreviewPanel from "../workspace/components/WorkspacePreviewPanel";
 import useWorkspaceBrowser from "../workspace/hooks/useWorkspaceBrowser";
+import { handleTurnCompletedWorkspaceRefresh } from "./turnCompletion";
 
 function AuthenticatedApp({ me, theme, onToggleTheme }) {
-  const WORKSPACE_TREE_LOAD_DEPTH = 4;
   const PALETTE_LIMIT = 10;
   const SIDEBAR_MIN = 260;
   const SIDEBAR_MAX = 620;
@@ -173,8 +173,8 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     workspacePreview,
     setWorkspacePreview,
     workspaceContextQuery,
-    loadWorkspaceTree,
     loadWorkspaceStatus,
+    refreshWorkspaceBrowser,
     openWorkspaceFile,
     toggleWorkspaceDirectory,
   } = useWorkspaceBrowser({
@@ -1660,37 +1660,26 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
         return;
       }
       logSseEvent("turn_completed", data);
-      const turnId = typeof data?.turn_id === "string" ? data.turn_id : "";
-      const completedThreadId = resolveThreadIdFromTurn(data?.thread_id, turnId);
-      if (turnId) {
-        delete turnThreadIdRef.current[turnId];
-      }
-      const shouldNotify = completedThreadId && completedThreadId !== activeThreadRef.current;
-      updateThreadTabState(completedThreadId, {
-        status: "completed",
-        hasUnreadCompletion: completedThreadId ? shouldNotify : true,
-      });
-      if (shouldNotify) {
-        playTurnNotification();
-      }
-      setStatusForThread(completedThreadId, "idle");
-      setActivityDetailForThread(completedThreadId, "");
       reasoningStateRef.current = {};
-      if (completedThreadId === activeThreadRef.current) {
-        setMessages((prev) => prev.map((m) => ({ ...m, streaming: false })));
-      }
-      const hasStreamed = turnId ? !!streamedTurnIdsRef.current[turnId] : false;
-      if (turnId) {
-        delete streamedTurnIdsRef.current[turnId];
-        delete assistantItemCompletedByTurnRef.current[turnId];
-      }
-      loadThreads({
-        projectKey: activeProjectKeyRef.current,
-        projectTabId: activeProjectTabIdRef.current,
-      }).catch(() => {});
-      loadProjects().catch(() => {});
-      loadSessionSummary().catch(() => {});
-      loadWorkspaceStatus().catch(() => {});
+      handleTurnCompletedWorkspaceRefresh({
+        data,
+        activeThreadId: activeThreadRef.current,
+        activeProjectKey: activeProjectKeyRef.current,
+        activeProjectTabId: activeProjectTabIdRef.current,
+        refreshWorkspaceBrowser,
+        loadThreads,
+        loadProjects,
+        loadSessionSummary,
+        updateThreadTabState,
+        playTurnNotification,
+        setStatusForThread,
+        setActivityDetailForThread,
+        setMessages,
+        streamedTurnIdsRef,
+        assistantItemCompletedByTurnRef,
+        turnThreadIdRef,
+        resolveThreadIdFromTurn,
+      });
     });
     es.addEventListener("turn_failed", (ev) => {
       const data = safeParseSseData("turn_failed", ev);
@@ -2727,10 +2716,9 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
           className="workspace-refresh"
           type="button"
           onClick={() => {
-            loadWorkspaceTree("", { force: true, depth: WORKSPACE_TREE_LOAD_DEPTH }).catch((err) => {
+            refreshWorkspaceBrowser().catch((err) => {
               setWorkspaceError(err.message || "Failed to refresh workspace tree.");
             });
-            loadWorkspaceStatus().catch(() => {});
           }}
           aria-label="Refresh workspace browser"
           title="Refresh workspace browser"
