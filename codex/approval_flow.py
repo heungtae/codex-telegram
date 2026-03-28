@@ -143,7 +143,11 @@ def build_approval_request_handler(
                             ),
                         )
                 else:
-                    accepted = state.codex_client.submit_approval_decision(req_id, policy_match.action)
+                    accepted = state.codex_client.submit_approval_decision(
+                        req_id,
+                        policy_match.action,
+                        thread_id if isinstance(thread_id, str) else None,
+                    )
                     if accepted:
                         if user_id > 0 and app is not None:
                             await app.bot.send_message(
@@ -206,7 +210,11 @@ def build_approval_request_handler(
                         guardian_message(guardian_decision),
                     )
                     if guardian_decision.choice in {"approve", "session"}:
-                        accepted = state.codex_client.submit_approval_decision(req_id, guardian_decision.choice)
+                        accepted = state.codex_client.submit_approval_decision(
+                            req_id,
+                            guardian_decision.choice,
+                            thread_id if isinstance(thread_id, str) else None,
+                        )
                         if accepted:
                             if user_id > 0 and app is not None:
                                 await app.bot.send_message(chat_id=user_id, text=guardian_message(guardian_decision))
@@ -244,7 +252,11 @@ def build_approval_request_handler(
                         f"Reason: {guardian_error or 'unknown'}",
                     )
                     if config.failure_policy in {"approve", "session", "deny"}:
-                        accepted = state.codex_client.submit_approval_decision(req_id, config.failure_policy)
+                        accepted = state.codex_client.submit_approval_decision(
+                            req_id,
+                            config.failure_policy,
+                            thread_id if isinstance(thread_id, str) else None,
+                        )
                         if accepted:
                             if user_id > 0 and app is not None:
                                 await app.bot.send_message(
@@ -300,7 +312,11 @@ def build_approval_request_handler(
             previous_id = previous.get("id")
             if not isinstance(previous_id, int) or previous_id == req_id:
                 continue
-            closed = state.codex_client.submit_approval_decision(previous_id, "deny")
+            closed = state.codex_client.submit_approval_decision(
+                previous_id,
+                "deny",
+                previous.get("thread_id") if isinstance(previous.get("thread_id"), str) else None,
+            )
             logger.info(
                 "Superseding approval request user_id=%s previous_request_id=%s new_request_id=%s closed=%s",
                 user_id,

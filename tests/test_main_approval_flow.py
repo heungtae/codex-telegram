@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
 import main as app_main
+from codex import event_forwarding
 from models import state
 from models.user import user_manager
 from web.runtime import event_hub
@@ -37,6 +38,7 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
         user_manager._turn_owners.clear()
         user_manager._turn_subscribers.clear()
         user_manager._turn_threads.clear()
+        event_forwarding._turn_token_usage_by_turn_id.clear()
         event_hub._pending_approvals.clear()
         event_hub._subscribers.clear()
 
@@ -52,6 +54,7 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
         user_manager._turn_owners.clear()
         user_manager._turn_subscribers.clear()
         user_manager._turn_threads.clear()
+        event_forwarding._turn_token_usage_by_turn_id.clear()
         event_hub._pending_approvals.clear()
         event_hub._subscribers.clear()
 
@@ -71,6 +74,36 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
         if overrides:
             values.update(overrides)
         return lambda key, default=None: values.get(key, default)
+
+    def test_token_usage_format_uses_k_suffix_for_large_values(self):
+        text = event_forwarding.format_token_usage(
+            {
+                "input_tokens": 120010,
+                "output_tokens": 1744,
+                "cached_input_tokens": 55936,
+                "reasoning_tokens": 551,
+                "total_tokens": 2_500_000_000,
+            }
+        )
+
+        self.assertEqual(
+            "Token usage: input: 120K, output: 1K, cached input: 55K, reasoning: 551, total: 2.5B",
+            text,
+        )
+
+    def test_token_usage_format_uses_m_suffix_for_millions(self):
+        text = event_forwarding.format_token_usage(
+            {
+                "input_tokens": 1_250_000,
+                "output_tokens": 2_500_000,
+                "total_tokens": 3_000_000,
+            }
+        )
+
+        self.assertEqual(
+            "Token usage: input: 1.2M, output: 2.5M, total: 3M",
+            text,
+        )
 
     async def _dispatch_policy_request(self, action: str, submit_result: bool):
         client = _DummyCodexClient(submit_result=submit_result)
@@ -129,7 +162,7 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
                 client, approvals = await self._dispatch_policy_request(action=action, submit_result=False)
 
                 self.assertEqual([], approvals)
-                client.submit_approval_decision.assert_called_once_with(7, action)
+                client.submit_approval_decision.assert_called_once_with(7, action, "thread-1")
 
     async def test_manual_fallback_rule_still_queues_user_approval(self):
         client, approvals = await self._dispatch_policy_request(action="manual_fallback", submit_result=False)
@@ -180,7 +213,7 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
         approvals = await event_hub.list_approvals(1)
 
         self.assertEqual([7], [item["id"] for item in approvals])
-        client.submit_approval_decision.assert_any_call(6, "deny")
+        client.submit_approval_decision.assert_any_call(6, "deny", None)
 
     async def test_turn_diff_updated_is_forwarded_to_web_only_for_apply_patch(self):
         client = _DummyCodexClient(submit_result=True)
@@ -262,6 +295,27 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
             queue = await event_hub.subscribe(1)
             try:
                 await client._any_handler(
+                    "thread/tokenUsage/updated",
+                    {
+                        "threadId": "thread-1",
+                        "turnId": "turn-1",
+                        "tokenUsage": {
+                            "total": {
+                                "totalTokens": 46,
+                                "inputTokens": 12,
+                                "outputTokens": 34,
+                                "reasoningOutputTokens": 5,
+                            },
+                            "last": {
+                                "totalTokens": 10,
+                                "inputTokens": 3,
+                                "outputTokens": 7,
+                            },
+                            "modelContextWindow": 258400,
+                        },
+                    },
+                )
+                await client._any_handler(
                     "turn/completed",
                     {
                         "threadId": "thread-1",
@@ -276,11 +330,15 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual("turn_completed", first["type"])
         self.assertEqual("system_message", second["type"])
-        self.assertEqual("Turn completed. Mode: PLAN.", second["text"])
+        self.assertEqual(
+            "Turn completed. Mode: PLAN.\nToken usage: input: 12, output: 34, reasoning: 5, total: 46",
+            second["text"],
+        )
         bot.send_message.assert_awaited()
         kwargs = bot.send_message.await_args.kwargs
         self.assertEqual(1, kwargs["chat_id"])
         self.assertIn("Turn completed", kwargs["text"])
+        self.assertIn("Token usage: input: 12, output: 34, reasoning: 5, total: 46", kwargs["text"])
         self.assertIn("reply_markup", kwargs)
 
     async def test_turn_completed_is_forwarded_to_telegram_with_default_forwarding_config(self):
@@ -306,6 +364,22 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
             await app_main.post_init(telegram_app)
             user_manager.bind_thread_owner(1, "thread-1")
             await client._any_handler(
+                "thread/tokenUsage/updated",
+                {
+                    "threadId": "thread-1",
+                    "turnId": "turn-1",
+                    "tokenUsage": {
+                        "total": {
+                            "totalTokens": 46,
+                            "inputTokens": 12,
+                            "outputTokens": 34,
+                            "reasoningOutputTokens": 5,
+                        },
+                        "modelContextWindow": 258400,
+                    },
+                },
+            )
+            await client._any_handler(
                 "turn/completed",
                 {
                     "threadId": "thread-1",
@@ -318,6 +392,7 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
         kwargs = bot.send_message.await_args.kwargs
         self.assertEqual(1, kwargs["chat_id"])
         self.assertIn("[app-server] Turn completed: turn-1 (mode: BUILD)", kwargs["text"])
+        self.assertIn("Token usage: input: 12, output: 34, reasoning: 5, total: 46", kwargs["text"])
         self.assertIn("turnId: turn-1", kwargs["text"])
         self.assertIn("reply_markup", kwargs)
 

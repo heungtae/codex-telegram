@@ -94,8 +94,8 @@ class CommandRouter:
     async def _dispatch_compact(self, args: list[str], _user_id: int) -> CommandResult:
         return await self.threads.compact(args)
 
-    async def _dispatch_rollback(self, args: list[str], _user_id: int) -> CommandResult:
-        return await self.threads.rollback(args)
+    async def _dispatch_rollback(self, args: list[str], user_id: int) -> CommandResult:
+        return await self.threads.rollback(args, user_id)
 
     async def _dispatch_interrupt(self, args: list[str], user_id: int) -> CommandResult:
         return await self.threads.interrupt(user_id, args)

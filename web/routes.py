@@ -259,7 +259,15 @@ def register_approval_routes(app: FastAPI) -> None:
             raise HTTPException(status_code=400, detail="decision must be approve|session|deny")
 
         await wait_for_codex()
-        accepted = state.codex_client.submit_approval_decision(request_id, decision)
+        pending = await event_hub.list_approvals(session.user_id)
+        thread_id = None
+        for item in pending:
+            if isinstance(item, dict) and item.get("id") == request_id:
+                thread = item.get("thread_id")
+                if isinstance(thread, str) and thread:
+                    thread_id = thread
+                break
+        accepted = state.codex_client.submit_approval_decision(request_id, decision, thread_id=thread_id)
         if not accepted:
             raise HTTPException(status_code=404, detail="approval request not found or already handled")
 

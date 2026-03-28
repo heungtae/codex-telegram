@@ -84,7 +84,7 @@ async def post_init(
             get_config_value("updates.pypi_check_verify_ssl", True),
             default=True,
         )
-        if update_check_enabled:
+        if update_check_enabled and app is not None:
             logger.info("Checking PyPI for codex-telegram updates...")
             asyncio.create_task(_check_update(verify_ssl=update_check_verify_ssl))
         state.update_notified = True

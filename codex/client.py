@@ -23,6 +23,7 @@ class CodexClient:
         self._proc: asyncio.subprocess.Process | None = None
         self._reader_task: asyncio.Task | None = None
         self._stderr_task: asyncio.Task | None = None
+        self._call_lock = asyncio.Lock()
         self._pending: dict[int, asyncio.Future[JSONRPCResponse]] = {}
         self._pending_approvals: dict[int, _ApprovalWaiter] = {}
         self._event_handlers: dict[str, list[Callable]] = {}
@@ -95,19 +96,21 @@ class CodexClient:
         return result
     
     async def call(self, method: str, params: dict[str, Any] | None = None) -> Any:
-        request = self.protocol.create_request(method, {} if params is None else params)
-        req_id = request.id
-        if req_id is None:
-            raise ValueError("Request ID is None")
-        future: asyncio.Future[JSONRPCResponse] = asyncio.Future()
-        self._pending[req_id] = future
-        
-        self._write(request)
-        
-        response = await future
-        if response.error:
-            raise CodexError(response.error["code"], response.error["message"])
-        return response.result
+        async with self._call_lock:
+            request = self.protocol.create_request(method, {} if params is None else params)
+            req_id = request.id
+            if req_id is None:
+                raise ValueError("Request ID is None")
+            loop = asyncio.get_running_loop()
+            future: asyncio.Future[JSONRPCResponse] = loop.create_future()
+            self._pending[req_id] = future
+
+            self._write(request)
+
+            response = await future
+            if response.error:
+                raise CodexError(response.error["code"], response.error["message"])
+            return response.result
     
     def on(self, method: str, handler: Callable):
         if method not in self._event_handlers:
@@ -120,7 +123,7 @@ class CodexClient:
     def on_approval_request(self, handler: Callable):
         self._approval_handlers.append(handler)
 
-    def submit_approval_decision(self, request_id: int, decision: str) -> bool:
+    def submit_approval_decision(self, request_id: int, decision: str, thread_id: str | None = None) -> bool:
         waiter = self._pending_approvals.get(request_id)
         if waiter is None or waiter.future.done():
             return False

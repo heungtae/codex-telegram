@@ -14,6 +14,7 @@ logger = logging.getLogger("codex-telegram")
 
 FILE_CHANGE_LINE_DELAY_SECONDS = 0.35
 TELEGRAM_MESSAGE_LIMIT = 3900
+_turn_token_usage_by_turn_id: dict[str, dict[str, int]] = {}
 
 
 @dataclass(frozen=True)
@@ -563,6 +564,163 @@ def extract_text_by_paths(payload: dict[str, Any], paths: list[str]) -> str | No
     return None
 
 
+def _coerce_usage_number(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        raw = value.strip()
+        if raw.isdigit():
+            return int(raw)
+    return None
+
+
+def _extract_usage_value(usage: dict[str, Any], keys: list[str]) -> int | None:
+    for key in keys:
+        value = _coerce_usage_number(usage.get(key))
+        if value is not None:
+            return value
+    return None
+
+
+def _normalize_usage_payload(usage: dict[str, Any]) -> dict[str, int] | None:
+    normalized: dict[str, int] = {}
+    input_tokens = _extract_usage_value(usage, ["input_tokens", "inputTokens", "prompt_tokens", "promptTokens"])
+    output_tokens = _extract_usage_value(usage, ["output_tokens", "outputTokens", "completion_tokens", "completionTokens"])
+    cached_input_tokens = _extract_usage_value(usage, ["cached_input_tokens", "cachedInputTokens"])
+    reasoning_tokens = _extract_usage_value(
+        usage,
+        ["reasoning_tokens", "reasoningTokens", "reasoning_output_tokens", "reasoningOutputTokens"],
+    )
+    total_tokens = _extract_usage_value(usage, ["total_tokens", "totalTokens"])
+
+    if input_tokens is not None:
+        normalized["input_tokens"] = input_tokens
+    if output_tokens is not None:
+        normalized["output_tokens"] = output_tokens
+    if cached_input_tokens is not None:
+        normalized["cached_input_tokens"] = cached_input_tokens
+    if reasoning_tokens is not None:
+        normalized["reasoning_tokens"] = reasoning_tokens
+    if total_tokens is not None:
+        normalized["total_tokens"] = total_tokens
+    return normalized or None
+
+
+def _extract_usage_candidate(candidate: Any) -> dict[str, int] | None:
+    if not isinstance(candidate, dict) or not candidate:
+        return None
+    for nested_key in ("total", "last"):
+        nested = candidate.get(nested_key)
+        if isinstance(nested, dict) and nested:
+            normalized = _normalize_usage_payload(nested)
+            if normalized is not None:
+                return normalized
+    return _normalize_usage_payload(candidate)
+
+
+def extract_token_usage(params: dict | None) -> dict[str, int] | None:
+    payload = params or {}
+    candidates = (
+        payload.get("usage"),
+        payload.get("tokenUsage"),
+        payload.get("token_usage"),
+        payload.get("metrics", {}).get("usage") if isinstance(payload.get("metrics"), dict) else None,
+        payload.get("turn", {}).get("usage") if isinstance(payload.get("turn"), dict) else None,
+    )
+    for candidate in candidates:
+        normalized = _extract_usage_candidate(candidate)
+        if normalized is not None:
+            return normalized
+    return None
+
+
+def remember_turn_token_usage(params: dict | None) -> None:
+    payload = params or {}
+    turn_id = extract_turn_id("thread/tokenUsage/updated", payload)
+    usage = extract_token_usage(payload)
+    if not turn_id or usage is None:
+        return
+    _turn_token_usage_by_turn_id[turn_id] = usage
+
+
+def resolve_turn_token_usage(params: dict | None) -> dict[str, int] | None:
+    payload = params or {}
+    usage = extract_token_usage(payload)
+    if usage is not None:
+        return usage
+    turn_id = extract_turn_id("turn/completed", payload)
+    if not turn_id:
+        return None
+    return _turn_token_usage_by_turn_id.get(turn_id)
+
+
+def format_token_usage(usage: dict[str, int] | None) -> str | None:
+    if not usage:
+        return None
+    parts: list[str] = []
+
+    def _render(value: int) -> str:
+        units = (
+            (1_000_000_000_000, "T", True),
+            (1_000_000_000, "B", True),
+            (1_000_000, "M", True),
+            (1_000, "K", False),
+        )
+        abs_value = abs(value)
+        for threshold, suffix, show_decimal in units:
+            if abs_value >= threshold:
+                scaled = abs_value / threshold
+                prefix = "-" if value < 0 else ""
+                if show_decimal:
+                    formatted = f"{scaled:.1f}".rstrip("0").rstrip(".")
+                    return f"{prefix}{formatted}{suffix}"
+                shortened = abs_value // threshold
+                return f"{prefix}{shortened}{suffix}"
+        return str(value)
+
+    input_tokens = usage.get("input_tokens")
+    output_tokens = usage.get("output_tokens")
+    cached_input_tokens = usage.get("cached_input_tokens")
+    reasoning_tokens = usage.get("reasoning_tokens")
+    total_tokens = usage.get("total_tokens")
+    if input_tokens is not None:
+        parts.append(f"input: {_render(input_tokens)}")
+    if output_tokens is not None:
+        parts.append(f"output: {_render(output_tokens)}")
+    if cached_input_tokens is not None:
+        parts.append(f"cached input: {_render(cached_input_tokens)}")
+    if reasoning_tokens is not None:
+        parts.append(f"reasoning: {_render(reasoning_tokens)}")
+    if total_tokens is not None:
+        parts.append(f"total: {_render(total_tokens)}")
+    if not parts:
+        return None
+    return "Token usage: " + ", ".join(parts)
+
+
+def format_turn_completed_message(params: dict | None, *, include_app_server_prefix: bool) -> str:
+    payload = params or {}
+    turn = payload.get("turn")
+    turn_id = (turn or {}).get("id") if isinstance(turn, dict) else payload.get("turnId")
+    actual_mode = normalize_mode_kind(payload.get("collaboration_mode_kind") or payload.get("collaborationModeKind"))
+    usage = format_token_usage(resolve_turn_token_usage(payload))
+    if include_app_server_prefix:
+        base = f"[app-server] Turn completed: {turn_id or 'unknown'}"
+        if actual_mode:
+            base += f" (mode: {actual_mode.upper()})"
+    else:
+        base = "Turn completed."
+        if actual_mode:
+            base += f" Mode: {actual_mode.upper()}."
+    if usage:
+        return f"{base}\n{usage}"
+    return base
+
+
 def rule_matches(method: str, rule: Any) -> bool:
     if not isinstance(rule, dict) or rule.get("enabled", True) is False:
         return False
@@ -626,11 +784,7 @@ def format_event(method: str, params: dict | None, rules: list[dict[str, Any]]) 
             return f"[app-server] Turn started: {turn_id or 'unknown'} (mode: {actual_mode.upper()})"
         return f"[app-server] Turn started: {turn_id or 'unknown'}"
     if method == "turn/completed":
-        turn_id = (payload.get("turn") or {}).get("id") if isinstance(payload.get("turn"), dict) else payload.get("turnId")
-        actual_mode = normalize_mode_kind(payload.get("collaboration_mode_kind") or payload.get("collaborationModeKind"))
-        if actual_mode:
-            return f"[app-server] Turn completed: {turn_id or 'unknown'} (mode: {actual_mode.upper()})"
-        return f"[app-server] Turn completed: {turn_id or 'unknown'}"
+        return format_turn_completed_message(payload, include_app_server_prefix=True)
     if method.startswith("codex/event/"):
         if text:
             return f"[app-server] {text}"
@@ -857,6 +1011,10 @@ def build_event_forwarder(app, config: ForwardingConfig):
                     await event_hub.publish_event(uid, specialized_payload)
                 return
 
+        if method == "thread/tokenUsage/updated":
+            remember_turn_token_usage(params)
+            return
+
         if target_user_ids:
             event_type = "app_event"
             if method == "item/agentMessage/delta":
@@ -891,14 +1049,8 @@ def build_event_forwarder(app, config: ForwardingConfig):
                     },
                 )
                 if method == "turn/completed":
-                    actual_mode = normalize_mode_kind((params or {}).get("collaboration_mode_kind") or (params or {}).get("collaborationModeKind"))
-                    mode_suffix = f" Mode: {actual_mode.upper()}." if actual_mode else ""
-                    await publish_system_message(
-                        uid,
-                        thread_id,
-                        turn_id,
-                        f"Turn completed.{mode_suffix}",
-                    )
+                    completion_text = format_turn_completed_message(params, include_app_server_prefix=False)
+                    await publish_system_message(uid, thread_id, turn_id, completion_text)
 
         if method_matches(method, config.denylist):
             return
@@ -931,5 +1083,8 @@ def build_event_forwarder(app, config: ForwardingConfig):
                 )
             except Exception:
                 logger.exception("Failed to forward app-server event to Telegram")
+
+        if method == "turn/completed" and turn_id:
+            _turn_token_usage_by_turn_id.pop(turn_id, None)
 
     return forward_event

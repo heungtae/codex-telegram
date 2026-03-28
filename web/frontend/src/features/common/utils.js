@@ -1,4 +1,4 @@
-import { EVENT_PANEL_KINDS, GUARDIAN_RULES_TOML_FALLBACK } from "./constants";
+import { EVENT_PANEL_KINDS, GUARDIAN_RULES_TOML_FALLBACK } from "./constants.js";
 
 export function formatGuardianRulesEditor(config) {
   const raw = typeof config?.rules_toml === "string" ? config.rules_toml : "";

@@ -480,12 +480,18 @@ class ThreadCommands:
         await self.ctx.codex.call("thread/compact/start", {"threadId": thread_id})
         return text_result(f"Compaction started: {thread_id}", thread_id=thread_id)
 
-    async def rollback(self, args: list[str]) -> CommandResult:
+    async def rollback(self, args: list[str], user_id: int) -> CommandResult:
+        from models.user import user_manager
+
         if not args:
             return usage_result("Usage: /rollback <n_turns>")
 
         n = int(args[0])
-        result = await self.ctx.codex.call("thread/rollback", {"n": n})
+        active_thread_id = user_manager.get(user_id).active_thread_id
+        if not active_thread_id:
+            return text_result("No active thread.")
+
+        result = await self.ctx.codex.call("thread/rollback", {"threadId": active_thread_id, "n": n})
         thread = result.get("thread", {})
         return text_result(f"Rolled back. Thread: {thread.get('id', 'unknown')}")
 

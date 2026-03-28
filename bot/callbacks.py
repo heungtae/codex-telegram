@@ -13,6 +13,7 @@ from bot.features_ui import features_keyboard, features_panel_text
 from models import state
 from models.user import user_manager
 from codex.commands import CommandResult
+from web.runtime import event_hub
 
 logger = logging.getLogger("codex-telegram.bot")
 GUARDIAN_WEB_ONLY_TEXT = "Guardian settings and rules can be edited in Web UI only."
@@ -352,7 +353,19 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         user_id,
                     )
                 else:
-                    accepted = state.codex_client.submit_approval_decision(request_id, choice)
+                    pending = await event_hub.list_approvals(user_id)
+                    thread_id = None
+                    for item in pending:
+                        if isinstance(item, dict) and item.get("id") == request_id:
+                            thread = item.get("thread_id")
+                            if isinstance(thread, str) and thread:
+                                thread_id = thread
+                            break
+                    accepted = state.codex_client.submit_approval_decision(
+                        request_id,
+                        choice,
+                        thread_id=thread_id,
+                    )
                     if not accepted:
                         await edit_with_log(
                             query,

@@ -14,7 +14,7 @@ from app_runtime.bootstrap import setup_codex as _setup_codex
 from app_runtime.telegram_app import build_application
 from app_runtime.web_server import WebServerThread, stop_web_server
 from bot import callback_handler, command_handler, error_handler, message_handler, start_handler
-from codex import CodexClient, CommandRouter
+from codex import CodexClientManager, CommandRouter
 from codex.approval_flow import build_approval_request_handler, build_guardian_config
 from codex.approval_guardian import ApprovalGuardianService
 from codex.event_forwarding import build_event_forwarder, build_forwarding_config
@@ -37,9 +37,9 @@ _web_server = None
 _web_server_thread = None
 
 
-async def setup_codex() -> CodexClient:
+async def setup_codex() -> CodexClientManager:
     return await _setup_codex(
-        codex_client_factory=CodexClient,
+        codex_client_factory=CodexClientManager,
         client_info={
             "name": "codex-telegram",
             "title": "Codex Telegram Bot",

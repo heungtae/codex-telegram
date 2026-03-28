@@ -38,6 +38,7 @@ import useThreadScopedState from "../thread/hooks/useThreadScopedState";
 import WorkspacePreviewPanel from "../workspace/components/WorkspacePreviewPanel";
 import useWorkspaceBrowser from "../workspace/hooks/useWorkspaceBrowser";
 import { handleTurnCompletedWorkspaceRefresh } from "./turnCompletion";
+import { resolveProjectTabThreadId } from "./projectTabThreads";
 
 function AuthenticatedApp({ me, theme, onToggleTheme }) {
   const PALETTE_LIMIT = 10;
@@ -659,29 +660,13 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   };
 
   const resolveCurrentThreadId = (projectTabId = activeProjectTabId) => {
-    const normalizedProjectTabId = normalizeThreadId(projectTabId);
-    const activeThreadId = normalizeThreadId(activeThread);
-    if (
-      activeThreadId &&
-      (
-        !normalizedProjectTabId ||
-        threadProjectTabIdByThreadId[activeThreadId] === normalizedProjectTabId ||
-        !threadProjectTabIdByThreadId[activeThreadId]
-      )
-    ) {
-      return activeThreadId;
-    }
-    if (!normalizedProjectTabId) {
-      return "";
-    }
-    const selectedThreadId = normalizeThreadId(activeThreadTabIdByProjectTabId[normalizedProjectTabId]) || "";
-    if (selectedThreadId) {
-      return selectedThreadId;
-    }
-    const openedThreads = Array.isArray(threadTabsByProjectTabId[normalizedProjectTabId])
-      ? threadTabsByProjectTabId[normalizedProjectTabId]
-      : [];
-    return normalizeThreadId(openedThreads[0]?.id) || "";
+    return resolveProjectTabThreadId({
+      projectTabId,
+      activeThreadId: activeThread,
+      threadProjectTabIdByThreadId,
+      activeThreadTabIdByProjectTabId,
+      threadTabsByProjectTabId,
+    });
   };
 
   const normalizeThreadMessages = (result, normalizedThreadId) => {
@@ -1950,9 +1935,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       return;
     }
     const selectedThreadId = resolveCurrentThreadId(activeProjectTabId);
-    if (selectedThreadId) {
-      setActiveThreadForProjectTab(activeProjectTabId, selectedThreadId);
-    }
+    setActiveThreadForProjectTab(activeProjectTabId, selectedThreadId);
     restoreWorkspaceForThread(selectedThreadId);
     if (selectedThreadId) {
       viewThread(selectedThreadId).catch(() => {});
