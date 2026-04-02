@@ -40,6 +40,64 @@ import useWorkspaceBrowser from "../workspace/hooks/useWorkspaceBrowser";
 import { handleTurnCompletedWorkspaceRefresh } from "./turnCompletion";
 import { resolveProjectTabThreadId } from "./projectTabThreads";
 
+function createFileChangePreview(data) {
+  const files = Array.isArray(data?.files) ? data.files : [];
+  const diff = typeof data?.diff === "string" ? data.diff : "";
+  const summary = typeof data?.summary === "string" && data.summary.trim()
+    ? data.summary.trim()
+    : typeof data?.text === "string" && data.text.trim()
+      ? data.text.trim()
+      : "";
+  const namedFiles = files
+    .map((file) => (typeof file?.path === "string" ? file.path.trim() : ""))
+    .filter(Boolean);
+  const path = namedFiles.length === 1
+    ? namedFiles[0]
+    : namedFiles.length > 1
+      ? `${namedFiles.length} files changed`
+      : summary || "File change";
+  const content = diff
+    ? ""
+    : summary || namedFiles.join("\n") || "Applied patch changes";
+  return {
+    path,
+    mode: diff ? "diff" : "file",
+    status: "",
+    loading: false,
+    content,
+    diff,
+    previewAvailable: true,
+    error: "",
+    truncated: false,
+    isBinary: false,
+  };
+}
+
+const WORKSPACE_PREVIEW_HEIGHT_STORAGE_KEY = "codex-web-workspace-preview-height";
+
+function readWorkspacePreviewHeight(defaultHeight, minHeight, maxHeight) {
+  if (typeof window === "undefined") {
+    return defaultHeight;
+  }
+  try {
+    const raw = window.localStorage.getItem(WORKSPACE_PREVIEW_HEIGHT_STORAGE_KEY);
+    const parsed = Number.parseInt(raw || "", 10);
+    if (Number.isFinite(parsed)) {
+      return Math.max(minHeight, Math.min(maxHeight, parsed));
+    }
+  } catch (_err) {}
+  return defaultHeight;
+}
+
+function persistWorkspacePreviewHeight(height) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.setItem(WORKSPACE_PREVIEW_HEIGHT_STORAGE_KEY, String(height));
+  } catch (_err) {}
+}
+
 function AuthenticatedApp({ me, theme, onToggleTheme }) {
   const PALETTE_LIMIT = 10;
   const SIDEBAR_MIN = 260;
@@ -47,6 +105,9 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   const SIDEBAR_COLLAPSED_WIDTH = 44;
   const WORKSPACE_PANEL_MIN = 280;
   const WORKSPACE_PANEL_MAX = 720;
+  const WORKSPACE_PREVIEW_MIN = 180;
+  const WORKSPACE_PREVIEW_MAX = 680;
+  const WORKSPACE_PREVIEW_DEFAULT = 320;
   const MOBILE_BREAKPOINT = 900;
   const WORKSPACE_PANEL_BREAKPOINT = 1200;
   const [projectTabs, setProjectTabs] = useState([]);
@@ -82,6 +143,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   const composerSelectionRef = useRef({ start: null, end: null });
   const recentBackspaceAtRef = useRef(0);
   const paletteRef = useRef(null);
+  const workspacePreviewResizeRef = useRef({ startY: 0, startHeight: WORKSPACE_PREVIEW_DEFAULT });
   const workspaceResizeRef = useRef({ startX: 0, startWidth: 320 });
   const projectTabSequenceRef = useRef(0);
   const initialLoadRef = useRef(true);
@@ -101,6 +163,14 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [workspacePanelWidth, setWorkspacePanelWidth] = useState(320);
   const [isResizingWorkspacePanel, setIsResizingWorkspacePanel] = useState(false);
+  const [workspacePreviewHeight, setWorkspacePreviewHeight] = useState(() =>
+    readWorkspacePreviewHeight(
+      WORKSPACE_PREVIEW_DEFAULT,
+      WORKSPACE_PREVIEW_MIN,
+      WORKSPACE_PREVIEW_MAX
+    )
+  );
+  const [isResizingWorkspacePreview, setIsResizingWorkspacePreview] = useState(false);
   const [isMobileLayout, setIsMobileLayout] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth <= MOBILE_BREAKPOINT : false
   );
@@ -1773,6 +1843,9 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       if (!summary && files.length === 0 && !diff) {
         return;
       }
+      if (!threadId || threadId === normalizeThreadId(activeThreadRef.current)) {
+        setWorkspacePreview(createFileChangePreview(data));
+      }
       appendMessageToThread(threadId, {
         role: "system",
         text: summary || "Applied patch changes",
@@ -1783,6 +1856,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
         kind: "file_change",
         streaming: false,
       });
+      loadWorkspaceStatus().catch(() => {});
       loadSessionSummary().catch(() => {});
     });
     es.addEventListener("app_event", (ev) => {
@@ -2051,6 +2125,31 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       window.removeEventListener("mouseup", onUp);
     };
   }, [isResizingWorkspacePanel]);
+  useEffect(() => {
+    if (!isResizingWorkspacePreview || typeof window === "undefined") {
+      return;
+    }
+    const onMove = (event) => {
+      const delta = event.clientY - workspacePreviewResizeRef.current.startY;
+      const next = workspacePreviewResizeRef.current.startHeight + delta;
+      setWorkspacePreviewHeight(
+        Math.max(WORKSPACE_PREVIEW_MIN, Math.min(WORKSPACE_PREVIEW_MAX, next))
+      );
+    };
+    const onUp = () => setIsResizingWorkspacePreview(false);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [isResizingWorkspacePreview]);
+  useEffect(() => {
+    if (!Number.isFinite(workspacePreviewHeight)) {
+      return;
+    }
+    persistWorkspacePreviewHeight(workspacePreviewHeight);
+  }, [workspacePreviewHeight]);
   useEffect(() => {
     if (!activeToken || activeToken.type !== "project") {
       setProjectSuggestions([]);
@@ -2771,9 +2870,9 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
         aria-label="Project open mode"
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <div className="modal-title">프로젝트 탭 동작 선택</div>
+        <div className="modal-title">Choose Project Tab Behavior</div>
         <div className="modal-desc">
-          프로젝트 클릭 시 새 탭으로 열지, 현재 탭을 교체할지 선택하세요.
+          Choose whether clicking a project opens it in a new tab or replaces the current tab.
         </div>
         <div className="modal-actions">
           <button
@@ -2782,7 +2881,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
             onMouseDown={(event) => event.stopPropagation()}
             onClick={() => chooseProjectClickMode("open_new_tab")}
           >
-            새 탭으로 열기
+            Open in New Tab
           </button>
           <button
             type="button"
@@ -2790,7 +2889,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
             onMouseDown={(event) => event.stopPropagation()}
             onClick={() => chooseProjectClickMode("replace_current")}
           >
-            현재 탭 교체
+            Replace Current Tab
           </button>
           <button
             type="button"
@@ -2801,7 +2900,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
               setIsProjectModeModalOpen(false);
             }}
           >
-            취소
+            Cancel
           </button>
         </div>
       </div>
@@ -2926,8 +3025,8 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
                         className="agent-settings-btn"
                         onClick={() => openAgentSettings(agent.name)}
                         disabled={!!agentConfigLoading || !!agentConfigSaving}
-                        aria-label={`${agent.name} 설정`}
-                        title={`${agent.name} 설정`}
+                        aria-label={`${agent.name} settings`}
+                        title={`${agent.name} settings`}
                         type="button"
                       >
                         <SettingsIcon />
@@ -3020,8 +3119,8 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
                             })
                           }
                           disabled={settingsBusy}
-                          aria-label="새로고침"
-                          title="새로고침"
+                          aria-label="Refresh"
+                          title="Refresh"
                         >
                           <RefreshIcon />
                         </button>
@@ -3034,15 +3133,15 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
                             })
                           }
                           disabled={settingsBusy}
-                          aria-label="저장"
-                          title="저장"
+                          aria-label="Save"
+                          title="Save"
                         >
                           <SaveIcon />
                         </button>
                       </div>
                     </div>
                   ) : (
-                    <div className="agent-settings-empty">설정을 불러오는 중입니다.</div>
+                    <div className="agent-settings-empty">Loading settings.</div>
                   )}
                 </div>
               ) : null}
@@ -3194,8 +3293,8 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
                         setAgentConfigError(err.message || "Failed to refresh settings.");
                       })}
                       disabled={settingsBusy}
-                      aria-label="새로고침"
-                      title="새로고침"
+                      aria-label="Refresh"
+                      title="Refresh"
                     >
                       <RefreshIcon />
                     </button>
@@ -3204,15 +3303,15 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
                       type="button"
                       onClick={() => saveAgentSettings(floatingAgentSettings, { includeRules: true })}
                       disabled={settingsBusy}
-                      aria-label="저장"
-                      title="저장"
+                      aria-label="Save"
+                      title="Save"
                     >
                       <SaveIcon />
                     </button>
                   </div>
                 </div>
               ) : (
-                <div className="agent-settings-empty">설정을 불러오는 중입니다.</div>
+                <div className="agent-settings-empty">Loading settings.</div>
               )}
             </div>
           </div>
@@ -3237,7 +3336,30 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
         />
         <div className="workspace-layout">
           <div className="center-pane">
-            <WorkspacePreviewPanel workspacePreview={workspacePreview} onClose={() => setWorkspacePreview(null)} />
+            {workspacePreview ? (
+              <div
+                className={`workspace-preview-shell ${isResizingWorkspacePreview ? "resizing" : ""}`}
+                style={{ height: isMobileLayout ? "min(38vh, 320px)" : `${workspacePreviewHeight}px` }}
+              >
+                <WorkspacePreviewPanel workspacePreview={workspacePreview} onClose={() => setWorkspacePreview(null)} />
+                {!isMobileLayout ? (
+                  <div
+                    className={`workspace-preview-resizer ${isResizingWorkspacePreview ? "active" : ""}`}
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      workspacePreviewResizeRef.current = {
+                        startY: event.clientY,
+                        startHeight: workspacePreviewHeight,
+                      };
+                      setIsResizingWorkspacePreview(true);
+                    }}
+                    role="separator"
+                    aria-orientation="horizontal"
+                    aria-label="Resize file preview"
+                  />
+                ) : null}
+              </div>
+            ) : null}
             <div className="chat" ref={chatRef}>
               <ApprovalStack
                 approvalItems={approvalItems}

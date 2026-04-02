@@ -1378,10 +1378,18 @@ kbd {
   line-height: 1.5;
 }
 
-.workspace-preview-panel {
+.workspace-preview-shell {
   margin-top: 12px;
   min-height: 0;
-  max-height: min(48vh, 720px);
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.workspace-preview-panel {
+  min-height: 0;
+  height: 100%;
+  max-height: none;
   border: 1px solid rgba(68, 101, 140, 0.82);
   border-radius: 0;
   background: linear-gradient(180deg, rgba(13, 22, 35, 0.96) 0%, rgba(10, 18, 30, 0.98) 100%);
@@ -1392,7 +1400,7 @@ kbd {
 }
 
 .workspace-preview-panel.diff-mode {
-  max-height: min(68vh, 980px);
+  max-height: none;
 }
 
 .workspace-preview-head {
@@ -1449,6 +1457,55 @@ kbd {
   min-width: 0;
   min-height: 0;
   overflow: auto;
+}
+
+.workspace-preview-resizer {
+  position: relative;
+  flex: 0 0 14px;
+  cursor: row-resize;
+  background: linear-gradient(180deg, rgba(18, 28, 42, 0.2) 0%, rgba(18, 28, 42, 0.05) 100%);
+  border-top: 1px solid transparent;
+  border-bottom: 1px solid transparent;
+}
+
+.workspace-preview-resizer:hover,
+.workspace-preview-resizer.active {
+  background: linear-gradient(180deg, rgba(37, 51, 70, 0.98) 0%, rgba(27, 39, 57, 0.98) 100%);
+  border-top-color: #5c799b;
+  border-bottom-color: #24344a;
+  box-shadow: inset 0 1px 0 rgba(141, 181, 222, 0.14), inset 0 -1px 0 rgba(3, 8, 18, 0.5);
+}
+
+.workspace-preview-resizer::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 88px;
+  max-width: calc(100% - 24px);
+  height: 4px;
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, transparent 0%, rgba(142, 181, 222, 0.95) 18%, rgba(189, 219, 255, 0.98) 50%, rgba(142, 181, 222, 0.95) 82%, transparent 100%);
+  box-shadow:
+    0 0 0 1px rgba(6, 12, 22, 0.28),
+    0 0 12px rgba(141, 181, 222, 0.16);
+}
+
+.workspace-preview-resizer::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 28px;
+  height: 10px;
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  border: 1px solid rgba(8, 15, 24, 0.18);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 
 .workspace-file-code {
@@ -2636,6 +2693,15 @@ kbd {
   background: rgba(12, 20, 32, 0.86);
 }
 
+:root[data-theme="dark"] .workspace-preview-resizer {
+  background: linear-gradient(180deg, rgba(18, 28, 42, 0.2) 0%, rgba(18, 28, 42, 0.05) 100%);
+}
+
+:root[data-theme="dark"] .workspace-preview-resizer:hover,
+:root[data-theme="dark"] .workspace-preview-resizer.active {
+  background: linear-gradient(180deg, rgba(37, 51, 70, 0.98) 0%, rgba(27, 39, 57, 0.98) 100%);
+}
+
 :root[data-theme="dark"] .composer-workspace-toggle {
   background: rgba(12, 20, 32, 0.86);
 }
@@ -2681,6 +2747,15 @@ kbd {
 :root[data-theme="light"] .composer,
 :root[data-theme="light"] .chat {
   background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+}
+
+:root[data-theme="light"] .workspace-preview-resizer {
+  background: linear-gradient(180deg, rgba(231, 239, 250, 0.98) 0%, rgba(219, 230, 244, 0.98) 100%);
+}
+
+:root[data-theme="light"] .workspace-preview-resizer:hover,
+:root[data-theme="light"] .workspace-preview-resizer.active {
+  background: linear-gradient(180deg, rgba(195, 214, 238, 0.98) 0%, rgba(177, 202, 230, 0.98) 100%);
 }
 
 :root[data-theme="light"] .thread-item,

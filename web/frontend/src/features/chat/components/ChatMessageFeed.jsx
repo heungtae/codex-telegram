@@ -4,11 +4,17 @@ import { FileChangeDiff } from "../../workspace/components/FilePreviewParts";
 export default function ChatMessageFeed({ renderItems }) {
   return renderItems.map((item, idx) => {
     if (item.type === "event_panel") {
+      const visibleEntries = Array.isArray(item.entries)
+        ? item.entries.filter((entry) => entry.kind !== "file_change")
+        : [];
+      if (!visibleEntries.length) {
+        return null;
+      }
       return (
         <div key={`file-panel:${idx}`} className="msg-row file-panel">
           <div className="file-change-panel">
             <div className="file-change-panel-scroll">
-              {item.entries.map((entry, entryIdx) => (
+              {visibleEntries.map((entry, entryIdx) => (
                 <div
                   key={`file-entry:${idx}:${entryIdx}`}
                   className={`file-change-entry kind-${entry.kind || "event"}`}
