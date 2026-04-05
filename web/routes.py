@@ -673,6 +673,7 @@ def register_system_routes(app: FastAPI) -> None:
         session = await session_from_request(request)
         await wait_for_codex()
         state_user = user_manager.get(session.user_id)
+        active_subagents = await event_hub.list_active_subagents(session.user_id)
         workspace = state_user.selected_project_path
         project_key = state_user.selected_project_key
         project_name = state_user.selected_project_name
@@ -703,6 +704,7 @@ def register_system_routes(app: FastAPI) -> None:
             "project_key": project_key,
             "project_name": project_name,
             "agents": agents,
+            "active_subagents": active_subagents,
         }
 
 

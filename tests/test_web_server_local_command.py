@@ -11,7 +11,7 @@ from fastapi import HTTPException
 from codex import CodexError
 from models import state
 from models.user import user_manager
-from web.runtime import session_manager
+from web.runtime import event_hub, session_manager
 from web.server import COOKIE_NAME, create_web_app
 
 
@@ -26,6 +26,7 @@ class WebServerLocalCommandTests(unittest.TestCase):
         user_manager._turn_owners.clear()
         user_manager._turn_subscribers.clear()
         user_manager._turn_threads.clear()
+        event_hub._active_subagents.clear()
         state.codex_ready.set()
         state.codex_client = SimpleNamespace(call=AsyncMock())
         state.command_router = SimpleNamespace(
@@ -36,6 +37,7 @@ class WebServerLocalCommandTests(unittest.TestCase):
 
     def tearDown(self):
         asyncio.run(session_manager.delete(self.session.token))
+        event_hub._active_subagents.clear()
         state.codex_client = self.original_codex_client
         state.command_router = self.original_command_router
 
@@ -256,6 +258,62 @@ class WebServerLocalCommandTests(unittest.TestCase):
                 {"name": "guardian", "enabled": True, "toggleable": True, "configurable": True},
             ],
             body["agents"],
+        )
+        self.assertIn("active_subagents", body)
+        self.assertEqual([], body["active_subagents"])
+
+    def test_session_summary_includes_active_subagents_payload(self):
+        app = create_web_app()
+        endpoint = next(
+            route.endpoint
+            for route in app.routes
+            if getattr(route, "path", None) == "/api/session/summary"
+        )
+        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+        state_user = user_manager.get(self.session.user_id)
+        state_user.selected_project_path = "/tmp/web-workspace"
+        state_user.selected_project_key = "default"
+        state.command_router.projects = SimpleNamespace(
+            resolve_effective_project=lambda user_id: {
+                "path": "/tmp/web-workspace",
+                "key": "default",
+                "name": "current workspace",
+            }
+        )
+
+        asyncio.run(
+            event_hub.upsert_active_subagent(
+                self.session.user_id,
+                {
+                    "thread_id": "thread-sub-1",
+                    "status": "active",
+                    "name": "atlas",
+                    "role": "search",
+                    "source_kind": "subAgentThreadSpawn",
+                    "parent_thread_id": "thread-parent",
+                    "turn_id": "turn-1",
+                    "item_id": "item-1",
+                },
+            )
+        )
+
+        with patch("web.server.get_guardian_settings", return_value={"enabled": False}):
+            body = asyncio.run(endpoint(request))
+
+        self.assertEqual(
+            [
+                {
+                    "thread_id": "thread-sub-1",
+                    "status": "active",
+                    "name": "atlas",
+                    "role": "search",
+                    "source_kind": "subAgentThreadSpawn",
+                    "parent_thread_id": "thread-parent",
+                    "turn_id": "turn-1",
+                    "item_id": "item-1",
+                }
+            ],
+            body["active_subagents"],
         )
 
     def test_projects_endpoint_includes_structured_items(self):

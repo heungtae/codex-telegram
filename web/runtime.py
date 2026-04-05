@@ -16,6 +16,38 @@ class WebSession:
     expires_at: float
 
 
+@dataclass(slots=True)
+class ActiveSubagent:
+    thread_id: str
+    status: str = ""
+    name: str = ""
+    role: str = ""
+    source_kind: str = ""
+    parent_thread_id: str = ""
+    turn_id: str = ""
+    item_id: str = ""
+    updated_at: float = 0.0
+
+    def to_dict(self) -> dict[str, Any]:
+        result = {
+            "thread_id": self.thread_id,
+            "status": self.status,
+        }
+        if self.name:
+            result["name"] = self.name
+        if self.role:
+            result["role"] = self.role
+        if self.source_kind:
+            result["source_kind"] = self.source_kind
+        if self.parent_thread_id:
+            result["parent_thread_id"] = self.parent_thread_id
+        if self.turn_id:
+            result["turn_id"] = self.turn_id
+        if self.item_id:
+            result["item_id"] = self.item_id
+        return result
+
+
 class WebSessionManager:
     def __init__(self):
         self._sessions: dict[str, WebSession] = {}
@@ -64,6 +96,7 @@ class WebEventHub:
     def __init__(self):
         self._subscribers: dict[int, set[asyncio.Queue[dict[str, Any]]]] = {}
         self._pending_approvals: dict[int, dict[int, dict[str, Any]]] = {}
+        self._active_subagents: dict[int, dict[str, ActiveSubagent]] = {}
         self._lock = asyncio.Lock()
 
     async def subscribe(self, user_id: int) -> asyncio.Queue[dict[str, Any]]:
@@ -94,6 +127,78 @@ class WebEventHub:
                 queue.put_nowait(event)
             except asyncio.QueueFull:
                 continue
+
+    async def upsert_active_subagent(self, user_id: int, subagent: dict[str, Any]) -> bool:
+        thread_id = str(subagent.get("thread_id") or "").strip()
+        if not thread_id:
+            return False
+        status = str(subagent.get("status") or "").strip()
+        active = bool(subagent.get("active", True))
+        async with self._lock:
+            bucket = self._active_subagents.setdefault(user_id, {})
+            changed = False
+            if not active:
+                changed = thread_id in bucket
+                bucket.pop(thread_id, None)
+            else:
+                previous = bucket.get(thread_id)
+                updated = ActiveSubagent(
+                    thread_id=thread_id,
+                    status=status or (previous.status if previous else "active"),
+                    name=str(subagent.get("name") or (previous.name if previous else "")).strip(),
+                    role=str(subagent.get("role") or (previous.role if previous else "")).strip(),
+                    source_kind=str(subagent.get("source_kind") or (previous.source_kind if previous else "")).strip(),
+                    parent_thread_id=str(subagent.get("parent_thread_id") or (previous.parent_thread_id if previous else "")).strip(),
+                    turn_id=str(subagent.get("turn_id") or (previous.turn_id if previous else "")).strip(),
+                    item_id=str(subagent.get("item_id") or (previous.item_id if previous else "")).strip(),
+                    updated_at=time.time(),
+                )
+                changed = previous != updated
+                bucket[thread_id] = updated
+            if not bucket:
+                self._active_subagents.pop(user_id, None)
+            return changed
+
+    async def remove_active_subagent(self, user_id: int, thread_id: str | None) -> bool:
+        normalized_thread_id = str(thread_id or "").strip()
+        if not normalized_thread_id:
+            return False
+        async with self._lock:
+            bucket = self._active_subagents.get(user_id)
+            if not bucket:
+                return False
+            removed = bucket.pop(normalized_thread_id, None) is not None
+            if not bucket:
+                self._active_subagents.pop(user_id, None)
+            return removed
+
+    async def clear_active_subagents_by_turn(self, user_id: int, turn_id: str | None) -> bool:
+        normalized_turn_id = str(turn_id or "").strip()
+        if not normalized_turn_id:
+            return False
+        async with self._lock:
+            bucket = self._active_subagents.get(user_id)
+            if not bucket:
+                return False
+            before = len(bucket)
+            bucket = {
+                thread_id: subagent
+                for thread_id, subagent in bucket.items()
+                if subagent.turn_id != normalized_turn_id
+            }
+            changed = len(bucket) != before
+            if bucket:
+                self._active_subagents[user_id] = bucket
+            else:
+                self._active_subagents.pop(user_id, None)
+            return changed
+
+    async def list_active_subagents(self, user_id: int) -> list[dict[str, Any]]:
+        async with self._lock:
+            bucket = self._active_subagents.get(user_id, {})
+            items = [subagent.to_dict() for subagent in bucket.values()]
+        items.sort(key=lambda item: (item.get("name") or item.get("thread_id") or "", item.get("thread_id") or ""))
+        return items
 
     async def replace_approval(self, user_id: int, request_id: int, payload: dict[str, Any]) -> list[dict[str, Any]]:
         async with self._lock:

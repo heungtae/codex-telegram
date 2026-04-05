@@ -33,6 +33,72 @@ class WebRuntimeTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual([{"id": 11, "type": "approval_required"}], pending)
 
+    async def test_active_subagent_registry_upsert_and_remove(self):
+        hub = WebEventHub()
+
+        changed = await hub.upsert_active_subagent(
+            7,
+            {
+                "thread_id": "thread-sub-1",
+                "name": "atlas",
+                "role": "explorer",
+                "status": "active",
+                "source_kind": "subAgentThreadSpawn",
+                "parent_thread_id": "thread-parent",
+                "turn_id": "turn-1",
+                "item_id": "item-1",
+            },
+        )
+        self.assertTrue(changed)
+
+        items = await hub.list_active_subagents(7)
+        self.assertEqual(1, len(items))
+        self.assertEqual("thread-sub-1", items[0]["thread_id"])
+        self.assertEqual("atlas", items[0]["name"])
+        self.assertEqual("explorer", items[0]["role"])
+
+        removed = await hub.remove_active_subagent(7, "thread-sub-1")
+        self.assertTrue(removed)
+        self.assertEqual([], await hub.list_active_subagents(7))
+
+    async def test_active_subagent_registry_clear_by_turn(self):
+        hub = WebEventHub()
+
+        await hub.upsert_active_subagent(
+            7,
+            {
+                "thread_id": "thread-sub-1",
+                "name": "atlas",
+                "role": "explorer",
+                "status": "active",
+                "source_kind": "subAgentThreadSpawn",
+                "parent_thread_id": "thread-parent",
+                "turn_id": "turn-1",
+                "item_id": "item-1",
+            },
+        )
+        await hub.upsert_active_subagent(
+            7,
+            {
+                "thread_id": "thread-sub-2",
+                "name": "nova",
+                "role": "review",
+                "status": "active",
+                "source_kind": "subAgentThreadSpawn",
+                "parent_thread_id": "thread-parent",
+                "turn_id": "turn-2",
+                "item_id": "item-2",
+            },
+        )
+
+        changed = await hub.clear_active_subagents_by_turn(7, "turn-1")
+
+        self.assertTrue(changed)
+        self.assertEqual(
+            [{"thread_id": "thread-sub-2", "status": "active", "name": "nova", "role": "review", "source_kind": "subAgentThreadSpawn", "parent_thread_id": "thread-parent", "turn_id": "turn-2", "item_id": "item-2"}],
+            await hub.list_active_subagents(7),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

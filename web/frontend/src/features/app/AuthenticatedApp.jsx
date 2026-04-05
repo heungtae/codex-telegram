@@ -232,6 +232,9 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     resolveThreadIdFromTurn,
   } = useThreadScopedState(activeThread);
   const activeProjectTabSnapshot = projectTabs.find((tab) => tab.id === activeProjectTabId) || null;
+  const activeSubagents = Array.isArray(sessionSummary?.active_subagents)
+    ? sessionSummary.active_subagents.filter((item) => item && typeof item === "object")
+    : [];
   const {
     ensureWorkspaceBucket,
     removeWorkspaceBucket,
@@ -1859,16 +1862,27 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       loadWorkspaceStatus().catch(() => {});
       loadSessionSummary().catch(() => {});
     });
+    es.addEventListener("subagents_changed", (ev) => {
+      const data = safeParseSseData("subagents_changed", ev);
+      if (!data) {
+        return;
+      }
+      logSseEvent("subagents_changed", data);
+      loadSessionSummary().catch(() => {});
+    });
     es.addEventListener("app_event", (ev) => {
       const data = safeParseSseData("app_event", ev);
       if (!data) {
         return;
       }
       logSseEvent("app_event", data);
+      const method = typeof data.method === "string" ? data.method : "";
+      if (["thread/started", "thread/status/changed", "thread/closed", "subagents_changed"].includes(method)) {
+        loadSessionSummary().catch(() => {});
+      }
       if (data.method === "item/started" || data.method === "item/completed") {
         recordItemPhase(data);
       }
-      const method = typeof data.method === "string" ? data.method : "";
       if (method !== "item/completed") {
         return;
       }
@@ -3035,6 +3049,37 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
                   </div>
                 ))}
               </div>
+              {activeSubagents.length ? (
+                <>
+                  <h3 style={{ marginTop: "1rem" }}>Running Subagents</h3>
+                  <div className="thread-list agent-list">
+                    {activeSubagents.map((subagent) => {
+                      const threadId = typeof subagent.thread_id === "string" ? subagent.thread_id : "";
+                      const label = typeof subagent.name === "string" && subagent.name.trim()
+                        ? subagent.name.trim()
+                        : typeof subagent.role === "string" && subagent.role.trim()
+                          ? subagent.role.trim()
+                          : "subagent";
+                      const detail = typeof subagent.role === "string" && subagent.role.trim()
+                        ? subagent.role.trim()
+                        : typeof subagent.status === "string" && subagent.status.trim()
+                          ? subagent.status.trim()
+                          : "active";
+                      const title = threadId
+                        ? `thread: ${threadId}${typeof subagent.parent_thread_id === "string" && subagent.parent_thread_id.trim() ? `, parent: ${subagent.parent_thread_id}` : ""}`
+                        : label;
+                      return (
+                        <div key={threadId || label} className="agent-row">
+                          <div className="agent-item static on" title={title}>
+                            <span>{label}</span>
+                            <span>{detail}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : null}
               {agentConfigError ? <div className="agent-error">{agentConfigError}</div> : null}
               {activeAgentDef ? (
                 <div className="agent-settings-card">

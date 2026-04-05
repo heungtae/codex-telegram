@@ -172,6 +172,148 @@ def extract_message_variant(params: dict | None) -> str | None:
     return None
 
 
+def _normalize_token(value: Any) -> str:
+    return str(value or "").strip().lower().replace("_", "").replace("-", "").replace(" ", "")
+
+
+def _normalize_subagent_source_kind(thread: dict[str, Any]) -> str:
+    source = thread.get("source")
+    if isinstance(source, dict):
+        for key in ("kind", "type", "source", "name"):
+            raw = source.get(key)
+            if isinstance(raw, str) and raw.strip():
+                return raw.strip()
+        if isinstance(source.get("threadSpawn"), dict):
+            return "subAgentThreadSpawn"
+    if isinstance(source, str) and source.strip():
+        return source.strip()
+    raw = thread.get("sourceKind") or thread.get("source_kind")
+    if isinstance(raw, str) and raw.strip():
+        return raw.strip()
+    return ""
+
+
+def _normalize_subagent_thread_status(thread: dict[str, Any]) -> str:
+    status = thread.get("status")
+    if isinstance(status, dict):
+        raw = status.get("type")
+        if isinstance(raw, str):
+            return raw.strip().lower()
+    if isinstance(status, str):
+        return status.strip().lower()
+    return ""
+
+
+def _is_subagent_thread(thread: dict[str, Any]) -> bool:
+    if not isinstance(thread, dict):
+        return False
+    if isinstance(thread.get("agentNickname"), str) and thread.get("agentNickname").strip():
+        return True
+    if isinstance(thread.get("agent_nickname"), str) and thread.get("agent_nickname").strip():
+        return True
+    if isinstance(thread.get("agentRole"), str) and thread.get("agentRole").strip():
+        return True
+    if isinstance(thread.get("agent_role"), str) and thread.get("agent_role").strip():
+        return True
+    source_kind = _normalize_subagent_source_kind(thread)
+    normalized_kind = _normalize_token(source_kind)
+    return "subagent" in normalized_kind
+
+
+def _collab_tool_call_updates(method: str, params: dict | None) -> list[dict[str, Any]]:
+    if method not in {"item/started", "item/completed"}:
+        return []
+    payload = params or {}
+    item = payload.get("item")
+    if not isinstance(item, dict) or normalize_item_type(item.get("type")) != "collabagenttoolcall":
+        return []
+
+    tool = _normalize_token(item.get("tool") or item.get("tool_name"))
+    if tool in {"wait", "closeagent"}:
+        return []
+    if tool not in {"spawnagent", "resumeagent", "sendinput"}:
+        return []
+
+    sender_thread_id = extract_thread_id(method, payload)
+    turn_id = extract_turn_id(method, payload)
+    item_id = extract_item_id(payload)
+    receiver_ids: list[str] = []
+    for key in ("receiverThreadIds", "receiver_thread_ids"):
+        raw = item.get(key)
+        if isinstance(raw, list):
+            receiver_ids = [str(v).strip() for v in raw if isinstance(v, str) and v.strip()]
+            if receiver_ids:
+                break
+
+    updates: list[dict[str, Any]] = []
+    for receiver_id in receiver_ids:
+        updates.append(
+            {
+                "thread_id": receiver_id,
+                "active": True,
+                "status": "active",
+                "name": "",
+                "role": "",
+                "source_kind": "subAgentThreadSpawn" if "spawn" in tool else "subAgent",
+                "parent_thread_id": sender_thread_id or "",
+                "turn_id": turn_id or "",
+                "item_id": item_id or "",
+            }
+        )
+    return updates
+
+
+def _thread_updates(method: str, params: dict | None) -> list[dict[str, Any]]:
+    if method not in {"thread/started", "thread/status/changed"}:
+        return []
+    payload = params or {}
+    thread = payload.get("thread")
+    if not isinstance(thread, dict):
+        thread = {}
+    thread_id = extract_thread_id(method, payload)
+    if not thread_id and isinstance(thread.get("id"), str):
+        thread_id = thread["id"]
+    if not thread_id:
+        return []
+    turn_id = extract_turn_id(method, payload)
+
+    if method == "thread/closed":
+        return []
+
+    is_subagent = _is_subagent_thread(thread)
+    if not is_subagent:
+        return []
+
+    status = _normalize_subagent_thread_status(thread)
+    if method == "thread/status/changed" and status and status != "active":
+        return []
+
+    active = True
+    if method == "thread/started" and not status:
+        status = "active"
+    updates = [
+        {
+            "thread_id": thread_id,
+            "active": active,
+            "status": status or "active",
+            "name": str(thread.get("agentNickname") or thread.get("agent_nickname") or "").strip(),
+            "role": str(thread.get("agentRole") or thread.get("agent_role") or "").strip(),
+            "source_kind": _normalize_subagent_source_kind(thread),
+            "parent_thread_id": str(thread.get("forkedFromId") or thread.get("forked_from_id") or "").strip(),
+            "turn_id": turn_id or "",
+            "item_id": "",
+        }
+    ]
+    return updates
+
+
+def _subagent_updates(method: str, params: dict | None) -> list[dict[str, Any]]:
+    updates = _thread_updates(method, params)
+    if updates:
+        return updates
+    return _collab_tool_call_updates(method, params)
+
+
 def coerce_int(value: Any) -> int:
     if isinstance(value, bool):
         return 0
@@ -944,8 +1086,22 @@ def build_event_forwarder(app, config: ForwardingConfig):
                 state_user = user_manager.get(uid)
                 if turn_id:
                     state_user.clear_turn(turn_id=turn_id, thread_id=thread_id)
+                    subagents_changed = await event_hub.clear_active_subagents_by_turn(uid, turn_id)
                 elif state_user.active_turn_id:
                     state_user.clear_turn()
+                    subagents_changed = False
+                else:
+                    subagents_changed = False
+                if turn_id and subagents_changed:
+                    await event_hub.publish_event(
+                        uid,
+                        {
+                            "type": "subagents_changed",
+                            "thread_id": thread_id,
+                            "turn_id": turn_id,
+                            "active_subagents": await event_hub.list_active_subagents(uid),
+                        },
+                    )
             if turn_id:
                 user_manager.clear_turn_bindings(turn_id)
 
@@ -1014,6 +1170,26 @@ def build_event_forwarder(app, config: ForwardingConfig):
         if method == "thread/tokenUsage/updated":
             remember_turn_token_usage(params)
             return
+
+        subagent_updates = _subagent_updates(method, params)
+        if subagent_updates and target_user_ids:
+            for uid in target_user_ids:
+                changed = False
+                for update in subagent_updates:
+                    if update.get("active", True):
+                        changed = await event_hub.upsert_active_subagent(uid, update) or changed
+                    else:
+                        changed = await event_hub.remove_active_subagent(uid, update.get("thread_id")) or changed
+                if changed:
+                    await event_hub.publish_event(
+                        uid,
+                        {
+                            "type": "subagents_changed",
+                            "thread_id": thread_id,
+                            "turn_id": turn_id,
+                            "active_subagents": await event_hub.list_active_subagents(uid),
+                        },
+                    )
 
         if target_user_ids:
             event_type = "app_event"

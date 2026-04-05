@@ -1,3 +1,4 @@
+import asyncio
 import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
@@ -41,6 +42,7 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
         event_forwarding._turn_token_usage_by_turn_id.clear()
         event_hub._pending_approvals.clear()
         event_hub._subscribers.clear()
+        event_hub._active_subagents.clear()
 
     async def asyncTearDown(self):
         state.codex_client = self.original_codex_client
@@ -57,6 +59,7 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
         event_forwarding._turn_token_usage_by_turn_id.clear()
         event_hub._pending_approvals.clear()
         event_hub._subscribers.clear()
+        event_hub._active_subagents.clear()
 
     @staticmethod
     def _config_getter(overrides: dict[str, object] | None = None):
@@ -669,6 +672,167 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("hello", tg_delta["text"])
         self.assertIn(-100, user_manager.find_user_ids_by_turn("turn-1"))
         self.assertIn(1, user_manager.find_user_ids_by_turn("turn-1"))
+
+    async def test_thread_started_subagent_updates_registry_and_publishes_subagents_changed(self):
+        client = _DummyCodexClient(submit_result=True)
+        router = SimpleNamespace(projects=SimpleNamespace(resolve_effective_project=Mock(return_value=None)))
+        guardian = SimpleNamespace(stop=AsyncMock())
+        bot = SimpleNamespace(send_message=AsyncMock())
+        telegram_app = SimpleNamespace(bot=bot)
+        guardian_settings = {
+            "enabled": False,
+            "apply_to_methods": ["*"],
+            "failure_policy": "manual_fallback",
+            "explainability": "decision_only",
+            "timeout_seconds": 5,
+            "rules": [],
+        }
+
+        with patch("main.setup_codex", new=AsyncMock(return_value=client)), \
+             patch("main.CommandRouter", return_value=router), \
+             patch("main.ApprovalGuardianService", return_value=guardian), \
+             patch("main.get", side_effect=lambda key, default=None: default), \
+             patch("main.get_guardian_settings", return_value=guardian_settings):
+            await app_main.post_init(telegram_app)
+            user_manager.bind_thread_owner(1, "thread-parent")
+            user_manager.bind_thread_subscriber(1, "thread-sub-1")
+            queue = await event_hub.subscribe(1)
+            try:
+                await client._any_handler(
+                    "turn/started",
+                    {
+                        "threadId": "thread-parent",
+                        "turnId": "turn-1",
+                    },
+                )
+                await asyncio.wait_for(queue.get(), timeout=0.2)
+
+                await client._any_handler(
+                    "thread/started",
+                    {
+                        "thread": {
+                            "id": "thread-sub-1",
+                            "status": "active",
+                            "agentNickname": "atlas",
+                            "agentRole": "search",
+                            "source": {"kind": "subAgentThreadSpawn"},
+                            "forkedFromId": "thread-parent",
+                        }
+                    },
+                )
+                event = await asyncio.wait_for(queue.get(), timeout=0.2)
+            finally:
+                await event_hub.unsubscribe(1, queue)
+
+        self.assertEqual("subagents_changed", event["type"])
+        self.assertEqual("thread-sub-1", event["thread_id"])
+        self.assertEqual([{"thread_id": "thread-sub-1", "status": "active", "name": "atlas", "role": "search", "source_kind": "subAgentThreadSpawn", "parent_thread_id": "thread-parent"}], event["active_subagents"])
+        self.assertEqual([{"thread_id": "thread-sub-1", "status": "active", "name": "atlas", "role": "search", "source_kind": "subAgentThreadSpawn", "parent_thread_id": "thread-parent"}], await event_hub.list_active_subagents(1))
+
+    async def test_subagent_stays_visible_until_turn_completed(self):
+        client = _DummyCodexClient(submit_result=True)
+        router = SimpleNamespace(projects=SimpleNamespace(resolve_effective_project=Mock(return_value=None)))
+        guardian = SimpleNamespace(stop=AsyncMock())
+        bot = SimpleNamespace(send_message=AsyncMock())
+        telegram_app = SimpleNamespace(bot=bot)
+        guardian_settings = {
+            "enabled": False,
+            "apply_to_methods": ["*"],
+            "failure_policy": "manual_fallback",
+            "explainability": "decision_only",
+            "timeout_seconds": 5,
+            "rules": [],
+        }
+
+        with patch("main.setup_codex", new=AsyncMock(return_value=client)), \
+             patch("main.CommandRouter", return_value=router), \
+             patch("main.ApprovalGuardianService", return_value=guardian), \
+             patch("main.get", side_effect=lambda key, default=None: default), \
+             patch("main.get_guardian_settings", return_value=guardian_settings):
+            await app_main.post_init(telegram_app)
+            user_manager.bind_thread_owner(1, "thread-parent")
+            user_manager.bind_thread_subscriber(1, "thread-sub-1")
+            queue = await event_hub.subscribe(1)
+            try:
+                await client._any_handler(
+                    "turn/started",
+                    {
+                        "threadId": "thread-parent",
+                        "turnId": "turn-1",
+                    },
+                )
+                await asyncio.wait_for(queue.get(), timeout=0.2)
+
+                await client._any_handler(
+                    "thread/started",
+                    {
+                        "thread": {
+                            "id": "thread-sub-1",
+                            "status": "active",
+                            "agentNickname": "atlas",
+                            "agentRole": "search",
+                            "source": {"kind": "subAgentThreadSpawn"},
+                            "forkedFromId": "thread-parent",
+                        },
+                        "turnId": "turn-1",
+                    },
+                )
+                await asyncio.wait_for(queue.get(), timeout=0.2)
+
+                await client._any_handler(
+                    "thread/closed",
+                    {
+                        "threadId": "thread-sub-1",
+                        "turnId": "turn-1",
+                        "thread": {
+                            "id": "thread-sub-1",
+                            "status": "closed",
+                            "agentNickname": "atlas",
+                            "agentRole": "search",
+                            "source": {"kind": "subAgentThreadSpawn"},
+                            "forkedFromId": "thread-parent",
+                        },
+                    },
+                )
+                self.assertEqual(
+                    [{"thread_id": "thread-sub-1", "status": "active", "name": "atlas", "role": "search", "source_kind": "subAgentThreadSpawn", "parent_thread_id": "thread-parent", "turn_id": "turn-1"}],
+                    await event_hub.list_active_subagents(1),
+                )
+
+                await client._any_handler(
+                    "item/completed",
+                    {
+                        "threadId": "thread-parent",
+                        "turnId": "turn-1",
+                        "item": {
+                            "id": "item-1",
+                            "type": "collabAgentToolCall",
+                            "tool": "spawnAgent",
+                            "receiverThreadIds": ["thread-sub-1"],
+                            "agentsStates": {
+                                "thread-sub-1": {
+                                    "status": "completed",
+                                }
+                            },
+                        },
+                    },
+                )
+                self.assertEqual(
+                    [{"thread_id": "thread-sub-1", "status": "active", "name": "atlas", "role": "search", "source_kind": "subAgentThreadSpawn", "parent_thread_id": "thread-parent", "turn_id": "turn-1", "item_id": "item-1"}],
+                    await event_hub.list_active_subagents(1),
+                )
+
+                await client._any_handler(
+                    "turn/completed",
+                    {
+                        "threadId": "thread-parent",
+                        "turnId": "turn-1",
+                    },
+                )
+                await asyncio.wait_for(queue.get(), timeout=0.2)
+                self.assertEqual([], await event_hub.list_active_subagents(1))
+            finally:
+                await event_hub.unsubscribe(1, queue)
 
     async def test_plan_delta_is_forwarded_to_web_only(self):
         client = _DummyCodexClient(submit_result=True)
