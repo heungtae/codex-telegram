@@ -40,40 +40,8 @@ import useWorkspaceBrowser from "../workspace/hooks/useWorkspaceBrowser";
 import { handleTurnCompletedWorkspaceRefresh } from "./turnCompletion";
 import { resolveProjectTabThreadId } from "./projectTabThreads";
 
-function createFileChangePreview(data) {
-  const files = Array.isArray(data?.files) ? data.files : [];
-  const diff = typeof data?.diff === "string" ? data.diff : "";
-  const summary = typeof data?.summary === "string" && data.summary.trim()
-    ? data.summary.trim()
-    : typeof data?.text === "string" && data.text.trim()
-      ? data.text.trim()
-      : "";
-  const namedFiles = files
-    .map((file) => (typeof file?.path === "string" ? file.path.trim() : ""))
-    .filter(Boolean);
-  const path = namedFiles.length === 1
-    ? namedFiles[0]
-    : namedFiles.length > 1
-      ? `${namedFiles.length} files changed`
-      : summary || "File change";
-  const content = diff
-    ? ""
-    : summary || namedFiles.join("\n") || "Applied patch changes";
-  return {
-    path,
-    mode: diff ? "diff" : "file",
-    status: "",
-    loading: false,
-    content,
-    diff,
-    previewAvailable: true,
-    error: "",
-    truncated: false,
-    isBinary: false,
-  };
-}
-
 const WORKSPACE_PREVIEW_HEIGHT_STORAGE_KEY = "codex-web-workspace-preview-height";
+const WORKSPACE_PREVIEW_WIDTH_STORAGE_KEY = "codex-web-workspace-preview-width";
 
 function readWorkspacePreviewHeight(defaultHeight, minHeight, maxHeight) {
   if (typeof window === "undefined") {
@@ -98,6 +66,39 @@ function persistWorkspacePreviewHeight(height) {
   } catch (_err) {}
 }
 
+function readWorkspacePreviewWidth(defaultWidth, minWidth, maxWidth) {
+  if (typeof window === "undefined") {
+    return defaultWidth;
+  }
+  try {
+    const raw = window.localStorage.getItem(WORKSPACE_PREVIEW_WIDTH_STORAGE_KEY);
+    const parsed = Number.parseInt(raw || "", 10);
+    if (Number.isFinite(parsed)) {
+      return Math.max(minWidth, Math.min(maxWidth, parsed));
+    }
+  } catch (_err) {}
+  return defaultWidth;
+}
+
+function persistWorkspacePreviewWidth(width) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.setItem(WORKSPACE_PREVIEW_WIDTH_STORAGE_KEY, String(width));
+  } catch (_err) {}
+}
+
+function clearWorkspacePreviewSize() {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.removeItem(WORKSPACE_PREVIEW_HEIGHT_STORAGE_KEY);
+    window.localStorage.removeItem(WORKSPACE_PREVIEW_WIDTH_STORAGE_KEY);
+  } catch (_err) {}
+}
+
 function AuthenticatedApp({ me, theme, onToggleTheme }) {
   const PALETTE_LIMIT = 10;
   const SIDEBAR_MIN = 260;
@@ -105,9 +106,12 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   const SIDEBAR_COLLAPSED_WIDTH = 44;
   const WORKSPACE_PANEL_MIN = 280;
   const WORKSPACE_PANEL_MAX = 720;
-  const WORKSPACE_PREVIEW_MIN = 180;
-  const WORKSPACE_PREVIEW_MAX = 680;
-  const WORKSPACE_PREVIEW_DEFAULT = 320;
+  const WORKSPACE_PREVIEW_MIN_HEIGHT = 280;
+  const WORKSPACE_PREVIEW_MAX_HEIGHT = 820;
+  const WORKSPACE_PREVIEW_DEFAULT_HEIGHT = 560;
+  const WORKSPACE_PREVIEW_MIN_WIDTH = 420;
+  const WORKSPACE_PREVIEW_MAX_WIDTH = 1200;
+  const WORKSPACE_PREVIEW_DEFAULT_WIDTH = 860;
   const MOBILE_BREAKPOINT = 900;
   const WORKSPACE_PANEL_BREAKPOINT = 1200;
   const [projectTabs, setProjectTabs] = useState([]);
@@ -143,7 +147,13 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   const composerSelectionRef = useRef({ start: null, end: null });
   const recentBackspaceAtRef = useRef(0);
   const paletteRef = useRef(null);
-  const workspacePreviewResizeRef = useRef({ startY: 0, startHeight: WORKSPACE_PREVIEW_DEFAULT });
+  const workspacePreviewResizeRef = useRef({
+    mode: "",
+    startX: 0,
+    startY: 0,
+    startWidth: WORKSPACE_PREVIEW_DEFAULT_WIDTH,
+    startHeight: WORKSPACE_PREVIEW_DEFAULT_HEIGHT,
+  });
   const workspaceResizeRef = useRef({ startX: 0, startWidth: 320 });
   const projectTabSequenceRef = useRef(0);
   const initialLoadRef = useRef(true);
@@ -163,11 +173,18 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [workspacePanelWidth, setWorkspacePanelWidth] = useState(320);
   const [isResizingWorkspacePanel, setIsResizingWorkspacePanel] = useState(false);
+  const [workspacePreviewWidth, setWorkspacePreviewWidth] = useState(() =>
+    readWorkspacePreviewWidth(
+      WORKSPACE_PREVIEW_DEFAULT_WIDTH,
+      WORKSPACE_PREVIEW_MIN_WIDTH,
+      WORKSPACE_PREVIEW_MAX_WIDTH
+    )
+  );
   const [workspacePreviewHeight, setWorkspacePreviewHeight] = useState(() =>
     readWorkspacePreviewHeight(
-      WORKSPACE_PREVIEW_DEFAULT,
-      WORKSPACE_PREVIEW_MIN,
-      WORKSPACE_PREVIEW_MAX
+      WORKSPACE_PREVIEW_DEFAULT_HEIGHT,
+      WORKSPACE_PREVIEW_MIN_HEIGHT,
+      WORKSPACE_PREVIEW_MAX_HEIGHT
     )
   );
   const [isResizingWorkspacePreview, setIsResizingWorkspacePreview] = useState(false);
@@ -1846,9 +1863,6 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       if (!summary && files.length === 0 && !diff) {
         return;
       }
-      if (!threadId || threadId === normalizeThreadId(activeThreadRef.current)) {
-        setWorkspacePreview(createFileChangePreview(data));
-      }
       appendMessageToThread(threadId, {
         role: "system",
         text: summary || "Applied patch changes",
@@ -2144,11 +2158,21 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       return;
     }
     const onMove = (event) => {
-      const delta = event.clientY - workspacePreviewResizeRef.current.startY;
-      const next = workspacePreviewResizeRef.current.startHeight + delta;
-      setWorkspacePreviewHeight(
-        Math.max(WORKSPACE_PREVIEW_MIN, Math.min(WORKSPACE_PREVIEW_MAX, next))
-      );
+      const { mode, startX, startY, startWidth, startHeight } = workspacePreviewResizeRef.current;
+      if (mode === "width" || mode === "both") {
+        const widthDelta = event.clientX - startX;
+        const nextWidth = startWidth + widthDelta;
+        setWorkspacePreviewWidth(
+          Math.max(WORKSPACE_PREVIEW_MIN_WIDTH, Math.min(WORKSPACE_PREVIEW_MAX_WIDTH, nextWidth))
+        );
+      }
+      if (mode === "height" || mode === "both") {
+        const heightDelta = event.clientY - startY;
+        const nextHeight = startHeight + heightDelta;
+        setWorkspacePreviewHeight(
+          Math.max(WORKSPACE_PREVIEW_MIN_HEIGHT, Math.min(WORKSPACE_PREVIEW_MAX_HEIGHT, nextHeight))
+        );
+      }
     };
     const onUp = () => setIsResizingWorkspacePreview(false);
     window.addEventListener("mousemove", onMove);
@@ -2159,11 +2183,48 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     };
   }, [isResizingWorkspacePreview]);
   useEffect(() => {
+    if (
+      !workspacePreview ||
+      typeof window === "undefined" ||
+      isProjectModeModalOpen ||
+      shortcutModalPage === "project"
+    ) {
+      return undefined;
+    }
+    const onKeyDown = (event) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      setIsResizingWorkspacePreview(false);
+      setWorkspacePreview(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [workspacePreview, isProjectModeModalOpen, shortcutModalPage, setWorkspacePreview]);
+  useEffect(() => {
+    if (!workspacePreview) {
+      setIsResizingWorkspacePreview(false);
+    }
+  }, [workspacePreview]);
+  useEffect(() => {
+    if (!Number.isFinite(workspacePreviewWidth)) {
+      return;
+    }
+    persistWorkspacePreviewWidth(workspacePreviewWidth);
+  }, [workspacePreviewWidth]);
+  useEffect(() => {
     if (!Number.isFinite(workspacePreviewHeight)) {
       return;
     }
     persistWorkspacePreviewHeight(workspacePreviewHeight);
   }, [workspacePreviewHeight]);
+  const resetWorkspacePreviewSize = useCallback(() => {
+    clearWorkspacePreviewSize();
+    setWorkspacePreviewWidth(WORKSPACE_PREVIEW_DEFAULT_WIDTH);
+    setWorkspacePreviewHeight(WORKSPACE_PREVIEW_DEFAULT_HEIGHT);
+  }, []);
   useEffect(() => {
     if (!activeToken || activeToken.type !== "project") {
       setProjectSuggestions([]);
@@ -3383,26 +3444,45 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
           <div className="center-pane">
             {workspacePreview ? (
               <div
-                className={`workspace-preview-shell ${isResizingWorkspacePreview ? "resizing" : ""}`}
-                style={{ height: isMobileLayout ? "min(38vh, 320px)" : `${workspacePreviewHeight}px` }}
+                className="modal-backdrop workspace-preview-backdrop"
+                role="presentation"
+                onMouseDown={() => setWorkspacePreview(null)}
               >
-                <WorkspacePreviewPanel workspacePreview={workspacePreview} onClose={() => setWorkspacePreview(null)} />
-                {!isMobileLayout ? (
-                  <div
-                    className={`workspace-preview-resizer ${isResizingWorkspacePreview ? "active" : ""}`}
-                    onMouseDown={(event) => {
-                      event.preventDefault();
-                      workspacePreviewResizeRef.current = {
-                        startY: event.clientY,
-                        startHeight: workspacePreviewHeight,
-                      };
-                      setIsResizingWorkspacePreview(true);
-                    }}
-                    role="separator"
-                    aria-orientation="horizontal"
-                    aria-label="Resize file preview"
-                  />
-                ) : null}
+                <WorkspacePreviewPanel
+                  workspacePreview={workspacePreview}
+                  onClose={() => setWorkspacePreview(null)}
+                  onResetSize={resetWorkspacePreviewSize}
+                  className={`workspace-preview-modal ${isResizingWorkspacePreview ? "resizing" : ""}`}
+                  style={{
+                    width: isMobileLayout ? "calc(100vw - 20px)" : `${workspacePreviewWidth}px`,
+                    height: isMobileLayout ? "calc(100vh - 20px)" : `${workspacePreviewHeight}px`,
+                  }}
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onResizeWidthStart={!isMobileLayout ? (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    workspacePreviewResizeRef.current = {
+                      mode: "width",
+                      startX: event.clientX,
+                      startY: event.clientY,
+                      startWidth: workspacePreviewWidth,
+                      startHeight: workspacePreviewHeight,
+                    };
+                    setIsResizingWorkspacePreview(true);
+                  } : null}
+                  onResizeHeightStart={!isMobileLayout ? (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    workspacePreviewResizeRef.current = {
+                      mode: "height",
+                      startX: event.clientX,
+                      startY: event.clientY,
+                      startWidth: workspacePreviewWidth,
+                      startHeight: workspacePreviewHeight,
+                    };
+                    setIsResizingWorkspacePreview(true);
+                  } : null}
+                />
               </div>
             ) : null}
             <div className="chat" ref={chatRef}>

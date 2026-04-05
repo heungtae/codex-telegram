@@ -1,28 +1,61 @@
 import { FileChangeDiff, FileCodePreview } from "./FilePreviewParts";
+import { CloseIcon, ResetSizeIcon } from "../../common/components/Icons";
 
-export default function WorkspacePreviewPanel({ workspacePreview, onClose }) {
+export default function WorkspacePreviewPanel({
+  workspacePreview,
+  onClose,
+  onResetSize,
+  className = "",
+  style,
+  onMouseDown,
+  onResizeWidthStart,
+  onResizeHeightStart,
+}) {
   if (!workspacePreview) {
     return null;
   }
+  const isDiffMode = workspacePreview.mode === "diff";
   return (
-    <div className={`workspace-preview-panel ${workspacePreview.mode === "diff" ? "diff-mode" : "file-mode"}`}>
+    <div
+      className={`workspace-preview-panel ${isDiffMode ? "diff-mode" : "file-mode"} ${className}`.trim()}
+      style={style}
+      role="dialog"
+      aria-modal="true"
+      aria-label={isDiffMode ? "Diff preview" : "File preview"}
+      onMouseDown={onMouseDown}
+    >
       <div className="workspace-preview-head">
         <div className="workspace-preview-copy">
           <div className="workspace-preview-title">
-            {workspacePreview.mode === "diff" ? "Diff Preview" : "File Preview"}
+            {isDiffMode ? "Diff Preview" : "File Preview"}
           </div>
           <div className="workspace-preview-path">
             {workspacePreview.status ? `[${workspacePreview.status}] ` : ""}
             {workspacePreview.path}
           </div>
         </div>
-        <button
-          className="workspace-preview-close"
-          type="button"
-          onClick={onClose}
-        >
-          Close
-        </button>
+        <div className="workspace-preview-actions">
+          {onResetSize ? (
+            <button
+              className="workspace-preview-action workspace-preview-reset"
+              type="button"
+              onClick={onResetSize}
+              title="Reset preview size to the default dimensions"
+              aria-label="Reset preview size to the default dimensions"
+            >
+              <ResetSizeIcon />
+            </button>
+          ) : null}
+          <button
+            className="workspace-preview-action workspace-preview-close"
+            type="button"
+            onClick={onClose}
+            title="Close preview (Esc)"
+            aria-label="Close preview (Esc)"
+          >
+            <CloseIcon />
+          </button>
+        </div>
       </div>
       {workspacePreview.loading ? (
         <div className="workspace-preview-empty">Loading preview...</div>
@@ -46,6 +79,24 @@ export default function WorkspacePreviewPanel({ workspacePreview, onClose }) {
           </div>
         </>
       )}
+      {onResizeWidthStart ? (
+        <div
+          className="workspace-preview-resizer workspace-preview-resizer-width"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize file preview width"
+          onMouseDown={onResizeWidthStart}
+        />
+      ) : null}
+      {onResizeHeightStart ? (
+        <div
+          className="workspace-preview-resizer workspace-preview-resizer-height"
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label="Resize file preview height"
+          onMouseDown={onResizeHeightStart}
+        />
+      ) : null}
     </div>
   );
 }

@@ -124,3 +124,20 @@ export function FileIcon() {
     </svg>
   );
 }
+
+export function CloseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6.2 5.1 5.1 6.2 10.9 12l-5.8 5.8 1.1 1.1L12 13.1l5.8 5.8 1.1-1.1-5.8-5.8 5.8-5.8-1.1-1.1-5.8 5.8Z" />
+    </svg>
+  );
+}
+
+export function ResetSizeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6 6h5V4H4v7h2Zm13 0v5h2V4h-7v2Zm-5 12h5v-5h2v7h-7Zm-8-5H4v7h7v-2H6Z" />
+      <path d="M8 9h8v6H8z" />
+    </svg>
+  );
+}
