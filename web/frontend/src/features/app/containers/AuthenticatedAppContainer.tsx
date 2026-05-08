@@ -249,20 +249,20 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
   const showToast = useCallback((message, type = "info") => {
     setToastNotification({ message, type });
     setTimeout(() => setToastNotification(null), 5000);
-  }, []);
+  }, [setToastNotification]);
   const debugLoggingEnabled =
     (typeof me?.logging_level === "string" && me.logging_level.toUpperCase() === "DEBUG") ||
     me?.debug_logging === true;
-  const debugLog = (...args) => {
+  const debugLog = useCallback((...args) => {
     if (debugLoggingEnabled) {
       console.log(...args);
     }
-  };
-  const debugError = (...args) => {
+  }, [debugLoggingEnabled]);
+  const debugError = useCallback((...args) => {
     if (debugLoggingEnabled) {
       console.error(...args);
     }
-  };
+  }, [debugLoggingEnabled]);
   const audioCtxRef = useRef(null);
   const itemPhaseByTurnRef = useRef({});
   const {
@@ -2741,8 +2741,10 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
   const settingsBusy = !!agentConfigLoading || !!agentConfigSaving;
   const currentProjectLabel = activeProjectTab?.name || sessionSummary?.project_name || sessionSummary?.project_key || "-";
   const workspaceRootLabel = basename(activeProjectTab?.path || sessionSummary?.workspace || "") || "Workspace";
-  const workspaceStatusItems =
-    workspaceStatus && typeof workspaceStatus.items === "object" ? workspaceStatus.items : {};
+  const workspaceStatusItems = useMemo(
+    () => (workspaceStatus && typeof workspaceStatus.items === "object" ? workspaceStatus.items : {}),
+    [workspaceStatus]
+  );
   const workspaceDirectoryStatus = useMemo(() => {
     const next = {};
     for (const [path, value] of Object.entries(workspaceStatusItems)) {
