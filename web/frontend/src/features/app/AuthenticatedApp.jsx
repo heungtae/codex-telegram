@@ -33,6 +33,7 @@ import {
   statusPriority,
   summarizeReasoningStatus,
 } from "../common/utils";
+import { closeSseStream, createSseStream } from "../../shared/events/sseStream";
 import TopTabs from "../tabs/components/TopTabs";
 import useThreadScopedState from "../thread/hooks/useThreadScopedState";
 import WorkspacePreviewPanel from "../workspace/components/WorkspacePreviewPanel";
@@ -1364,7 +1365,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     loadSessionSummary().catch(() => {});
     loadApprovals().catch(() => {});
 
-    const es = new EventSource("/api/events/stream", { withCredentials: true });
+    const es = createSseStream();
     const safeParseSseData = (eventType, ev) => {
       try {
         return JSON.parse(ev.data);
@@ -1944,7 +1945,7 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
       setStatusForThread(activeThreadRef.current, "disconnected");
     };
 
-    return () => es.close();
+    return () => closeSseStream(es);
   }, [me, turnNotificationEnabled]);
 
   useEffect(() => {
