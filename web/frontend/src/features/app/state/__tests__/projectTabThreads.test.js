@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { resolveProjectTabThreadId } from "./projectTabThreads.js";
+import { resolveProjectTabThreadId } from "../projectTabThreads.js";
 
 test("resolveProjectTabThreadId prefers the selected thread within the active project tab", () => {
   const threadId = resolveProjectTabThreadId({

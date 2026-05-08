@@ -11,8 +11,6 @@ export default function useSessionDomain() {
   const [sessionSummary, setSessionSummary] = useState(null);
   const [collaborationMode, setCollaborationMode] = useState("build");
   const [modeSwitchBusy, setModeSwitchBusy] = useState(false);
-  const [approvalItems, setApprovalItems] = useState([]);
-  const [approvalBusyId, setApprovalBusyId] = useState(null);
   const [agentConfigs, setAgentConfigs] = useState({});
   const [agentConfigRawEditors, setAgentConfigRawEditors] = useState({});
   const [activeAgentSettings, setActiveAgentSettings] = useState("");
@@ -25,8 +23,6 @@ export default function useSessionDomain() {
     setSessionSummary,
     setCollaborationMode,
     setModeSwitchBusy,
-    setApprovalItems,
-    setApprovalBusyId,
     setAgentConfigs,
     setAgentConfigRawEditors,
     setActiveAgentSettings,
@@ -40,8 +36,6 @@ export default function useSessionDomain() {
     sessionSummary,
     collaborationMode,
     modeSwitchBusy,
-    approvalItems,
-    approvalBusyId,
     agentConfigs,
     agentConfigRawEditors,
     activeAgentSettings,

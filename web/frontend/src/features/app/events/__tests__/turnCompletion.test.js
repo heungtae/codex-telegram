@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { handleTurnCompletedWorkspaceRefresh } from "./turnCompletion.js";
+import { handleTurnCompletedWorkspaceRefresh } from "../turnCompletion.js";
 
 test("turn completion handler refreshes workspace browser and clears streamed turn state", async () => {
   const calls = [];
