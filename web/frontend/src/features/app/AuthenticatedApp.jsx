@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import ApprovalStack from "../approvals/components/ApprovalStack";
 import ChatMessageFeed from "../chat/components/ChatMessageFeed";
@@ -35,9 +35,12 @@ import {
 } from "../common/utils";
 import { closeSseStream, createSseStream } from "../../shared/events/sseStream";
 import TopTabs from "../tabs/components/TopTabs";
+import useSessionDomain from "./hooks/useSessionDomain";
+import useThreadsDomain from "./hooks/useThreadsDomain";
+import useUiDomain from "./hooks/useUiDomain";
+import useWorkspaceDomain from "./hooks/useWorkspaceDomain";
 import useThreadScopedState from "../thread/hooks/useThreadScopedState";
 import WorkspacePreviewPanel from "../workspace/components/WorkspacePreviewPanel";
-import useWorkspaceBrowser from "../workspace/hooks/useWorkspaceBrowser";
 import { handleTurnCompletedWorkspaceRefresh } from "./turnCompletion";
 import { resolveProjectTabThreadId } from "./projectTabThreads";
 
@@ -115,28 +118,54 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   const WORKSPACE_PREVIEW_DEFAULT_WIDTH = 860;
   const MOBILE_BREAKPOINT = 900;
   const WORKSPACE_PANEL_BREAKPOINT = 1200;
-  const [projectTabs, setProjectTabs] = useState([]);
-  const [activeProjectTabId, setActiveProjectTabId] = useState("");
-  const [threadTabsByProjectTabId, setThreadTabsByProjectTabId] = useState({});
-  const [activeThreadTabIdByProjectTabId, setActiveThreadTabIdByProjectTabId] = useState({});
-  const [threadProjectTabIdByThreadId, setThreadProjectTabIdByThreadId] = useState({});
-  const [activeThread, setActiveThread] = useState("");
-  const [threadItems, setThreadItems] = useState([]);
-  const [projectItems, setProjectItems] = useState([]);
-  const [projectSuggestions, setProjectSuggestions] = useState([]);
-  const [skillSuggestions, setSkillSuggestions] = useState([]);
-  const [sessionSummary, setSessionSummary] = useState(null);
-  const [collaborationMode, setCollaborationMode] = useState("build");
-  const [modeSwitchBusy, setModeSwitchBusy] = useState(false);
-  const [approvalItems, setApprovalItems] = useState([]);
-  const [approvalBusyId, setApprovalBusyId] = useState(null);
-  const [agentConfigs, setAgentConfigs] = useState({});
-  const [agentConfigRawEditors, setAgentConfigRawEditors] = useState({});
-  const [activeAgentSettings, setActiveAgentSettings] = useState("");
-  const [floatingAgentSettings, setFloatingAgentSettings] = useState("");
-  const [agentConfigLoading, setAgentConfigLoading] = useState("");
-  const [agentConfigSaving, setAgentConfigSaving] = useState("");
-  const [agentConfigError, setAgentConfigError] = useState("");
+  const {
+    projectTabs,
+    activeProjectTabId,
+    threadTabsByProjectTabId,
+    activeThreadTabIdByProjectTabId,
+    threadProjectTabIdByThreadId,
+    activeThread,
+    threadItems,
+    projectItems,
+    projectSuggestions,
+    skillSuggestions,
+    setProjectTabs,
+    setActiveProjectTabId,
+    setThreadTabsByProjectTabId,
+    setActiveThreadTabIdByProjectTabId,
+    setThreadProjectTabIdByThreadId,
+    setActiveThread,
+    setThreadItems,
+    setProjectItems,
+    setProjectSuggestions,
+    setSkillSuggestions,
+  } = useThreadsDomain();
+  const {
+    sessionSummary,
+    collaborationMode,
+    modeSwitchBusy,
+    approvalItems,
+    approvalBusyId,
+    agentConfigs,
+    agentConfigRawEditors,
+    activeAgentSettings,
+    floatingAgentSettings,
+    agentConfigLoading,
+    agentConfigSaving,
+    agentConfigError,
+    setSessionSummary,
+    setCollaborationMode,
+    setModeSwitchBusy,
+    setApprovalItems,
+    setApprovalBusyId,
+    setAgentConfigs,
+    setAgentConfigRawEditors,
+    setActiveAgentSettings,
+    setFloatingAgentSettings,
+    setAgentConfigLoading,
+    setAgentConfigSaving,
+    setAgentConfigError,
+  } = useSessionDomain();
   const chatRef = useRef(null);
   const inputRef = useRef(null);
   const reasoningStateRef = useRef({});
@@ -168,43 +197,44 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
   const focusComposerRef = useRef(null);
   const setInputForActiveThreadRef = useRef(null);
   const inputHistoryIndexRef = useRef(-1);
-  const [paletteSelectedIndex, setPaletteSelectedIndex] = useState(0);
-  const [sidebarWidth, setSidebarWidth] = useState(340);
-  const [isResizingSidebar, setIsResizingSidebar] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [workspacePanelWidth, setWorkspacePanelWidth] = useState(320);
-  const [isResizingWorkspacePanel, setIsResizingWorkspacePanel] = useState(false);
-  const [workspacePreviewWidth, setWorkspacePreviewWidth] = useState(() =>
-    readWorkspacePreviewWidth(
-      WORKSPACE_PREVIEW_DEFAULT_WIDTH,
-      WORKSPACE_PREVIEW_MIN_WIDTH,
-      WORKSPACE_PREVIEW_MAX_WIDTH
-    )
-  );
-  const [workspacePreviewHeight, setWorkspacePreviewHeight] = useState(() =>
-    readWorkspacePreviewHeight(
-      WORKSPACE_PREVIEW_DEFAULT_HEIGHT,
-      WORKSPACE_PREVIEW_MIN_HEIGHT,
-      WORKSPACE_PREVIEW_MAX_HEIGHT
-    )
-  );
-  const [isResizingWorkspacePreview, setIsResizingWorkspacePreview] = useState(false);
-  const [isMobileLayout, setIsMobileLayout] = useState(() =>
-    typeof window !== "undefined" ? window.innerWidth <= MOBILE_BREAKPOINT : false
-  );
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isCompactWorkspaceLayout, setIsCompactWorkspaceLayout] = useState(() =>
-    typeof window !== "undefined" ? window.innerWidth <= WORKSPACE_PANEL_BREAKPOINT : false
-  );
-  const [isWorkspacePanelOpen, setIsWorkspacePanelOpen] = useState(false);
-  const [isProjectModeModalOpen, setIsProjectModeModalOpen] = useState(false);
-  const [isShortcutModalOpen, setIsShortcutModalOpen] = useState(false);
-  const [shortcutModalPage, setShortcutModalPage] = useState("main");
-  const [selectedProjectIndex, setSelectedProjectIndex] = useState(0);
-  const [projectSearchQuery, setProjectSearchQuery] = useState("");
-  const [pendingProjectTarget, setPendingProjectTarget] = useState("");
-  const [turnNotificationEnabled, setTurnNotificationEnabled] = useState(() => readTurnNotificationEnabled());
-  const [toastNotification, setToastNotification] = useState(null);
+  const {
+    paletteSelectedIndex,
+    sidebarWidth,
+    isResizingSidebar,
+    isSidebarCollapsed,
+    isMobileLayout,
+    isSidebarOpen,
+    isCompactWorkspaceLayout,
+    isWorkspacePanelOpen,
+    isProjectModeModalOpen,
+    isShortcutModalOpen,
+    shortcutModalPage,
+    selectedProjectIndex,
+    projectSearchQuery,
+    pendingProjectTarget,
+    turnNotificationEnabled,
+    toastNotification,
+    setPaletteSelectedIndex,
+    setSidebarWidth,
+    setIsResizingSidebar,
+    setIsSidebarCollapsed,
+    setIsMobileLayout,
+    setIsSidebarOpen,
+    setIsCompactWorkspaceLayout,
+    setIsWorkspacePanelOpen,
+    setIsProjectModeModalOpen,
+    setIsShortcutModalOpen,
+    setShortcutModalPage,
+    setSelectedProjectIndex,
+    setProjectSearchQuery,
+    setPendingProjectTarget,
+    setTurnNotificationEnabled,
+    setToastNotification,
+  } = useUiDomain({
+    mobileBreakpoint: MOBILE_BREAKPOINT,
+    workspacePanelBreakpoint: WORKSPACE_PANEL_BREAKPOINT,
+    readTurnNotificationEnabled,
+  });
 
   const showToast = useCallback((message, type = "info") => {
     setToastNotification({ message, type });
@@ -254,6 +284,16 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     ? sessionSummary.active_subagents.filter((item) => item && typeof item === "object")
     : [];
   const {
+    workspacePanelWidth,
+    isResizingWorkspacePanel,
+    workspacePreviewWidth,
+    workspacePreviewHeight,
+    isResizingWorkspacePreview,
+    setWorkspacePanelWidth,
+    setIsResizingWorkspacePanel,
+    setWorkspacePreviewWidth,
+    setWorkspacePreviewHeight,
+    setIsResizingWorkspacePreview,
     ensureWorkspaceBucket,
     removeWorkspaceBucket,
     restoreWorkspaceForThread,
@@ -269,13 +309,23 @@ function AuthenticatedApp({ me, theme, onToggleTheme }) {
     refreshWorkspaceBrowser,
     openWorkspaceFile,
     toggleWorkspaceDirectory,
-  } = useWorkspaceBrowser({
+  } = useWorkspaceDomain({
     activeThread,
     activeProjectTabId,
     activeProjectKey: activeProjectTabSnapshot?.key || "",
     threadProjectTabIdByThreadId,
     activeProjectTabPath: activeProjectTabSnapshot?.path || "",
     sessionWorkspace: sessionSummary?.workspace || "",
+    readWorkspacePreviewWidth,
+    readWorkspacePreviewHeight,
+    workspacePreviewDefaults: {
+      minWidth: WORKSPACE_PREVIEW_MIN_WIDTH,
+      maxWidth: WORKSPACE_PREVIEW_MAX_WIDTH,
+      defaultWidth: WORKSPACE_PREVIEW_DEFAULT_WIDTH,
+      minHeight: WORKSPACE_PREVIEW_MIN_HEIGHT,
+      maxHeight: WORKSPACE_PREVIEW_MAX_HEIGHT,
+      defaultHeight: WORKSPACE_PREVIEW_DEFAULT_HEIGHT,
+    },
   });
   const slashCommands = useMemo(
     () => [
