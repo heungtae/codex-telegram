@@ -476,7 +476,10 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
     return next;
   }, [projectTabs, threadTabsByProjectTabId]);
 
-  const upsertProjectTab = (project, options = {}) => {
+  const upsertProjectTab = (
+    project,
+    options: { forceNew?: boolean } = {}
+  ) => {
     const forceNew = !!options.forceNew;
     const key = typeof project?.key === "string" ? project.key : "";
     if (!key) {
@@ -676,7 +679,14 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
     showToast("Turn completed!", "success");
   };
 
-  const loadThreads = async (options = {}) => {
+  const loadThreads = async (
+    options: {
+      projectKey?: string;
+      projectTabId?: string;
+      ensureDefaultTab?: boolean;
+      resetThreadTabs?: boolean;
+    } = {}
+  ) => {
     const projectKey = typeof options.projectKey === "string" ? options.projectKey : (activeProjectKey || "");
     const projectTabId = typeof options.projectTabId === "string" ? options.projectTabId : (activeProjectTabId || "");
     const ensureDefaultTab = !!options.ensureDefaultTab;
@@ -838,7 +848,10 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
     return list;
   };
 
-  const syncThreadMessagesFromServer = async (threadId, options = {}) => {
+  const syncThreadMessagesFromServer = async (
+    threadId,
+    options: { applyToVisible?: boolean } = {}
+  ) => {
     const { applyToVisible = true } = options;
     const normalizedThreadId = normalizeThreadId(threadId);
     if (!normalizedThreadId) {
@@ -852,7 +865,7 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
     }
   };
 
-  const startThread = async (options = {}) => {
+  const startThread = async (options: { replaceCurrentTab?: boolean } = {}) => {
     const replaceCurrentTab = !!options.replaceCurrentTab;
     let nextThreadId = "";
     if (activeProjectKey) {
@@ -1041,7 +1054,10 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
     }
   };
 
-  const loadAgentConfig = async (agentName, options = {}) => {
+  const loadAgentConfig = async (
+    agentName,
+    options: { syncRulesEditor?: boolean } = {}
+  ) => {
     const { syncRulesEditor = true } = options;
     const def = AGENT_CONFIG_DEFS[agentName];
     if (!def) {
@@ -1058,7 +1074,11 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
     }
   };
 
-  const buildAgentPayload = (agentName, draft, options = {}) => {
+  const buildAgentPayload = (
+    agentName,
+    draft,
+    options: { includeRules?: boolean } = {}
+  ) => {
     const { includeRules = false } = options;
     if (agentName !== "guardian") {
       return draft;
@@ -1151,7 +1171,10 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
     }));
   };
 
-  const saveAgentSettings = async (agentName = activeAgentSettings, options = {}) => {
+  const saveAgentSettings = async (
+    agentName = activeAgentSettings,
+    options: { includeRules?: boolean } = {}
+  ) => {
     const { includeRules = agentName === activeAgentSettings && agentName === "guardian" } = options;
     const def = AGENT_CONFIG_DEFS[agentName];
     const draft = agentConfigs[agentName];
@@ -3538,6 +3561,7 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
                 approvalItems={approvalItems}
                 approvalBusyId={approvalBusyId}
                 onSubmitApproval={submitApproval}
+                onClose={() => setApprovalItems([])}
               />
               <ChatMessageFeed renderItems={renderItems} />
             </div>
@@ -3619,7 +3643,7 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
                     if (composerLocked) {
                       return;
                     }
-                    if (e.isComposing) {
+                    if (e.nativeEvent.isComposing) {
                       return;
                     }
                     composerFocusWantedRef.current = true;

@@ -6,15 +6,27 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "test": "node --test",
-    "preview": "vite preview"
+    "test": "node scripts/run-tests.mjs",
+    "preview": "vite preview",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
   },
   "dependencies": {
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@eslint/js": "^9.26.0",
+    "@types/node": "^25.6.2",
+    "@types/react": "^18.3.23",
+    "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "^4.3.4",
+    "eslint": "^9.26.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.20",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.31.1",
     "vite": "^5.4.11"
   }
 }

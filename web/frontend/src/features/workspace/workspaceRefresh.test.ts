@@ -15,5 +15,5 @@ test("collectWorkspaceRefreshPaths keeps root and cached subtree paths", () => {
 
 test("collectWorkspaceRefreshPaths removes duplicate paths and tolerates empty input", () => {
   assert.deepEqual(collectWorkspaceRefreshPaths(null), [""]);
-  assert.deepEqual(collectWorkspaceRefreshPaths({ "": [], src: [], src: [] }), ["", "src"]);
+  assert.deepEqual(collectWorkspaceRefreshPaths({ "": [], src: [] }), ["", "src"]);
 });
