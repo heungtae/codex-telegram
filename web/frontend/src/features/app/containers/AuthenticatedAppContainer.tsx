@@ -27,10 +27,8 @@ import {
 import { persistTurnNotificationEnabled, readTurnNotificationEnabled } from "../../common/theme";
 import {
   basename,
-  buildProjectTabId,
   formatGuardianRulesEditor,
   formatPlanChecklistText,
-  formatWebSearchAction,
   groupMessagesForRender,
   normalizeThreadId,
   normalizeWorkspacePath,
@@ -38,16 +36,19 @@ import {
   statusPriority,
   summarizeReasoningStatus,
 } from "../../common/utils";
-import { closeSseStream, createSseStream } from "../../../shared/events/sseStream";
 import TopTabs from "../../tabs/components/TopTabs";
 import useSessionDomain from "../hooks/useSessionDomain";
 import useThreadsDomain from "../hooks/useThreadsDomain";
 import useUiDomain from "../hooks/useUiDomain";
 import useWorkspaceDomain from "../hooks/useWorkspaceDomain";
+import useProjectThreadTabs from "../hooks/useProjectThreadTabs";
+import useThreadSession from "../hooks/useThreadSession";
+import useTurnSession from "../hooks/useTurnSession";
+import useViewportLayout from "../hooks/useViewportLayout";
+import useResizeInteractions from "../hooks/useResizeInteractions";
+import useGlobalKeyboardShortcuts from "../hooks/useGlobalKeyboardShortcuts";
 import useThreadScopedState from "../../thread/hooks/useThreadScopedState";
 import WorkspacePreviewPanel from "../../workspace/components/WorkspacePreviewPanel";
-import { handleTurnCompletedWorkspaceRefresh } from "../events/turnCompletion";
-import { resolveProjectTabThreadId } from "../state/projectTabThreads";
 import { getSidebarStyle, getWorkspacePanelStyle, shouldShowWorkspacePanelDesktop } from "../state/layoutSelectors";
 
 const WORKSPACE_PREVIEW_HEIGHT_STORAGE_KEY = "codex-web-workspace-preview-height";
@@ -476,83 +477,36 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
     return next;
   }, [projectTabs, threadTabsByProjectTabId]);
 
-  const upsertProjectTab = (
-    project,
-    options: { forceNew?: boolean } = {}
-  ) => {
-    const forceNew = !!options.forceNew;
-    const key = typeof project?.key === "string" ? project.key : "";
-    if (!key) {
-      return "";
+  function normalizeCollaborationMode(raw) {
+    if (typeof raw !== "string") {
+      return "build";
     }
-    const baseTabId = buildProjectTabId(key);
-    const tabId = forceNew ? `${baseTabId}:${++projectTabSequenceRef.current}` : baseTabId;
-    const tab = {
-      id: tabId,
-      key,
-      name: typeof project?.name === "string" && project.name ? project.name : key,
-      path: typeof project?.path === "string" ? project.path : "",
-    };
-    setProjectTabs((prev) => {
-      const index = prev.findIndex((item) => item.id === tabId);
-      if (index >= 0) {
-        const next = [...prev];
-        next[index] = { ...next[index], ...tab };
-        return next;
-      }
-      return [...prev, tab];
-    });
-    return tabId;
-  };
+    return raw.trim().toLowerCase() === "plan" ? "plan" : "build";
+  }
 
-  const openThreadInProjectTab = (projectTabId, thread) => {
-    const threadId = normalizeThreadId(thread?.id);
-    if (!projectTabId || !threadId) {
-      return "";
-    }
-    const title = typeof thread?.title === "string" && thread.title ? thread.title : threadId;
-    setThreadTabsByProjectTabId((prev) => {
-      const rows = Array.isArray(prev[projectTabId]) ? prev[projectTabId] : [];
-      const existing = rows.find((row) => row.id === threadId);
-      if (existing) {
-        return prev;
-      }
-      return {
-        ...prev,
-        [projectTabId]: [...rows, { id: threadId, title, status: "idle", hasUnreadCompletion: false }],
-      };
-    });
-    setThreadProjectTabIdByThreadId((prev) => ({ ...prev, [threadId]: projectTabId }));
-    ensureWorkspaceBucket(threadId);
-    setActiveThreadForProjectTab(projectTabId, threadId);
-    return threadId;
-  };
-
-  const setActiveThreadForProjectTab = (projectTabId, threadId) => {
-    const normalizedThreadId = normalizeThreadId(threadId);
-    setActiveThreadTabIdByProjectTabId((prev) => ({ ...prev, [projectTabId]: normalizedThreadId }));
-    if (projectTabId === activeProjectTabId) {
-      setActiveThread(normalizedThreadId);
-    }
-  };
-
-  const updateThreadTabState = (threadId, patch) => {
-    const normalizedThreadId = normalizeThreadId(threadId);
-    if (!normalizedThreadId) {
-      return;
-    }
-    const projectTabId = threadProjectTabIdByThreadIdRef.current[normalizedThreadId];
-    if (!projectTabId) {
-      return;
-    }
-    setThreadTabsByProjectTabId((prev) => {
-      const rows = Array.isArray(prev[projectTabId]) ? prev[projectTabId] : [];
-      const nextRows = rows.map((row) => (
-        row.id === normalizedThreadId ? { ...row, ...patch } : row
-      ));
-      return { ...prev, [projectTabId]: nextRows };
-    });
-  };
+  const {
+    upsertProjectTab,
+    setActiveThreadForProjectTab,
+    openThreadInProjectTab,
+    updateThreadTabState,
+    closeProjectTab,
+  } = useProjectThreadTabs({
+    projectTabs,
+    setProjectTabs,
+    projectTabSequenceRef,
+    setThreadTabsByProjectTabId,
+    setThreadProjectTabIdByThreadId,
+    ensureWorkspaceBucket,
+    setActiveThreadTabIdByProjectTabId,
+    activeProjectTabId,
+    setActiveThread,
+    threadProjectTabIdByThreadIdRef,
+    threadTabsByProjectTabId,
+    removeWorkspaceBucket,
+    activeThreadTabIdByProjectTabId,
+    setActiveProjectTabId,
+    setMessages,
+  });
 
   const closeThreadTab = (projectTabId, threadId) => {
     const normalizedThreadId = normalizeThreadId(threadId);
@@ -608,44 +562,6 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
     removeWorkspaceBucket(normalizedThreadId);
   };
 
-  const closeProjectTab = (projectTabId) => {
-    if (!projectTabId) {
-      return;
-    }
-    const existingTabs = projectTabs;
-    const index = existingTabs.findIndex((tab) => tab.id === projectTabId);
-    const fallback = index > 0 ? existingTabs[index - 1] : existingTabs[index + 1];
-    setProjectTabs((prev) => prev.filter((tab) => tab.id !== projectTabId));
-    setThreadTabsByProjectTabId((prev) => {
-      const next = { ...prev };
-      delete next[projectTabId];
-      return next;
-    });
-    setActiveThreadTabIdByProjectTabId((prev) => {
-      const next = { ...prev };
-      delete next[projectTabId];
-      return next;
-    });
-    const ownedThreads = Array.isArray(threadTabsByProjectTabId[projectTabId])
-      ? threadTabsByProjectTabId[projectTabId].map((row) => normalizeThreadId(row.id)).filter(Boolean)
-      : [];
-    ownedThreads.forEach((threadId) => removeWorkspaceBucket(threadId));
-    setThreadProjectTabIdByThreadId((prev) => {
-      const next = { ...prev };
-      Object.entries(next).forEach(([threadId, tabId]) => {
-        if (tabId === projectTabId) {
-          delete next[threadId];
-        }
-      });
-      return next;
-    });
-    if (activeProjectTabId === projectTabId) {
-      setActiveProjectTabId(fallback?.id || "");
-      setActiveThread(fallback ? normalizeThreadId(activeThreadTabIdByProjectTabId[fallback.id]) : "");
-      setMessages([]);
-    }
-  };
-
   const playTurnNotification = () => {
     if (!turnNotificationEnabled || typeof window === "undefined") {
       return;
@@ -679,346 +595,63 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
     showToast("Turn completed!", "success");
   };
 
-  const loadThreads = async (
-    options: {
-      projectKey?: string;
-      projectTabId?: string;
-      ensureDefaultTab?: boolean;
-      resetThreadTabs?: boolean;
-    } = {}
-  ) => {
-    const projectKey = typeof options.projectKey === "string" ? options.projectKey : (activeProjectKey || "");
-    const projectTabId = typeof options.projectTabId === "string" ? options.projectTabId : (activeProjectTabId || "");
-    const ensureDefaultTab = !!options.ensureDefaultTab;
-    const resetThreadTabs = !!options.resetThreadTabs;
-    const configuredThreadsLimit = Number.parseInt(String(me?.threads_list_limit ?? "20"), 10);
-    const threadsLimit = Number.isFinite(configuredThreadsLimit)
-      ? Math.max(1, Math.min(100, configuredThreadsLimit))
-      : 20;
-    const query = new URLSearchParams({ limit: String(threadsLimit), offset: "0", archived: "false" });
-    if (projectKey) {
-      query.set("project_key", projectKey);
-    }
-    const summaries = await api(`/api/threads/summaries?${query.toString()}`);
-    const items = Array.isArray(summaries.items) ? summaries.items : [];
-    if (!projectTabId || projectTabId === activeProjectTabId) {
-      setThreadItems(items);
-    }
-    if (ensureDefaultTab && projectTabId) {
-      const opened = resetThreadTabs
-        ? []
-        : (Array.isArray(threadTabsByProjectTabId[projectTabId]) ? threadTabsByProjectTabId[projectTabId] : []);
-      if (opened.length === 0) {
-        if (items.length > 0) {
-          const openedThreadId = openThreadInProjectTab(projectTabId, items[0]);
-          if (projectTabId === activeProjectTabId && openedThreadId) {
-            viewThread(openedThreadId).catch(() => {});
-          }
-        } else if (projectKey) {
-          const created = await api("/api/projects/open-thread", {
-            method: "POST",
-            body: JSON.stringify({ project_key: projectKey }),
-          });
-          const createdThreadId = normalizeThreadId(created?.thread_id);
-          if (createdThreadId) {
-            openThreadInProjectTab(projectTabId, { id: createdThreadId, title: createdThreadId });
-            if (projectTabId === activeProjectTabId) {
-              viewThread(createdThreadId).catch(() => {});
-            }
-          }
-        }
-      } else if (!normalizeThreadId(activeThreadTabIdByProjectTabId[projectTabId])) {
-        const defaultThreadId = normalizeThreadId(opened[0]?.id || "");
-        setActiveThreadForProjectTab(projectTabId, defaultThreadId);
-        if (projectTabId === activeProjectTabId && defaultThreadId) {
-          viewThread(defaultThreadId).catch(() => {});
-        }
-      }
-    }
-  };
-
-  const loadProjects = async () => {
-    const result = await api("/api/projects");
-    const items = Array.isArray(result.items) ? result.items : [];
-    setProjectItems(items);
-    if (!projectTabs.length && initialLoadRef.current) {
-      initialLoadRef.current = false;
-      const defaultItem = items.find((item) => item?.default) || items[0];
-      if (defaultItem) {
-        const tabId = upsertProjectTab(defaultItem);
-        if (tabId) {
-          setActiveProjectTabId(tabId);
-        }
-      }
-      return;
-    }
-    if (projectTabs.length) {
-      setProjectTabs((prev) =>
-        prev.map((tab) => {
-          const matched = items.find((item) => item?.key === tab.key);
-          if (!matched) {
-            return tab;
-          }
-          return {
-            ...tab,
-            name: matched.name || tab.name,
-            path: matched.path || tab.path,
-          };
-        })
-      );
-    }
-  };
-
-  const loadSkillSuggestions = async () => {
-    const skillsResult = await api("/api/skills");
-    const skills = Array.isArray(skillsResult.meta?.skill_names) ? skillsResult.meta.skill_names : [];
-    setSkillSuggestions([...new Set(skills.filter((v) => typeof v === "string" && v))]);
-  };
-  const loadSessionSummary = async () => {
-    const summary = await api("/api/session/summary");
-    setSessionSummary(summary);
-    const summaryThreadId = normalizeThreadId(summary?.active_thread_id);
-    const hasActiveTurn = !!summary?.active_turn_id;
-    setThreadTabsByProjectTabId((prev) => {
-      const next = {};
-      for (const [projectTabId, rows] of Object.entries(prev)) {
-        next[projectTabId] = (Array.isArray(rows) ? rows : []).map((row) => {
-          const rowThreadId = normalizeThreadId(row?.id);
-          if (!rowThreadId) {
-            return row;
-          }
-          if (hasActiveTurn && rowThreadId === summaryThreadId) {
-            if (row.status === "running") {
-              return row;
-            }
-            return { ...row, status: "running" };
-          }
-          if (!hasActiveTurn && row.status === "running") {
-            return { ...row, status: "idle" };
-          }
-          return row;
-        });
-      }
-      return next;
-    });
-    if (summaryThreadId) {
-      updateThreadUi(summaryThreadId, { status: hasActiveTurn ? "running" : "idle" });
-    }
-    if (summaryThreadId && summaryThreadId === activeThreadRef.current) {
-      setStatusForActiveThread(hasActiveTurn ? "running" : "idle");
-    } else if (!hasActiveTurn) {
-      setStatus((current) => (current === "running" ? "idle" : current));
-    }
-    if (typeof summary?.collaboration_mode === "string") {
-      setCollaborationMode(normalizeCollaborationMode(summary.collaboration_mode));
-    }
-  };
-  const resolveCurrentThreadId = (projectTabId = activeProjectTabId) => {
-    return resolveProjectTabThreadId({
-      projectTabId,
-      activeThreadId: activeThread,
-      threadProjectTabIdByThreadId,
-      activeThreadTabIdByProjectTabId,
-      threadTabsByProjectTabId,
-    });
-  };
-
-  const normalizeThreadMessages = (result, normalizedThreadId) => {
-    const list = Array.isArray(result?.messages) && result.messages.length > 0
-      ? result.messages
-        .filter((item) => item && typeof item.text === "string" && item.text.trim())
-        .map((item) => ({
-          role: item.role === "user" ? "user" : item.role === "assistant" ? "assistant" : "system",
-          text: item.text,
-          variant: item.variant === "subagent" ? "subagent" : "",
-          kind: item.kind === "plan" ? "plan" : "",
-          threadId: normalizeThreadId(item.thread_id) || normalizedThreadId,
-          turnId: typeof item.turn_id === "string" ? item.turn_id : "",
-          streaming: false,
-        }))
-      : [
-        {
-          role: "assistant",
-          text: result?.text || "",
-          threadId: normalizeThreadId(result?.thread_id) || normalizedThreadId,
-          turnId: typeof result?.turn_id === "string" ? result.turn_id : "",
-          streaming: false,
-        },
-      ];
-    return list;
-  };
-
-  const syncThreadMessagesFromServer = async (
-    threadId,
-    options: { applyToVisible?: boolean } = {}
-  ) => {
-    const { applyToVisible = true } = options;
-    const normalizedThreadId = normalizeThreadId(threadId);
-    if (!normalizedThreadId) {
-      return;
-    }
-    const result = await api(`/api/threads/read?thread_id=${encodeURIComponent(normalizedThreadId)}`);
-    const nextMessages = normalizeThreadMessages(result, normalizedThreadId);
-    setMessagesByThreadId((prev) => ({ ...prev, [normalizedThreadId]: nextMessages }));
-    if (applyToVisible && activeThreadRef.current === normalizedThreadId) {
-      setMessages(nextMessages);
-    }
-  };
-
-  const startThread = async (options: { replaceCurrentTab?: boolean } = {}) => {
-    const replaceCurrentTab = !!options.replaceCurrentTab;
-    let nextThreadId = "";
-    if (activeProjectKey) {
-      const result = await api("/api/projects/open-thread", {
-        method: "POST",
-        body: JSON.stringify({ project_key: activeProjectKey }),
-      });
-      nextThreadId = normalizeThreadId(result?.thread_id);
-      if (activeProjectTabId && nextThreadId) {
-        const currentThreadTabId = normalizeThreadId(
-          activeThreadTabIdByProjectTabId[activeProjectTabId] || activeThread
-        );
-        if (replaceCurrentTab && currentThreadTabId) {
-          setThreadTabsByProjectTabId((prev) => {
-            const rows = Array.isArray(prev[activeProjectTabId]) ? prev[activeProjectTabId] : [];
-            const index = rows.findIndex((row) => normalizeThreadId(row.id) === currentThreadTabId);
-            if (index < 0) {
-              return {
-                ...prev,
-                [activeProjectTabId]: [...rows, { id: nextThreadId, title: nextThreadId, status: "idle", hasUnreadCompletion: false }],
-              };
-            }
-            const nextRows = [...rows];
-            nextRows[index] = {
-              ...nextRows[index],
-              id: nextThreadId,
-              title: nextThreadId,
-              status: "idle",
-              hasUnreadCompletion: false,
-            };
-            return { ...prev, [activeProjectTabId]: nextRows };
-          });
-          setThreadProjectTabIdByThreadId((prev) => {
-            const next = { ...prev };
-            delete next[currentThreadTabId];
-            next[nextThreadId] = activeProjectTabId;
-            return next;
-          });
-          removeWorkspaceBucket(currentThreadTabId);
-          ensureWorkspaceBucket(nextThreadId);
-          setActiveThreadForProjectTab(activeProjectTabId, nextThreadId);
-        } else {
-          openThreadInProjectTab(activeProjectTabId, { id: nextThreadId, title: nextThreadId });
-        }
-      }
-    } else {
-      const result = await api("/api/threads/start", { method: "POST", body: "{}" });
-      nextThreadId = normalizeThreadId(result?.meta?.thread_id);
-    }
-    setMessages([]);
-    setStatus("idle");
-    pendingComposerFocusRef.current = true;
-    if (nextThreadId) {
-      setActiveThread(nextThreadId);
-      if (activeProjectTabId) {
-        setActiveThreadForProjectTab(activeProjectTabId, nextThreadId);
-      }
-    } else {
-      await loadSessionSummary();
-    }
-    await loadThreads({ projectKey: activeProjectKey, projectTabId: activeProjectTabId });
-  };
-
-  const selectProject = async (target, forcedMode = "") => {
-    const normalizedTarget = typeof target === "string" ? target.trim() : "";
-    if (!normalizedTarget || interactionBusy) {
-      return;
-    }
-    const existingTabForTarget = projectTabs.find((tab) => tab.key === normalizedTarget);
-    if (!forcedMode && existingTabForTarget) {
-      setActiveProjectTabId(existingTabForTarget.id);
-      if (isMobileLayout) {
-        setIsSidebarOpen(false);
-      }
-      return;
-    }
-    let resolvedMode = forcedMode;
-    if (!resolvedMode) {
-      if (!projectTabs.length) {
-        resolvedMode = "open_new_tab";
-      } else {
-        setPendingProjectTarget(normalizedTarget);
-        setIsProjectModeModalOpen(true);
-        return;
-      }
-    }
-    try {
-      const selectedProject = projectItems.find((item) => item?.key === normalizedTarget);
-      let projectTabId = "";
-      if (resolvedMode === "replace_current" && activeProjectTabId) {
-        const nextProject = selectedProject || { key: normalizedTarget, name: normalizedTarget, path: "" };
-        projectTabId = activeProjectTabId;
-        setProjectTabs((prev) =>
-          prev.map((tab) =>
-            tab.id === activeProjectTabId
-              ? {
-                  ...tab,
-                  key: nextProject.key,
-                  name: nextProject.name || nextProject.key,
-                  path: nextProject.path || "",
-                }
-              : tab
-          )
-        );
-        setThreadTabsByProjectTabId((prev) => ({ ...prev, [activeProjectTabId]: [] }));
-        setActiveThreadTabIdByProjectTabId((prev) => ({ ...prev, [activeProjectTabId]: "" }));
-        const ownedThreads = Array.isArray(threadTabsByProjectTabId[activeProjectTabId])
-          ? threadTabsByProjectTabId[activeProjectTabId].map((row) => normalizeThreadId(row.id)).filter(Boolean)
-          : [];
-        ownedThreads.forEach((threadId) => removeWorkspaceBucket(threadId));
-        setThreadProjectTabIdByThreadId((prev) => {
-          const next = { ...prev };
-          Object.entries(next).forEach(([threadId, tabId]) => {
-            if (tabId === activeProjectTabId) {
-              delete next[threadId];
-            }
-          });
-          return next;
-        });
-      } else {
-        projectTabId = upsertProjectTab(
-          selectedProject || { key: normalizedTarget, name: normalizedTarget, path: "" },
-          { forceNew: resolvedMode === "open_new_tab" }
-        );
-      }
-      if (projectTabId) {
-        setActiveProjectTabId(projectTabId);
-      }
-      setMessages([]);
-      setStatus("idle");
-      setActiveThread("");
-      pendingComposerFocusRef.current = true;
-      await loadSessionSummary();
-      await loadProjects();
-      await loadThreads({
-        projectKey: normalizedTarget,
-        projectTabId,
-        ensureDefaultTab: false,
-        resetThreadTabs: resolvedMode === "replace_current",
-      });
-    } catch (err) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "system",
-          text: err.message || "Failed to switch project.",
-          threadId: normalizeThreadId(activeThread),
-          turnId: "",
-          streaming: false,
-        },
-      ]);
-    }
-  };
+  const {
+    loadThreads,
+    loadProjects,
+    loadSessionSummary,
+    resolveCurrentThreadId,
+    syncThreadMessagesFromServer,
+    startThread,
+    selectProject,
+    viewThread,
+    runCommand,
+  } = useThreadSession({
+    api,
+    me,
+    activeProjectKey,
+    activeProjectTabId,
+    activeThread,
+    isMobileLayout,
+    interactionBusy,
+    projectTabs,
+    projectItems,
+    threadItems,
+    threadTabsByProjectTabId,
+    activeThreadTabIdByProjectTabId,
+    threadProjectTabIdByThreadId,
+    initialLoadRef,
+    activeThreadRef,
+    pendingComposerFocusRef,
+    turnThreadIdRef,
+    setThreadItems,
+    setProjectItems,
+    setSessionSummary,
+    setProjectTabs,
+    setThreadTabsByProjectTabId,
+    setThreadProjectTabIdByThreadId,
+    setActiveThreadTabIdByProjectTabId,
+    setActiveProjectTabId,
+    setActiveThread,
+    setMessagesByThreadId,
+    setMessages,
+    setStatus,
+    setStatusForThread,
+    setStatusForActiveThread,
+    setCollaborationMode,
+    setIsSidebarOpen,
+    setPendingProjectTarget,
+    setIsProjectModeModalOpen,
+    appendMessageToThread,
+    restoreThreadMessages,
+    updateThreadUi,
+    upsertProjectTab,
+    openThreadInProjectTab,
+    setActiveThreadForProjectTab,
+    updateThreadTabState,
+    ensureWorkspaceBucket,
+    removeWorkspaceBucket,
+    normalizeCollaborationMode,
+  });
 
   const chooseProjectClickMode = (mode) => {
     const normalizedMode = mode === "replace_current" ? "replace_current" : "open_new_tab";
@@ -1029,6 +662,12 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
       selectProject(target, normalizedMode).catch(() => {});
     }
   };
+
+  async function loadSkillSuggestions() {
+    const skillsResult = await api("/api/skills");
+    const skills = Array.isArray(skillsResult.meta?.skill_names) ? skillsResult.meta.skill_names : [];
+    setSkillSuggestions([...new Set(skills.filter((v) => typeof v === "string" && v))]);
+  }
 
   const patchSessionAgent = (agentName, enabled) => {
     setSessionSummary((prev) => {
@@ -1264,13 +903,6 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
     }
   };
 
-  const normalizeCollaborationMode = (raw) => {
-    if (typeof raw !== "string") {
-      return "build";
-    }
-    return raw.trim().toLowerCase() === "plan" ? "plan" : "build";
-  };
-
   const toggleComposerMode = async () => {
     if (status === "running" || modeSwitchBusy) {
       return;
@@ -1343,670 +975,45 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
     setStatusForThread(activeThreadId, "idle");
   };
 
-  const viewThread = async (threadId) => {
-    if (isMobileLayout) {
-      setIsSidebarOpen(false);
-    }
-    const normalizedThreadId = normalizeThreadId(threadId);
-    setActiveThread(normalizedThreadId);
-    if (activeProjectTabId) {
-      const threadInfo = threadItems.find((item) => normalizeThreadId(item?.id) === normalizedThreadId);
-      openThreadInProjectTab(activeProjectTabId, {
-        id: normalizedThreadId,
-        title: threadInfo?.title || normalizedThreadId,
-      });
-      updateThreadTabState(normalizedThreadId, { hasUnreadCompletion: false });
-    }
-    const restored = restoreThreadMessages(normalizedThreadId);
-    if (!restored) {
-      const rows = Array.isArray(threadTabsByProjectTabId[activeProjectTabId])
-        ? threadTabsByProjectTabId[activeProjectTabId]
-        : [];
-      const threadTab = rows.find((tab) => normalizeThreadId(tab.id) === normalizedThreadId);
-      const isRunning = threadTab?.status === "running";
-      if (!isRunning) {
-        setMessages([]);
-        await syncThreadMessagesFromServer(normalizedThreadId, { applyToVisible: true });
-      }
-    }
-  };
-
-  const runCommand = async (line) => {
-    const cmd = (line || "").trim();
-    if (!cmd) {
-      return;
-    }
-    const commandThreadId = resolveCurrentThreadId();
-    appendMessageToThread(commandThreadId, { role: "user", text: cmd, turnId: "" });
-    setStatusForThread(commandThreadId, "running");
-    const result = await api("/api/command", {
-      method: "POST",
-      body: JSON.stringify({ command_line: cmd }),
-    });
-    if (result?.meta?.collaboration_mode) {
-      setCollaborationMode(normalizeCollaborationMode(result.meta.collaboration_mode));
-    }
-    const responseThreadId = normalizeThreadId(result?.meta?.thread_id) || commandThreadId;
-    if (responseThreadId && activeProjectTabId) {
-      const threadInfo = threadItems.find((item) => normalizeThreadId(item?.id) === responseThreadId);
-      openThreadInProjectTab(activeProjectTabId, {
-        id: responseThreadId,
-        title: threadInfo?.title || responseThreadId,
-      });
-    }
-    appendMessageToThread(responseThreadId, {
-      role: "assistant",
-      text: result.text,
-      threadId: responseThreadId,
-      turnId: typeof result?.meta?.turn_id === "string" ? result.meta.turn_id : "",
-    });
-    setStatusForThread(responseThreadId, "idle");
-    if (
-      cmd.startsWith("/threads") ||
-      cmd.startsWith("/start") ||
-      cmd.startsWith("/resume") ||
-      cmd.startsWith("/project")
-    ) {
-      loadThreads({ projectKey: activeProjectKey, projectTabId: activeProjectTabId }).catch(() => {});
-    }
-    if (cmd.startsWith("/projects") || cmd.startsWith("/project")) {
-      loadProjects().catch(() => {});
-    }
-    loadSessionSummary().catch(() => {});
-  };
-
-  useEffect(() => {
-    if (!me) {
-      return;
-    }
-    loadProjects().catch(() => {});
-    loadThreads({ projectKey: activeProjectKey, projectTabId: activeProjectTabId }).catch(() => {});
-    loadSkillSuggestions().catch(() => {});
-    loadSessionSummary().catch(() => {});
-    loadApprovals().catch(() => {});
-
-    const es = createSseStream();
-    const safeParseSseData = (eventType, ev) => {
-      try {
-        return JSON.parse(ev.data);
-      } catch (err) {
-        debugError("[SSE parse error]", eventType, ev?.data, err);
-        return null;
-      }
-    };
-    const logSseEvent = (eventType, data) => {
-      if (!data || typeof data !== "object") {
-        debugLog("[SSE]", eventType, data);
-        return;
-      }
-      const text = typeof data.text === "string" ? data.text : "";
-      debugLog("[SSE]", {
-        eventType,
-        method: typeof data.method === "string" ? data.method : "",
-        thread_id: typeof data.thread_id === "string" ? data.thread_id : "",
-        turn_id: typeof data.turn_id === "string" ? data.turn_id : "",
-        text: text ? text.slice(0, 200) : "",
-        payload: data,
-      });
-    };
-    const recordItemPhase = (data) => {
-      if (!data || typeof data !== "object") {
-        return;
-      }
-      const turnId = typeof data.turn_id === "string" && data.turn_id ? data.turn_id : "";
-      if (!turnId) {
-        return;
-      }
-      const item = data?.params?.item;
-      if (!item || typeof item !== "object") {
-        return;
-      }
-      const itemId = typeof item.id === "string" && item.id ? item.id : (typeof data.item_id === "string" ? data.item_id : "");
-      const phase = typeof item.phase === "string" ? item.phase.toLowerCase() : "";
-      if (!itemId || !phase) {
-        return;
-      }
-      const turnMap = itemPhaseByTurnRef.current[turnId] || {};
-      turnMap[itemId] = phase;
-      itemPhaseByTurnRef.current[turnId] = turnMap;
-    };
-    const pruneCommentaryAfterCompletion = (threadId, turnId) => {
-      if (!turnId) {
-        return;
-      }
-      const phaseMap = itemPhaseByTurnRef.current[turnId] || {};
-      const hasFinal = Object.values(phaseMap).includes("final_answer");
-      if (!hasFinal) {
-        return;
-      }
-      applyMessageMutationForThread(threadId, (prev) =>
-        prev.filter((message) => {
-          if (message.role !== "assistant") {
-            return true;
-          }
-          if ((message.turnId || "") !== turnId) {
-            return true;
-          }
-          const itemId = typeof message.itemId === "string" ? message.itemId : "";
-          const phase = itemId ? phaseMap[itemId] : "";
-          return phase !== "commentary";
-        }).map((message) => (message.streaming ? { ...message, streaming: false } : message))
-      );
-      delete itemPhaseByTurnRef.current[turnId];
-    };
-    const extractEventText = (data) => {
-      if (!data || typeof data !== "object") {
-        return "";
-      }
-      if (typeof data.text === "string" && data.text.trim()) {
-        return data.text;
-      }
-      const item = data?.params?.item;
-      if (!item || typeof item !== "object") {
-        return "";
-      }
-      if (typeof item.text === "string" && item.text.trim()) {
-        return item.text;
-      }
-      const content = item.content;
-      if (Array.isArray(content)) {
-        for (const entry of content) {
-          if (entry && typeof entry === "object" && typeof entry.text === "string" && entry.text.trim()) {
-            return entry.text;
-          }
-        }
-      }
-      return "";
-    };
-    const extractEventItemId = (data) => {
-      if (!data || typeof data !== "object") {
-        return "";
-      }
-      if (typeof data.item_id === "string" && data.item_id) {
-        return data.item_id;
-      }
-      const item = data?.params?.item;
-      if (item && typeof item === "object" && typeof item.id === "string" && item.id) {
-        return item.id;
-      }
-      return "";
-    };
-    es.onopen = () => {
-      debugLog("[SSE] connected");
-    };
-    es.addEventListener("turn_delta", (ev) => {
-      const data = safeParseSseData("turn_delta", ev);
-      if (!data) {
-        return;
-      }
-      logSseEvent("turn_delta", data);
-      const method = typeof data.method === "string" ? data.method : "";
-      const text = extractEventText(data);
-      if (!text) {
-        debugLog("[SSE] turn_delta ignored: empty text", data);
-        return;
-      }
-      const variant = data.variant === "subagent" ? "subagent" : "";
-      const turnId = typeof data.turn_id === "string" && data.turn_id ? data.turn_id : "";
-      const itemId = extractEventItemId(data);
-      const phase =
-        turnId && itemId && itemPhaseByTurnRef.current[turnId]
-          ? itemPhaseByTurnRef.current[turnId][itemId] || ""
-          : "";
-      const threadId = resolveThreadIdFromTurn(data.thread_id, turnId);
-      if (!threadId && turnId) {
-        debugLog("[SSE] turn_delta ignored: unresolved thread_id for turn", { turnId, data });
-        return;
-      }
-      if (turnId) {
-        streamedTurnIdsRef.current[turnId] = true;
-      }
-      if (method === "item/completed") {
-        // The full completed text can duplicate already-streamed delta chunks.
-        // For completed notifications, just finalize the current streaming message.
-        applyMessageMutationForThread(threadId, (prev) => {
-          const copy = [...prev];
-          let targetIndex = -1;
-          for (let i = copy.length - 1; i >= 0; i -= 1) {
-            const message = copy[i];
-            if (message.role !== "assistant") {
-              continue;
-            }
-            if (turnId && (message.turnId || "") !== turnId) {
-              continue;
-            }
-            if ((message.variant || "") !== variant) {
-              continue;
-            }
-            if (itemId && (message.itemId || "") === itemId) {
-              targetIndex = i;
-              break;
-            }
-            if (!itemId) {
-              targetIndex = i;
-              break;
-            }
-            if (targetIndex < 0 && message.streaming) {
-              // Fallback for streams where early deltas do not carry item_id.
-              targetIndex = i;
-            }
-          }
-          if (targetIndex >= 0) {
-            const current = copy[targetIndex];
-            copy[targetIndex] = {
-              ...current,
-              threadId: current.threadId || threadId,
-              turnId: current.turnId || turnId,
-              itemId: current.itemId || itemId,
-              phase: current.phase || phase,
-              streaming: false,
-            };
-            return copy;
-          }
-          debugLog("[SSE] turn_delta item/completed unmatched: append fallback", {
-            threadId,
-            turnId,
-            itemId,
-            variant,
-            assistantTail: copy
-              .slice(-5)
-              .filter((message) => message?.role === "assistant")
-              .map((message) => ({
-                turnId: message?.turnId || "",
-                itemId: message?.itemId || "",
-                variant: message?.variant || "",
-                streaming: !!message?.streaming,
-                text: typeof message?.text === "string" ? message.text.slice(0, 80) : "",
-              })),
-          });
-          copy.push({ role: "assistant", text, variant, threadId, turnId, itemId, phase, streaming: false });
-          return copy;
-        });
-        if (turnId) {
-          assistantItemCompletedByTurnRef.current[turnId] = true;
-        }
-        return;
-      }
-      applyMessageMutationForThread(threadId, (prev) => {
-        const copy = [...prev];
-        const last = copy[copy.length - 1];
-        const shouldStartNewMessage = turnId && assistantItemCompletedByTurnRef.current[turnId];
-        if (shouldStartNewMessage && turnId) {
-          delete assistantItemCompletedByTurnRef.current[turnId];
-        }
-        if (
-          !shouldStartNewMessage &&
-          last &&
-          last.role === "assistant" &&
-          last.streaming &&
-          (last.variant || "") === variant &&
-          ((last.itemId || "") === itemId || !itemId || (itemId && !(last.itemId || ""))) &&
-          ((last.turnId || "") === turnId || !turnId)
-        ) {
-          last.text += text;
-          if (!last.threadId && threadId) {
-            last.threadId = threadId;
-          }
-          if (!last.turnId && turnId) {
-            last.turnId = turnId;
-          }
-          if (!last.itemId && itemId) {
-            last.itemId = itemId;
-          }
-          if (!last.phase && phase) {
-            last.phase = phase;
-          }
-          return copy;
-        }
-        copy.push({ role: "assistant", text, variant, threadId, turnId, itemId, phase, streaming: true });
-        return copy;
-      });
-    });
-    es.addEventListener("plan_delta", (ev) => {
-      const data = safeParseSseData("plan_delta", ev);
-      if (!data) {
-        return;
-      }
-      logSseEvent("plan_delta", data);
-      upsertPlanMessage("append", data);
-    });
-    es.addEventListener("plan_completed", (ev) => {
-      const data = safeParseSseData("plan_completed", ev);
-      if (!data) {
-        return;
-      }
-      logSseEvent("plan_completed", data);
-      upsertPlanMessage("final", data);
-      loadSessionSummary().catch(() => {});
-    });
-    es.addEventListener("plan_checklist", (ev) => {
-      const data = safeParseSseData("plan_checklist", ev);
-      if (!data) {
-        return;
-      }
-      logSseEvent("plan_checklist", data);
-      upsertPlanChecklist(data);
-    });
-    es.addEventListener("reasoning_status", (ev) => {
-      const data = safeParseSseData("reasoning_status", ev);
-      if (!data) {
-        return;
-      }
-      logSseEvent("reasoning_status", data);
-      appendReasoningStatus(data);
-    });
-    es.addEventListener("reasoning_completed", (ev) => {
-      const data = safeParseSseData("reasoning_completed", ev);
-      if (!data) {
-        return;
-      }
-      logSseEvent("reasoning_completed", data);
-      completeReasoning(data);
-    });
-    es.addEventListener("web_search_item", (ev) => {
-      const data = safeParseSseData("web_search_item", ev);
-      if (!data) {
-        return;
-      }
-      logSseEvent("web_search_item", data);
-      const query = typeof data?.query === "string" ? data.query.trim() : "";
-      const actionText = formatWebSearchAction(data?.action);
-      if (!query && !actionText) {
-        return;
-      }
-      appendMessageToThread(normalizeThreadId(data?.thread_id), {
-        role: "system",
-        kind: "web_search",
-        threadId: normalizeThreadId(data?.thread_id),
-        turnId: typeof data?.turn_id === "string" ? data.turn_id : "",
-        itemId: typeof data?.item_id === "string" ? data.item_id : "",
-        text: query || "Web search",
-        detail: actionText,
-        streaming: false,
-      });
-    });
-    es.addEventListener("image_generation_item", (ev) => {
-      const data = safeParseSseData("image_generation_item", ev);
-      if (!data) {
-        return;
-      }
-      logSseEvent("image_generation_item", data);
-      const detailLines = [];
-      const revisedPrompt = typeof data?.revised_prompt === "string" ? data.revised_prompt.trim() : "";
-      const savedPath = typeof data?.saved_path === "string" ? data.saved_path.trim() : "";
-      const statusText = typeof data?.status === "string" ? data.status.trim() : "";
-      if (statusText) {
-        detailLines.push(`Status: ${statusText}`);
-      }
-      if (savedPath) {
-        detailLines.push(`Saved to: ${savedPath}`);
-      }
-      appendMessageToThread(normalizeThreadId(data?.thread_id), {
-        role: "system",
-        kind: "image_generation",
-        threadId: normalizeThreadId(data?.thread_id),
-        turnId: typeof data?.turn_id === "string" ? data.turn_id : "",
-        itemId: typeof data?.item_id === "string" ? data.item_id : "",
-        text: revisedPrompt || "Generated image",
-        detail: detailLines.join("\n"),
-        streaming: false,
-      });
-    });
-    es.addEventListener("context_compacted_item", (ev) => {
-      const data = safeParseSseData("context_compacted_item", ev);
-      if (!data) {
-        return;
-      }
-      logSseEvent("context_compacted_item", data);
-      const text = typeof data?.text === "string" && data.text.trim() ? data.text.trim() : "Context compacted";
-      appendMessageToThread(normalizeThreadId(data?.thread_id), {
-        role: "system",
-        text,
-        threadId: normalizeThreadId(data?.thread_id),
-        turnId: typeof data?.turn_id === "string" ? data.turn_id : "",
-        streaming: false,
-      });
-    });
-    es.addEventListener("turn_started", (ev) => {
-      const data = safeParseSseData("turn_started", ev);
-      if (!data) {
-        return;
-      }
-      logSseEvent("turn_started", data);
-      const turnId = typeof data?.turn_id === "string" ? data.turn_id : "";
-      const eventThreadId = resolveThreadIdFromTurn(data?.thread_id, turnId);
-      if (turnId && eventThreadId) {
-        turnThreadIdRef.current[turnId] = eventThreadId;
-      }
-      updateThreadTabState(eventThreadId, { status: "running", hasUnreadCompletion: false });
-      setStatusForThread(eventThreadId, "running");
-      setActivityDetailForThread(eventThreadId, "");
-      const actualMode = data?.params?.collaboration_mode_kind || data?.params?.collaborationModeKind;
-      if (typeof actualMode === "string") {
-        setCollaborationMode(normalizeCollaborationMode(actualMode));
-      }
-      reasoningStateRef.current = {};
-      if (eventThreadId === activeThreadRef.current) {
-        setMessages((prev) => prev.map((m) => (m.streaming ? { ...m, streaming: false } : m)));
-      }
-    });
-    es.addEventListener("turn_completed", (ev) => {
-      const data = safeParseSseData("turn_completed", ev);
-      if (!data) {
-        return;
-      }
-      logSseEvent("turn_completed", data);
-      reasoningStateRef.current = {};
-      handleTurnCompletedWorkspaceRefresh({
-        data,
-        activeThreadId: activeThreadRef.current,
-        activeProjectKey: activeProjectKeyRef.current,
-        activeProjectTabId: activeProjectTabIdRef.current,
-        refreshWorkspaceBrowser,
-        loadThreads,
-        loadProjects,
-        loadSessionSummary,
-        updateThreadTabState,
-        playTurnNotification,
-        setStatusForThread,
-        setActivityDetailForThread,
-        setMessages,
-        streamedTurnIdsRef,
-        assistantItemCompletedByTurnRef,
-        turnThreadIdRef,
-        resolveThreadIdFromTurn,
-      });
-    });
-    es.addEventListener("turn_failed", (ev) => {
-      const data = safeParseSseData("turn_failed", ev);
-      if (!data) {
-        return;
-      }
-      logSseEvent("turn_failed", data);
-      const turnId = typeof data?.turn_id === "string" ? data.turn_id : "";
-      if (turnId) {
-        delete streamedTurnIdsRef.current[turnId];
-        delete assistantItemCompletedByTurnRef.current[turnId];
-      }
-      const failedThreadId = resolveThreadIdFromTurn(data?.thread_id, turnId);
-      if (turnId) {
-        delete turnThreadIdRef.current[turnId];
-      }
-      const shouldNotify = failedThreadId && failedThreadId !== activeThreadRef.current;
-      updateThreadTabState(failedThreadId, {
-        status: "failed",
-        hasUnreadCompletion: failedThreadId ? shouldNotify : true,
-      });
-      if (shouldNotify) {
-        playTurnNotification();
-      }
-      const text = data.text || "Turn failed.";
-      const threadId = resolveThreadIdFromTurn(data.thread_id, turnId);
-      setStatusForThread(threadId, "idle");
-      setActivityDetailForThread(threadId, "");
-      reasoningStateRef.current = {};
-      appendMessageToThread(threadId, { role: "system", text, threadId, turnId, streaming: false });
-      loadProjects().catch(() => {});
-      loadSessionSummary().catch(() => {});
-    });
-    es.addEventListener("turn_cancelled", (ev) => {
-      const data = safeParseSseData("turn_cancelled", ev);
-      if (!data) {
-        return;
-      }
-      logSseEvent("turn_cancelled", data);
-      const turnId = typeof data?.turn_id === "string" ? data.turn_id : "";
-      if (turnId) {
-        delete streamedTurnIdsRef.current[turnId];
-        delete assistantItemCompletedByTurnRef.current[turnId];
-      }
-      const cancelledThreadId = resolveThreadIdFromTurn(data?.thread_id, turnId);
-      if (turnId) {
-        delete turnThreadIdRef.current[turnId];
-      }
-      const shouldNotify = cancelledThreadId && cancelledThreadId !== activeThreadRef.current;
-      updateThreadTabState(cancelledThreadId, {
-        status: "cancelled",
-        hasUnreadCompletion: cancelledThreadId ? shouldNotify : true,
-      });
-      if (shouldNotify) {
-        playTurnNotification();
-      }
-      setStatusForThread(cancelledThreadId, "idle");
-      setActivityDetailForThread(cancelledThreadId, "");
-      reasoningStateRef.current = {};
-      loadProjects().catch(() => {});
-      loadSessionSummary().catch(() => {});
-    });
-    es.addEventListener("approval_required", (ev) => {
-      const data = safeParseSseData("approval_required", ev);
-      if (!data) {
-        return;
-      }
-      logSseEvent("approval_required", data);
-      if (!data || typeof data.id !== "number") {
-        return;
-      }
-      setApprovalBusyId(null);
-      setApprovalItems([data]);
-    });
-    es.addEventListener("system_message", (ev) => {
-      const data = safeParseSseData("system_message", ev);
-      if (!data) {
-        return;
-      }
-      logSseEvent("system_message", data);
-      const text = data.text || "";
-      if (!text) {
-        return;
-      }
-      appendMessageToThread(normalizeThreadId(data.thread_id), {
-        role: "system",
-        text,
-        threadId: normalizeThreadId(data.thread_id),
-        turnId: typeof data.turn_id === "string" ? data.turn_id : "",
-        streaming: false,
-      });
-      loadSessionSummary().catch(() => {});
-      loadWorkspaceStatus().catch(() => {});
-    });
-    es.addEventListener("file_change", (ev) => {
-      const data = safeParseSseData("file_change", ev);
-      if (!data) {
-        return;
-      }
-      logSseEvent("file_change", data);
-      const summary = data.summary || data.text || "";
-      const files = Array.isArray(data.files) ? data.files : [];
-      const diff = typeof data.diff === "string" ? data.diff : "";
-      const threadId = normalizeThreadId(data.thread_id);
-      const turnId = typeof data.turn_id === "string" ? data.turn_id : "";
-      if (!summary && files.length === 0 && !diff) {
-        return;
-      }
-      appendMessageToThread(threadId, {
-        role: "system",
-        text: summary || "Applied patch changes",
-        files,
-        diff,
-        threadId,
-        turnId,
-        kind: "file_change",
-        streaming: false,
-      });
-      loadWorkspaceStatus().catch(() => {});
-      loadSessionSummary().catch(() => {});
-    });
-    es.addEventListener("subagents_changed", (ev) => {
-      const data = safeParseSseData("subagents_changed", ev);
-      if (!data) {
-        return;
-      }
-      logSseEvent("subagents_changed", data);
-      loadSessionSummary().catch(() => {});
-    });
-    es.addEventListener("app_event", (ev) => {
-      const data = safeParseSseData("app_event", ev);
-      if (!data) {
-        return;
-      }
-      logSseEvent("app_event", data);
-      const method = typeof data.method === "string" ? data.method : "";
-      if (["thread/started", "thread/status/changed", "thread/closed", "subagents_changed"].includes(method)) {
-        loadSessionSummary().catch(() => {});
-      }
-      if (data.method === "item/started" || data.method === "item/completed") {
-        recordItemPhase(data);
-      }
-      if (method !== "item/completed") {
-        return;
-      }
-      const item = data?.params?.item;
-      const itemType = typeof item?.type === "string" ? item.type.toLowerCase() : "";
-      if (!["agentmessage", "assistantmessage", "message"].includes(itemType)) {
-        return;
-      }
-      const text = extractEventText(data);
-      if (!text) {
-        return;
-      }
-      const turnId = typeof data.turn_id === "string" && data.turn_id ? data.turn_id : "";
-      const threadId = resolveThreadIdFromTurn(data.thread_id, turnId);
-      if (!threadId && turnId) {
-        return;
-      }
-      if (turnId && streamedTurnIdsRef.current[turnId]) {
-        return;
-      }
-      applyMessageMutationForThread(threadId, (prev) => {
-        const copy = [...prev];
-        const last = copy[copy.length - 1];
-        if (
-          last &&
-          last.role === "assistant" &&
-          last.streaming &&
-          ((last.turnId || "") === turnId || !turnId)
-        ) {
-          last.text += text;
-          if (!last.threadId && threadId) {
-            last.threadId = threadId;
-          }
-          if (!last.turnId && turnId) {
-            last.turnId = turnId;
-          }
-          return copy;
-        }
-        copy.push({ role: "assistant", text, threadId, turnId, streaming: true });
-        return copy;
-      });
-    });
-    es.onerror = () => {
-      debugError("[SSE] connection error");
-      setStatusForThread(activeThreadRef.current, "disconnected");
-    };
-
-    return () => closeSseStream(es);
-  }, [me, turnNotificationEnabled]);
+  useTurnSession({
+    me,
+    turnNotificationEnabled,
+    loadProjects,
+    loadThreads,
+    loadSkillSuggestions,
+    loadSessionSummary,
+    loadApprovals,
+    loadWorkspaceStatus,
+    refreshWorkspaceBrowser,
+    activeProjectKey,
+    activeProjectTabId,
+    activeThreadRef,
+    activeProjectKeyRef,
+    activeProjectTabIdRef,
+    streamedTurnIdsRef,
+    assistantItemCompletedByTurnRef,
+    itemPhaseByTurnRef,
+    turnThreadIdRef,
+    reasoningStateRef,
+    debugLog,
+    debugError,
+    appendMessageToThread,
+    applyMessageMutationForThread,
+    appendReasoningStatus,
+    completeReasoning,
+    upsertPlanMessage,
+    upsertPlanChecklist,
+    setStatusForThread,
+    setActivityDetailForThread,
+    setMessages,
+    updateThreadTabState,
+    playTurnNotification,
+    setApprovalBusyId,
+    setApprovalItems,
+    setCollaborationMode,
+    normalizeCollaborationMode,
+    resolveThreadIdFromTurn,
+  });
 
   useEffect(() => {
     const activeThreadId = normalizeThreadId(activeThreadRef.current);
@@ -2125,167 +1132,52 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
     }
     active.scrollIntoView({ block: "nearest" });
   }, [paletteOpen, paletteSelectedIndex, visiblePaletteItems.length]);
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return undefined;
-    }
-    const syncViewport = () => {
-      setIsMobileLayout(window.innerWidth <= MOBILE_BREAKPOINT);
-      setIsCompactWorkspaceLayout(window.innerWidth <= WORKSPACE_PANEL_BREAKPOINT);
-    };
-    syncViewport();
-    window.addEventListener("resize", syncViewport);
-    return () => window.removeEventListener("resize", syncViewport);
-  }, []);
-  useEffect(() => {
-    if (!isMobileLayout) {
-      setIsSidebarOpen(false);
-      return;
-    }
-    setIsResizingSidebar(false);
-  }, [isMobileLayout]);
-  useEffect(() => {
-    if (!isCompactWorkspaceLayout) {
-      setIsWorkspacePanelOpen(false);
-      return;
-    }
-    setIsResizingWorkspacePanel(false);
-  }, [isCompactWorkspaceLayout]);
-  useEffect(() => {
-    if (!isMobileLayout || typeof document === "undefined") {
-      return undefined;
-    }
-    const { body } = document;
-    if (!body) {
-      return undefined;
-    }
-    const previousOverflow = body.style.overflow;
-    if (isSidebarOpen) {
-      body.style.overflow = "hidden";
-    }
-    return () => {
-      body.style.overflow = previousOverflow;
-    };
-  }, [isMobileLayout, isSidebarOpen]);
-  useEffect(() => {
-    if (!isMobileLayout || !isSidebarOpen || typeof window === "undefined") {
-      return undefined;
-    }
-    const onKeyDown = (event) => {
-      if (event.key === "Escape") {
-        setIsSidebarOpen(false);
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isMobileLayout, isSidebarOpen]);
-  useEffect(() => {
-    if (!isResizingSidebar) {
-      return;
-    }
-    const onMove = (event) => {
-      const next = Math.max(SIDEBAR_MIN, Math.min(SIDEBAR_MAX, event.clientX));
-      setSidebarWidth(next);
-    };
-    const onUp = () => setIsResizingSidebar(false);
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-  }, [isResizingSidebar]);
-  useEffect(() => {
-    if (!isResizingWorkspacePanel) {
-      return;
-    }
-    const onMove = (event) => {
-      const delta = workspaceResizeRef.current.startX - event.clientX;
-      const next = workspaceResizeRef.current.startWidth + delta;
-      setWorkspacePanelWidth(
-        Math.max(WORKSPACE_PANEL_MIN, Math.min(WORKSPACE_PANEL_MAX, next))
-      );
-    };
-    const onUp = () => setIsResizingWorkspacePanel(false);
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-  }, [isResizingWorkspacePanel]);
-  useEffect(() => {
-    if (!isResizingWorkspacePreview || typeof window === "undefined") {
-      return;
-    }
-    const onMove = (event) => {
-      const { mode, startX, startY, startWidth, startHeight } = workspacePreviewResizeRef.current;
-      if (mode === "width" || mode === "both") {
-        const widthDelta = event.clientX - startX;
-        const nextWidth = startWidth + widthDelta;
-        setWorkspacePreviewWidth(
-          Math.max(WORKSPACE_PREVIEW_MIN_WIDTH, Math.min(WORKSPACE_PREVIEW_MAX_WIDTH, nextWidth))
-        );
-      }
-      if (mode === "height" || mode === "both") {
-        const heightDelta = event.clientY - startY;
-        const nextHeight = startHeight + heightDelta;
-        setWorkspacePreviewHeight(
-          Math.max(WORKSPACE_PREVIEW_MIN_HEIGHT, Math.min(WORKSPACE_PREVIEW_MAX_HEIGHT, nextHeight))
-        );
-      }
-    };
-    const onUp = () => setIsResizingWorkspacePreview(false);
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-  }, [isResizingWorkspacePreview]);
-  useEffect(() => {
-    if (
-      !workspacePreview ||
-      typeof window === "undefined" ||
-      isProjectModeModalOpen ||
-      shortcutModalPage === "project"
-    ) {
-      return undefined;
-    }
-    const onKeyDown = (event) => {
-      if (event.key !== "Escape") {
-        return;
-      }
-      event.preventDefault();
-      event.stopPropagation();
-      setIsResizingWorkspacePreview(false);
-      setWorkspacePreview(null);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [workspacePreview, isProjectModeModalOpen, shortcutModalPage, setWorkspacePreview]);
-  useEffect(() => {
-    if (!workspacePreview) {
-      setIsResizingWorkspacePreview(false);
-    }
-  }, [workspacePreview]);
-  useEffect(() => {
-    if (!Number.isFinite(workspacePreviewWidth)) {
-      return;
-    }
-    persistWorkspacePreviewWidth(workspacePreviewWidth);
-  }, [workspacePreviewWidth]);
-  useEffect(() => {
-    if (!Number.isFinite(workspacePreviewHeight)) {
-      return;
-    }
-    persistWorkspacePreviewHeight(workspacePreviewHeight);
-  }, [workspacePreviewHeight]);
-  const resetWorkspacePreviewSize = useCallback(() => {
-    clearWorkspacePreviewSize();
-    setWorkspacePreviewWidth(WORKSPACE_PREVIEW_DEFAULT_WIDTH);
-    setWorkspacePreviewHeight(WORKSPACE_PREVIEW_DEFAULT_HEIGHT);
-  }, []);
+  useViewportLayout({
+    mobileBreakpoint: MOBILE_BREAKPOINT,
+    workspacePanelBreakpoint: WORKSPACE_PANEL_BREAKPOINT,
+    isMobileLayout,
+    isSidebarOpen,
+    isCompactWorkspaceLayout,
+    setIsMobileLayout,
+    setIsCompactWorkspaceLayout,
+    setIsSidebarOpen,
+    setIsResizingSidebar,
+    setIsWorkspacePanelOpen,
+    setIsResizingWorkspacePanel,
+  });
+  const { resetWorkspacePreviewSize } = useResizeInteractions({
+    sidebarMin: SIDEBAR_MIN,
+    sidebarMax: SIDEBAR_MAX,
+    workspacePanelMin: WORKSPACE_PANEL_MIN,
+    workspacePanelMax: WORKSPACE_PANEL_MAX,
+    workspacePreviewMinWidth: WORKSPACE_PREVIEW_MIN_WIDTH,
+    workspacePreviewMaxWidth: WORKSPACE_PREVIEW_MAX_WIDTH,
+    workspacePreviewMinHeight: WORKSPACE_PREVIEW_MIN_HEIGHT,
+    workspacePreviewMaxHeight: WORKSPACE_PREVIEW_MAX_HEIGHT,
+    workspacePreviewDefaultWidth: WORKSPACE_PREVIEW_DEFAULT_WIDTH,
+    workspacePreviewDefaultHeight: WORKSPACE_PREVIEW_DEFAULT_HEIGHT,
+    isResizingSidebar,
+    isResizingWorkspacePanel,
+    isResizingWorkspacePreview,
+    workspacePreview,
+    isProjectModeModalOpen,
+    shortcutModalPage,
+    workspacePreviewWidth,
+    workspacePreviewHeight,
+    workspaceResizeRef,
+    workspacePreviewResizeRef,
+    setSidebarWidth,
+    setIsResizingSidebar,
+    setWorkspacePanelWidth,
+    setIsResizingWorkspacePanel,
+    setWorkspacePreviewWidth,
+    setWorkspacePreviewHeight,
+    setIsResizingWorkspacePreview,
+    setWorkspacePreview,
+    persistWorkspacePreviewWidth,
+    persistWorkspacePreviewHeight,
+    clearWorkspacePreviewSize,
+  });
   useEffect(() => {
     if (!activeToken || activeToken.type !== "project") {
       setProjectSuggestions([]);
@@ -2350,172 +1242,7 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
     );
   }, [projectItems, projectSearchQuery]);
 
-  useEffect(() => {
-    if (shortcutModalPage === "project") {
-      setSelectedProjectIndex(0);
-    }
-  }, [projectSearchQuery, shortcutModalPage]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return undefined;
-    }
-    const onKeyDown = (event) => {
-      const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
-      const ctrlKey = isMac ? event.metaKey : event.ctrlKey;
-      const altKey = event.altKey;
-      if (event.key === "Escape") {
-        if (shortcutModalPage === "project") {
-          setShortcutModalPage("main");
-          setProjectSearchQuery("");
-        }
-        return;
-      }
-      if (altKey && !ctrlKey) {
-        const target = event.target;
-        const isInputFocused = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
-        if (isInputFocused) {
-          return;
-        }
-        event.preventDefault();
-        switch (event.key) {
-          case "n":
-          case "N":
-            focusComposerRef.current?.();
-            if (!interactionBusy) {
-              startThreadRef.current?.({ replaceCurrentTab: true }).catch(() => {});
-            }
-            break;
-          case "t":
-          case "T":
-            if (!interactionBusy && activeProjectKey) {
-              startThreadRef.current?.().catch(() => {});
-            }
-            break;
-          case "w":
-          case "W":
-            if (activeThread && activeProjectTabId) {
-              closeThreadTabRef.current?.(activeProjectTabId, activeThread);
-            }
-            break;
-          case "p":
-          case "P":
-            setShortcutModalPage("project");
-            setSelectedProjectIndex(0);
-            setProjectSearchQuery("");
-            break;
-          case "v":
-          case "V":
-            if (isCompactWorkspaceLayout) {
-              setIsWorkspacePanelOpen((current) => !current);
-            }
-            break;
-          case "[":
-            {
-              const threadTabs = threadTabsByProjectTabId[activeProjectTabId] || [];
-              const currentIndex = threadTabs.findIndex((t) => normalizeThreadId(t.id) === normalizeThreadId(activeThread));
-              if (currentIndex > 0) {
-                viewThreadRef.current?.(threadTabs[currentIndex - 1].id);
-              } else if (threadTabs.length > 0) {
-                viewThreadRef.current?.(threadTabs[threadTabs.length - 1].id);
-              }
-            }
-            break;
-          case "]":
-            {
-              const threadTabs = threadTabsByProjectTabId[activeProjectTabId] || [];
-              const currentIndex = threadTabs.findIndex((t) => normalizeThreadId(t.id) === normalizeThreadId(activeThread));
-              if (currentIndex < threadTabs.length - 1 && currentIndex >= 0) {
-                viewThreadRef.current?.(threadTabs[currentIndex + 1].id);
-              } else if (threadTabs.length > 0) {
-                viewThreadRef.current?.(threadTabs[0].id);
-              }
-            }
-            break;
-          case "1":
-          case "2":
-          case "3":
-          case "4":
-          case "5":
-          case "6":
-          case "7":
-          case "8":
-          case "9":
-            {
-              const num = parseInt(event.key, 10);
-              const threadTabs = threadTabsByProjectTabId[activeProjectTabId] || [];
-              if (threadTabs[num - 1]) {
-                viewThreadRef.current?.(threadTabs[num - 1].id);
-              }
-            }
-            break;
-          default:
-            break;
-        }
-        return;
-      }
-      if (!ctrlKey) {
-        return;
-      }
-      const target = event.target;
-      const isInputFocused = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
-      const selection =
-        typeof window.getSelection === "function"
-          ? window.getSelection()
-          : null;
-      const hasSelectedText = !!selection && !selection.isCollapsed && `${selection}`.trim().length > 0;
-      const key = typeof event.key === "string" ? event.key.toLowerCase() : "";
-      if ((key === "c" || key === "x") && hasSelectedText) {
-        return;
-      }
-      if (key === "a" && !isInputFocused) {
-        return;
-      }
-      if (isInputFocused && !event.shiftKey && event.key !== "Enter") {
-        return;
-      }
-      event.preventDefault();
-      switch (event.key) {
-        case "Enter":
-          if (!isInputFocused || event.shiftKey) {
-            sendMessageRef.current?.().catch(() => {});
-          }
-          break;
-        case "p":
-        case "P":
-          if (event.shiftKey) {
-            if (collaborationMode !== "plan" && !modeSwitchBusy) {
-              api("/api/command", {
-                method: "POST",
-                body: JSON.stringify({ command_line: "/mode plan" }),
-              }).then((result) => {
-                if (result?.meta?.collaboration_mode) {
-                  setCollaborationMode("plan");
-                }
-              }).catch(() => {});
-            }
-          }
-          break;
-        case "b":
-        case "B":
-          if (collaborationMode !== "build" && !modeSwitchBusy) {
-            api("/api/command", {
-              method: "POST",
-              body: JSON.stringify({ command_line: "/mode build" }),
-            }).then((result) => {
-              if (result?.meta?.collaboration_mode) {
-                setCollaborationMode("build");
-              }
-            }).catch(() => {});
-          }
-          break;
-        default:
-          break;
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [
+  useGlobalKeyboardShortcuts({
     shortcutModalPage,
     interactionBusy,
     activeThread,
@@ -2524,48 +1251,24 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
     collaborationMode,
     modeSwitchBusy,
     isCompactWorkspaceLayout,
+    projectSearchQuery,
+    filteredProjects,
+    selectedProjectIndex,
+    activeProjectKey,
     focusComposerRef,
-  ]);
-
-  useEffect(() => {
-    if (shortcutModalPage !== "project" || typeof window === "undefined") {
-      return undefined;
-    }
-    const onKeyDown = (event) => {
-      if (event.key === "Escape") {
-        if (projectSearchQuery) {
-          setProjectSearchQuery("");
-          return;
-        }
-        setShortcutModalPage("main");
-        return;
-      }
-      if (event.key === "Enter") {
-        const target = filteredProjects[selectedProjectIndex];
-        if (target) {
-          selectProjectRef.current?.(target.key).catch(() => {});
-          setShortcutModalPage("main");
-          setProjectSearchQuery("");
-        }
-        return;
-      }
-      if (event.key === "ArrowDown") {
-        event.preventDefault();
-        setSelectedProjectIndex((prev) => Math.min(prev + 1, filteredProjects.length - 1));
-        return;
-      }
-      if (event.key === "ArrowUp") {
-        event.preventDefault();
-        setSelectedProjectIndex((prev) => Math.max(prev - 1, 0));
-        return;
-      }
-      if (event.key === "Backspace" && !projectSearchQuery) {
-        setShortcutModalPage("main");
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [shortcutModalPage, projectSearchQuery, filteredProjects, selectedProjectIndex]);
+    startThreadRef,
+    closeThreadTabRef,
+    viewThreadRef,
+    sendMessageRef,
+    selectProjectRef,
+    setShortcutModalPage,
+    setProjectSearchQuery,
+    setSelectedProjectIndex,
+    setIsWorkspacePanelOpen,
+    setCollaborationMode,
+    api,
+    normalizeThreadId,
+  });
 
   const applyPaletteItem = (item) => {
     if (!activeToken) {
@@ -2587,7 +1290,7 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
     focusComposer(cursor);
   };
 
-  const upsertPlanMessage = (mode, payload) => {
+  function upsertPlanMessage(mode, payload) {
     const itemId = typeof payload?.item_id === "string" ? payload.item_id : "";
     const text = typeof payload?.text === "string" ? payload.text : "";
     if (!itemId || !text) {
@@ -2627,7 +1330,7 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
     });
   };
 
-  const upsertPlanChecklist = (payload) => {
+  function upsertPlanChecklist(payload) {
     const text = formatPlanChecklistText(payload?.explanation, payload?.plan);
     const turnId = typeof payload?.turn_id === "string" ? payload.turn_id : "";
     if (!text || !turnId) {
@@ -2658,7 +1361,7 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
     });
   };
 
-  const appendReasoningStatus = (payload) => {
+  function appendReasoningStatus(payload) {
     const itemId = typeof payload?.item_id === "string" ? payload.item_id : "";
     if (!itemId) {
       return;
@@ -2692,7 +1395,7 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
     setActivityDetailForThread(targetThreadId, detail);
   };
 
-  const completeReasoning = (payload) => {
+  function completeReasoning(payload) {
     const itemId = typeof payload?.item_id === "string" ? payload.item_id : "";
     const existing = (itemId && reasoningStateRef.current[itemId]) || null;
     const summaryText = Array.isArray(payload?.summary_text)
@@ -3097,7 +1800,7 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
           )}
         </div>
         <div className="project-picker-footer">
-          <span><kbd>↑↓</kbd> Navigate</span>
+          <span><kbd>?묅넃</kbd> Navigate</span>
           <span><kbd>Enter</kbd> Select</span>
           <span><kbd>Esc</kbd> Close</span>
         </div>
@@ -3262,7 +1965,7 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
                               {guardianRuleSummary.top.slice(0, 3).map((rule, index) => (
                                 <div key={`${rule.name || "rule"}:${index}`} className="agent-settings-summary-item">
                                   <span>{rule.name || "unnamed-rule"}</span>
-                                  <span>{`${rule.action || "deny"} · p${rule.priority || 0}`}</span>
+                                  <span>{`${rule.action || "deny"} 쨌 p${rule.priority || 0}`}</span>
                                 </div>
                               ))}
                             </div>
@@ -3804,4 +2507,10 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
 
 
 export default AuthenticatedAppContainer;
+
+
+
+
+
+
 
