@@ -4,6 +4,11 @@ import AuthenticatedAppPresenter from "../components/AuthenticatedAppPresenter";
 import AppMainPresenter from "../components/AppMainPresenter";
 import AppOverlaysPresenter from "../components/AppOverlaysPresenter";
 import AppSidebarPresenter from "../components/AppSidebarPresenter";
+import AppCenterPanePresenter from "../components/AppCenterPanePresenter";
+import AppComposerPresenter from "../components/AppComposerPresenter";
+import AppSidebarContentPanel from "../components/AppSidebarContentPanel";
+import FloatingGuardianSettingsPanel from "../components/FloatingGuardianSettingsPanel";
+import WorkspacePreviewOverlay from "../components/WorkspacePreviewOverlay";
 import ApprovalStack from "../../approvals/components/ApprovalStack";
 import useApprovalFlow from "../../approvals/hooks/useApprovalFlow";
 import ChatMessageFeed from "../../chat/components/ChatMessageFeed";
@@ -15,14 +20,10 @@ import {
   FolderIcon,
   MenuIcon,
   NewChatIcon,
-  NotificationIcon,
   RefreshIcon,
-  SaveIcon,
   SendIcon,
-  SettingsIcon,
   SidebarChevronIcon,
   StopIcon,
-  ThemeIcon,
 } from "../../common/components/Icons";
 import { persistTurnNotificationEnabled, readTurnNotificationEnabled } from "../../common/theme";
 import {
@@ -47,9 +48,10 @@ import useTurnSession from "../hooks/useTurnSession";
 import useViewportLayout from "../hooks/useViewportLayout";
 import useResizeInteractions from "../hooks/useResizeInteractions";
 import useGlobalKeyboardShortcuts from "../hooks/useGlobalKeyboardShortcuts";
+import useComposerPalette from "../hooks/useComposerPalette";
+import useComposerInputHandlers from "../hooks/useComposerInputHandlers";
 import useThreadScopedState from "../../thread/hooks/useThreadScopedState";
-import WorkspacePreviewPanel from "../../workspace/components/WorkspacePreviewPanel";
-import { getSidebarStyle, getWorkspacePanelStyle, shouldShowWorkspacePanelDesktop } from "../state/layoutSelectors";
+import { getSidebarStyle, getWorkspacePanelStyle } from "../state/layoutSelectors";
 
 const WORKSPACE_PREVIEW_HEIGHT_STORAGE_KEY = "codex-web-workspace-preview-height";
 const WORKSPACE_PREVIEW_WIDTH_STORAGE_KEY = "codex-web-workspace-preview-width";
@@ -369,63 +371,14 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
     ],
     []
   );
-  const activeToken = useMemo(() => {
-    if (input.startsWith("/")) {
-      const commandToken = input.slice(1);
-      if (!commandToken || /\s/.test(commandToken)) {
-        return null;
-      }
-      return {
-        type: "slash",
-        query: commandToken.toLowerCase(),
-        start: 0,
-        end: input.length,
-      };
-    }
-    const lastToken = input.split(/\s+/).pop() || "";
-    const match = lastToken.match(/^([@$])([^\s]*)$/);
-    if (!match) {
-      return null;
-    }
-    const marker = match[1];
-    const typed = match[2] || "";
-    const end = input.length;
-    const start = end - lastToken.length;
-    return {
-      type: marker === "@" ? "project" : "skill",
-      query: typed.toLowerCase(),
-      start,
-      end,
-    };
-  }, [input]);
-  const paletteItems = useMemo(() => {
-    if (!activeToken) {
-      return [];
-    }
-    const query = activeToken.query;
-    if (activeToken.type === "slash") {
-      if (!query) {
-        return slashCommands;
-      }
-      return slashCommands.filter((cmd) => cmd.toLowerCase().includes(`/${query}`));
-    }
-    if (activeToken.type === "project") {
-      return projectSuggestions;
-    }
-    if (!query) {
-      return skillSuggestions;
-    }
-    return skillSuggestions.filter((name) => name.toLowerCase().includes(query));
-  }, [activeToken, projectSuggestions, skillSuggestions, slashCommands]);
-  const paletteOpen = paletteItems.length > 0;
-  const paletteWindowStart = useMemo(
-    () => Math.floor(paletteSelectedIndex / PALETTE_LIMIT) * PALETTE_LIMIT,
-    [paletteSelectedIndex]
-  );
-  const visiblePaletteItems = useMemo(
-    () => paletteItems.slice(paletteWindowStart, paletteWindowStart + PALETTE_LIMIT),
-    [paletteItems, paletteWindowStart]
-  );
+  const { activeToken, paletteItems, paletteOpen, paletteWindowStart, visiblePaletteItems } = useComposerPalette({
+    input,
+    slashCommands,
+    projectSuggestions,
+    skillSuggestions,
+    paletteSelectedIndex,
+    paletteLimit: PALETTE_LIMIT,
+  });
   const renderItems = useMemo(() => groupMessagesForRender(messages), [messages]);
   const activeProjectTab = useMemo(
     () => projectTabs.find((tab) => tab.id === activeProjectTabId) || null,
@@ -1290,6 +1243,26 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
     focusComposer(cursor);
   };
 
+  const { onInputChange, onInputFocus, onInputBlur, onInputSelect, onInputKeyDown } = useComposerInputHandlers({
+    composerLocked,
+    input,
+    inputRef,
+    activeThread,
+    messagesByThreadId,
+    composerFocusWantedRef,
+    recentBackspaceAtRef,
+    inputHistoryIndexRef,
+    rememberComposerSelection,
+    paletteOpen,
+    paletteItems,
+    paletteSelectedIndex,
+    setPaletteSelectedIndex,
+    setInputForActiveThread,
+    applyPaletteItem,
+    toggleComposerMode,
+    sendMessage,
+  });
+
   function upsertPlanMessage(mode, payload) {
     const itemId = typeof payload?.item_id === "string" ? payload.item_id : "";
     const text = typeof payload?.text === "string" ? payload.text : "";
@@ -1828,252 +1801,38 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
       >
         {!isDesktopSidebarCollapsed ? (
           <div className="sidebar-content">
-            <div className="sidebar-header-row">
-              <div className="brand">Codex Web</div>
-              <div className="sidebar-top-actions">
-                <button
-                  className={`notify-toggle icon-only ${turnNotificationEnabled ? "on" : "off"}`}
-                  type="button"
-                  onClick={() => {
-                    const next = !turnNotificationEnabled;
-                    setTurnNotificationEnabled(next);
-                    persistTurnNotificationEnabled(next);
-                  }}
-                  aria-label="Toggle turn completion notification"
-                  title={`Turn notification ${turnNotificationEnabled ? "on" : "off"}`}
-                >
-                  <NotificationIcon enabled={turnNotificationEnabled} />
-                </button>
-                <button
-                  className="theme-toggle icon-only"
-                  type="button"
-                  onClick={onToggleTheme}
-                  aria-label="Toggle theme"
-                  title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
-                >
-                  <ThemeIcon theme={theme} />
-                </button>
-              </div>
-            </div>
-            <div className="panel">
-              <h3>Enabled Agents</h3>
-              <div className="thread-list agent-list">
-                {(sessionSummary?.agents || []).map((agent) => (
-                  <div key={agent.name} className="agent-row">
-                    <button
-                      className={`agent-item ${agent.enabled ? "on" : "off"} ${AGENT_CONFIG_DEFS[agent.name] ? "clickable" : "static"}`}
-                      onClick={() => toggleAgent(agent.name)}
-                      disabled={!AGENT_CONFIG_DEFS[agent.name] || !!agentConfigLoading || !!agentConfigSaving}
-                      type="button"
-                    >
-                      <span>{agent.name}</span>
-                      <span>{agent.enabled ? "enabled" : "disabled"}</span>
-                    </button>
-                    {AGENT_CONFIG_DEFS[agent.name] ? (
-                      <button
-                        className="agent-settings-btn"
-                        onClick={() => openAgentSettings(agent.name)}
-                        disabled={!!agentConfigLoading || !!agentConfigSaving}
-                        aria-label={`${agent.name} settings`}
-                        title={`${agent.name} settings`}
-                        type="button"
-                      >
-                        <SettingsIcon />
-                      </button>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-              {activeSubagents.length ? (
-                <>
-                  <h3 style={{ marginTop: "1rem" }}>Running Subagents</h3>
-                  <div className="thread-list agent-list">
-                    {activeSubagents.map((subagent) => {
-                      const threadId = typeof subagent.thread_id === "string" ? subagent.thread_id : "";
-                      const label = typeof subagent.name === "string" && subagent.name.trim()
-                        ? subagent.name.trim()
-                        : typeof subagent.role === "string" && subagent.role.trim()
-                          ? subagent.role.trim()
-                          : "subagent";
-                      const detail = typeof subagent.role === "string" && subagent.role.trim()
-                        ? subagent.role.trim()
-                        : typeof subagent.status === "string" && subagent.status.trim()
-                          ? subagent.status.trim()
-                          : "active";
-                      const title = threadId
-                        ? `thread: ${threadId}${typeof subagent.parent_thread_id === "string" && subagent.parent_thread_id.trim() ? `, parent: ${subagent.parent_thread_id}` : ""}`
-                        : label;
-                      return (
-                        <div key={threadId || label} className="agent-row">
-                          <div className="agent-item static on" title={title}>
-                            <span>{label}</span>
-                            <span>{detail}</span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </>
-              ) : null}
-              {agentConfigError ? <div className="agent-error">{agentConfigError}</div> : null}
-              {activeAgentDef ? (
-                <div className="agent-settings-card">
-                  <div className="agent-settings-head">
-                    <strong>{activeAgentDef.title}</strong>
-                    <span className={`agent-status-chip ${(activeAgentConfig?.enabled ?? false) ? "on" : "off"}`}>
-                      {(activeAgentConfig?.enabled ?? false) ? "enabled" : "disabled"}
-                    </span>
-                  </div>
-                  {activeAgentConfig ? (
-                    <div className="agent-settings-form">
-                      {activeAgentDef.fields.map((field) => (
-                        <label key={field.key} className="agent-field">
-                          <span>{field.label}</span>
-                          <select
-                            value={String(activeAgentConfig[field.key] ?? "")}
-                            onChange={(e) => {
-                              const raw = e.target.value;
-                              const nextValue = typeof field.options[0] === "number" ? Number(raw) : raw;
-                              updateAgentDraft(activeAgentSettings, field.key, nextValue);
-                            }}
-                            disabled={settingsBusy}
-                          >
-                            {field.options.map((option) => (
-                              <option key={String(option)} value={String(option)}>
-                                {String(option)}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      ))}
-                      {activeAgentSettings === "guardian" ? (
-                        <div className="agent-settings-summary">
-                          <div className="agent-settings-summary-title">
-                            Rules: {guardianRuleSummary.enabled || 0}/{guardianRuleSummary.total || 0} enabled
-                          </div>
-                          {guardianRuleSummary.action_counts ? (
-                            <div className="agent-settings-summary-actions">
-                              {["approve", "session", "deny", "manual_fallback"].map((action) => (
-                                <span key={action}>
-                                  {action}: {guardianRuleSummary.action_counts[action] || 0}
-                                </span>
-                              ))}
-                            </div>
-                          ) : null}
-                          {Array.isArray(guardianRuleSummary.top) && guardianRuleSummary.top.length ? (
-                            <div className="agent-settings-summary-list">
-                              {guardianRuleSummary.top.slice(0, 3).map((rule, index) => (
-                                <div key={`${rule.name || "rule"}:${index}`} className="agent-settings-summary-item">
-                                  <span>{rule.name || "unnamed-rule"}</span>
-                                  <span>{`${rule.action || "deny"} 쨌 p${rule.priority || 0}`}</span>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="agent-settings-empty">No guardian policy rules configured.</div>
-                          )}
-                          <div className="agent-settings-summary-footer">
-                            <button
-                              className={`agent-settings-inline-btn ${floatingAgentSettings === "guardian" ? "active" : ""}`}
-                              type="button"
-                              onClick={() => toggleFloatingAgentSettings("guardian")}
-                              disabled={settingsBusy}
-                              aria-label="Rules TOML"
-                              title="Rules TOML"
-                            >
-                              <SettingsIcon />
-                              <span>Settings</span>
-                            </button>
-                          </div>
-                        </div>
-                      ) : null}
-                      <div className="agent-settings-actions">
-                        <button
-                          className="agent-settings-action"
-                          type="button"
-                          onClick={() =>
-                            loadAgentConfig(activeAgentSettings, {
-                              syncRulesEditor: activeAgentSettings !== "guardian",
-                            }).catch((err) => {
-                              setAgentConfigError(err.message || "Failed to refresh settings.");
-                            })
-                          }
-                          disabled={settingsBusy}
-                          aria-label="Refresh"
-                          title="Refresh"
-                        >
-                          <RefreshIcon />
-                        </button>
-                        <button
-                          className="agent-settings-action agent-settings-action-primary"
-                          type="button"
-                          onClick={() =>
-                            saveAgentSettings(activeAgentSettings, {
-                              includeRules: false,
-                            })
-                          }
-                          disabled={settingsBusy}
-                          aria-label="Save"
-                          title="Save"
-                        >
-                          <SaveIcon />
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="agent-settings-empty">Loading settings.</div>
-                  )}
-                </div>
-              ) : null}
-            </div>
-            <div className="panel">
-              <div className="panel-head">
-                <h3>Projects</h3>
-              </div>
-              {interactionBusy ? (
-                <div className="panel-note">Project switch is unavailable while a turn is running.</div>
-              ) : null}
-              <div className="thread-list project-list">
-                {projectItems.map((item) => (
-                  <button
-                    key={item.key}
-                    className={`thread-item project-item ${item.key === activeProjectKey ? "active" : ""}`}
-                    onClick={() => selectProject(item.key).catch(() => {})}
-                    disabled={interactionBusy}
-                    type="button"
-                  >
-                    <div className="thread-title">
-                      {item.name || item.key}
-                      {item.default ? <span className="project-pill">default</span> : null}
-                    </div>
-                    <div className="thread-sub">{item.key}</div>
-                  </button>
-                ))}
-                {projectItems.length ? null : <div className="panel-note">No projects configured.</div>}
-              </div>
-            </div>
-            <div className="panel threads-panel">
-              <div className="panel-head">
-                <h3>Threads</h3>
-              </div>
-              <div className="thread-list">
-                {threadItems.map((item) => (
-                  <button
-                    key={item.id}
-                    className={`thread-item ${normalizeThreadId(item.id) === normalizeThreadId(activeThread) ? "active" : ""}`}
-                    onClick={() => viewThread(item.id)}
-                    disabled={interactionBusy}
-                    type="button"
-                  >
-                    <div className="thread-title">{item.title || "Untitled"}</div>
-                    <div className="thread-sub">{item.id}</div>
-                  </button>
-                ))}
-                {threadItems.length ? null : (
-                  <div className="panel-note">No open threads.</div>
-                )}
-              </div>
-            </div>
+            <AppSidebarContentPanel
+              turnNotificationEnabled={turnNotificationEnabled}
+              setTurnNotificationEnabled={setTurnNotificationEnabled}
+              persistTurnNotificationEnabled={persistTurnNotificationEnabled}
+              onToggleTheme={onToggleTheme}
+              theme={theme}
+              sessionSummary={sessionSummary}
+              toggleAgent={toggleAgent}
+              agentConfigLoading={agentConfigLoading}
+              agentConfigSaving={agentConfigSaving}
+              openAgentSettings={openAgentSettings}
+              activeSubagents={activeSubagents}
+              agentConfigError={agentConfigError}
+              activeAgentDef={activeAgentDef}
+              activeAgentConfig={activeAgentConfig}
+              settingsBusy={settingsBusy}
+              updateAgentDraft={updateAgentDraft}
+              activeAgentSettings={activeAgentSettings}
+              guardianRuleSummary={guardianRuleSummary}
+              floatingAgentSettings={floatingAgentSettings}
+              toggleFloatingAgentSettings={toggleFloatingAgentSettings}
+              loadAgentConfig={loadAgentConfig}
+              setAgentConfigError={setAgentConfigError}
+              saveAgentSettings={saveAgentSettings}
+              interactionBusy={interactionBusy}
+              projectItems={projectItems}
+              activeProjectKey={activeProjectKey}
+              selectProject={selectProject}
+              threadItems={threadItems}
+              activeThread={activeThread}
+              viewThread={viewThread}
+            />
           </div>
         ) : null}
         <div className="sidebar-footer">
@@ -2129,375 +1888,111 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
             </button>
           </div>
         ) : null}
-        {floatingAgentSettings === "guardian" ? (
-          <div className="agent-floating-settings">
-            <div className="agent-floating-settings-card">
-              <div className="agent-settings-head">
-                <strong>Guardian Rules TOML</strong>
-                <button
-                  className="agent-floating-settings-close"
-                  type="button"
-                  onClick={() => setFloatingAgentSettings("")}
-                  disabled={settingsBusy}
-                >
-                  Close
-                </button>
-              </div>
-              {floatingAgentConfig ? (
-                <div className="agent-settings-form">
-                  <label className="agent-field">
-                    <span>Rules TOML</span>
-                    <textarea
-                      className="agent-field-textarea"
-                      value={guardianRulesEditor}
-                      onChange={(e) => {
-                        const nextValue = e.target.value;
-                        setAgentConfigRawEditors((prev) => ({
-                          ...prev,
-                          [floatingAgentSettings]: nextValue,
-                        }));
-                      }}
-                      disabled={settingsBusy}
-                      spellCheck={false}
-                    />
-                    <span className="agent-field-help">
-                      Only rules that already exist in `conf.toml` are active. If none are configured, commented examples from `conf.toml.example` are shown here.
-                    </span>
-                  </label>
-                  <div className="agent-floating-settings-note">
-                    Timeout, failure policy, and explainability stay in the left settings card.
-                  </div>
-                  <div className="agent-settings-actions">
-                    <button
-                      className="agent-settings-action"
-                      type="button"
-                      onClick={() => loadAgentConfig(floatingAgentSettings, { syncRulesEditor: true }).catch((err) => {
-                        setAgentConfigError(err.message || "Failed to refresh settings.");
-                      })}
-                      disabled={settingsBusy}
-                      aria-label="Refresh"
-                      title="Refresh"
-                    >
-                      <RefreshIcon />
-                    </button>
-                    <button
-                      className="agent-settings-action agent-settings-action-primary"
-                      type="button"
-                      onClick={() => saveAgentSettings(floatingAgentSettings, { includeRules: true })}
-                      disabled={settingsBusy}
-                      aria-label="Save"
-                      title="Save"
-                    >
-                      <SaveIcon />
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="agent-settings-empty">Loading settings.</div>
-              )}
-            </div>
-          </div>
-        ) : null}
-        <TopTabs
-          projectTabs={projectTabs}
-          activeProjectTabId={activeProjectTabId}
-          projectTabStatusById={projectTabStatusById}
-          onSelectProjectTab={(tabId) => {
-            setActiveProjectTabId(tabId);
-            if (isMobileLayout) {
-              setIsSidebarOpen(false);
-            }
-          }}
-          onCloseProjectTab={closeProjectTab}
-          threadTabs={threadTabsByProjectTabId[activeProjectTabId] || []}
-          activeThread={activeThread}
-          onSelectThread={viewThread}
-          onCloseThread={(threadId) => closeThreadTab(activeProjectTabId, threadId)}
-          onAddThread={() => startThread().catch(() => {})}
-          disableAddThread={!activeProjectKey || interactionBusy}
+        <FloatingGuardianSettingsPanel
+          visible={floatingAgentSettings === "guardian"}
+          settingsBusy={settingsBusy}
+          floatingAgentConfig={floatingAgentConfig}
+          floatingAgentSettings={floatingAgentSettings}
+          guardianRulesEditor={guardianRulesEditor}
+          setFloatingAgentSettings={setFloatingAgentSettings}
+          setAgentConfigRawEditors={setAgentConfigRawEditors}
+          loadAgentConfig={loadAgentConfig}
+          saveAgentSettings={saveAgentSettings}
+          setAgentConfigError={setAgentConfigError}
         />
-        <div className="workspace-layout">
-          <div className="center-pane">
-            {workspacePreview ? (
-              <div
-                className="modal-backdrop workspace-preview-backdrop"
-                role="presentation"
-                onMouseDown={() => setWorkspacePreview(null)}
-              >
-                <WorkspacePreviewPanel
-                  workspacePreview={workspacePreview}
-                  onClose={() => setWorkspacePreview(null)}
-                  onResetSize={resetWorkspacePreviewSize}
-                  className={`workspace-preview-modal ${isResizingWorkspacePreview ? "resizing" : ""}`}
-                  style={{
-                    width: isMobileLayout ? "calc(100vw - 20px)" : `${workspacePreviewWidth}px`,
-                    height: isMobileLayout ? "calc(100vh - 20px)" : `${workspacePreviewHeight}px`,
-                  }}
-                  onMouseDown={(event) => event.stopPropagation()}
-                  onResizeWidthStart={!isMobileLayout ? (event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    workspacePreviewResizeRef.current = {
-                      mode: "width",
-                      startX: event.clientX,
-                      startY: event.clientY,
-                      startWidth: workspacePreviewWidth,
-                      startHeight: workspacePreviewHeight,
-                    };
-                    setIsResizingWorkspacePreview(true);
-                  } : null}
-                  onResizeHeightStart={!isMobileLayout ? (event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    workspacePreviewResizeRef.current = {
-                      mode: "height",
-                      startX: event.clientX,
-                      startY: event.clientY,
-                      startWidth: workspacePreviewWidth,
-                      startHeight: workspacePreviewHeight,
-                    };
-                    setIsResizingWorkspacePreview(true);
-                  } : null}
-                />
-              </div>
-            ) : null}
-            <div className="chat" ref={chatRef}>
-              <ApprovalStack
-                approvalItems={approvalItems}
-                approvalBusyId={approvalBusyId}
-                onSubmitApproval={submitApproval}
-                onClose={() => setApprovalItems([])}
+        <AppCenterPanePresenter
+          topTabs={
+            <TopTabs
+              projectTabs={projectTabs}
+              activeProjectTabId={activeProjectTabId}
+              projectTabStatusById={projectTabStatusById}
+              onSelectProjectTab={(tabId) => {
+                setActiveProjectTabId(tabId);
+                if (isMobileLayout) {
+                  setIsSidebarOpen(false);
+                }
+              }}
+              onCloseProjectTab={closeProjectTab}
+              threadTabs={threadTabsByProjectTabId[activeProjectTabId] || []}
+              activeThread={activeThread}
+              onSelectThread={viewThread}
+              onCloseThread={(threadId) => closeThreadTab(activeProjectTabId, threadId)}
+              onAddThread={() => startThread().catch(() => {})}
+              disableAddThread={!activeProjectKey || interactionBusy}
+            />
+          }
+          centerPane={
+            <>
+              <WorkspacePreviewOverlay
+                workspacePreview={workspacePreview}
+                isResizingWorkspacePreview={isResizingWorkspacePreview}
+                isMobileLayout={isMobileLayout}
+                workspacePreviewWidth={workspacePreviewWidth}
+                workspacePreviewHeight={workspacePreviewHeight}
+                workspacePreviewResizeRef={workspacePreviewResizeRef}
+                setIsResizingWorkspacePreview={setIsResizingWorkspacePreview}
+                setWorkspacePreview={setWorkspacePreview}
+                resetWorkspacePreviewSize={resetWorkspacePreviewSize}
               />
-              <ChatMessageFeed renderItems={renderItems} />
-            </div>
-            <div className="composer">
-              {activityDetail ? (
-                <div className="activity-indicator composer-activity-indicator">{activityDetail}</div>
-              ) : null}
-              <div className="composer-inner">
-                <div className="input-wrap">
-              {paletteOpen ? (
-                <div className="slash-panel" ref={paletteRef}>
-                  {visiblePaletteItems.map((item, idx) => {
-                    const absoluteIndex = paletteWindowStart + idx;
-                    return (
-                    <button
-                      key={`${activeToken?.type || "t"}:${item}`}
-                      className={`slash-item ${absoluteIndex === paletteSelectedIndex ? "active" : ""}`}
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        applyPaletteItem(item);
-                      }}
-                    >
-                      {activeToken?.type === "project" ? "@" : activeToken?.type === "skill" ? "$" : ""}
-                      {item}
-                    </button>
-                    );
-                  })}
-                </div>
-              ) : null}
-              <div className={`composer-input-shell mode-${collaborationMode}`}>
-                <button
-                  type="button"
-                  className={`composer-mode mode-${collaborationMode}`}
-                  disabled={composerLocked || modeSwitchBusy}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                  }}
-                  onClick={() => {
-                    toggleComposerMode().catch(() => {});
-                    focusComposer();
-                  }}
-                  title="Press Tab to toggle mode"
-                  aria-label={`Collaboration mode ${collaborationMode}. Press Tab to toggle.`}
-                >
-                  <span className="composer-mode-label">{collaborationMode.toUpperCase()}</span>
-                  <span className="composer-mode-key">TAB</span>
-                </button>
-                <textarea
-                  ref={inputRef}
-                  rows={1}
-                  value={input}
-                  disabled={composerLocked}
-                  onChange={(e) => {
-                    composerFocusWantedRef.current = true;
-                    rememberComposerSelection(e.currentTarget);
-                    inputHistoryIndexRef.current = -1;
-                    setInputForActiveThread(e.target.value);
-                  }}
-                  onFocus={(e) => {
-                    composerFocusWantedRef.current = true;
-                    rememberComposerSelection(e.currentTarget);
-                  }}
-                  onBlur={(e) => {
-                    const now =
-                      typeof performance !== "undefined" && typeof performance.now === "function"
-                        ? performance.now()
-                        : Date.now();
-                    if (now - recentBackspaceAtRef.current <= 250) {
-                      composerFocusWantedRef.current = true;
-                      return;
-                    }
-                    composerFocusWantedRef.current = false;
-                    rememberComposerSelection(e.currentTarget);
-                  }}
-                  onSelect={(e) => {
-                    rememberComposerSelection(e.currentTarget);
-                  }}
-                  onKeyDown={(e) => {
-                    if (composerLocked) {
-                      return;
-                    }
-                    if (e.nativeEvent.isComposing) {
-                      return;
-                    }
-                    composerFocusWantedRef.current = true;
-                    rememberComposerSelection(e.currentTarget);
-                    if (e.key === "Backspace") {
-                      recentBackspaceAtRef.current =
-                        typeof performance !== "undefined" && typeof performance.now === "function"
-                          ? performance.now()
-                          : Date.now();
-                    }
-                    if (e.key === "Tab" && !e.altKey && !e.ctrlKey && !e.metaKey) {
-                      e.preventDefault();
-                      toggleComposerMode().catch(() => {});
-                      return;
-                    }
-                    if (paletteOpen && e.key === "ArrowDown") {
-                      e.preventDefault();
-                      setPaletteSelectedIndex((prev) => (prev + 1) % paletteItems.length);
-                      return;
-                    }
-                    if (paletteOpen && e.key === "ArrowUp") {
-                      e.preventDefault();
-                      setPaletteSelectedIndex((prev) =>
-                        (prev - 1 + paletteItems.length) % paletteItems.length
-                      );
-                      return;
-                    }
-                    if (!paletteOpen && e.key === "ArrowUp") {
-                      e.preventDefault();
-                      const activeThreadId = normalizeThreadId(activeThread);
-                      const threadMessages = messagesByThreadId[activeThreadId] || [];
-                      const userMessages = threadMessages
-                        .filter((m) => m?.role === "user" && typeof m?.text === "string" && m.text.trim())
-                        .map((m) => m.text);
-                      if (userMessages.length === 0) {
-                        return;
-                      }
-                      const newIndex = Math.min(inputHistoryIndexRef.current + 1, userMessages.length - 1);
-                      inputHistoryIndexRef.current = newIndex;
-                      setInputForActiveThread(userMessages[userMessages.length - 1 - newIndex]);
-                      return;
-                    }
-                    if (!paletteOpen && e.key === "ArrowDown") {
-                      e.preventDefault();
-                      if (inputHistoryIndexRef.current <= 0) {
-                        inputHistoryIndexRef.current = -1;
-                        setInputForActiveThread("");
-                        return;
-                      }
-                      const activeThreadId = normalizeThreadId(activeThread);
-                      const threadMessages = messagesByThreadId[activeThreadId] || [];
-                      const userMessages = threadMessages
-                        .filter((m) => m?.role === "user" && typeof m?.text === "string" && m.text.trim())
-                        .map((m) => m.text);
-                      if (userMessages.length === 0) {
-                        return;
-                      }
-                      const newIndex = inputHistoryIndexRef.current - 1;
-                      inputHistoryIndexRef.current = newIndex;
-                      setInputForActiveThread(userMessages[userMessages.length - 1 - newIndex]);
-                      return;
-                    }
-                    if (paletteOpen && e.key === "Escape") {
-                      e.preventDefault();
-                      return;
-                    }
-                    if (e.key !== "Enter") {
-                      return;
-                    }
-                    if (e.altKey || e.shiftKey) {
-                      e.preventDefault();
-                      const el = e.currentTarget;
-                      const start = el.selectionStart ?? input.length;
-                      const end = el.selectionEnd ?? input.length;
-                      const next = `${input.slice(0, start)}\n${input.slice(end)}`;
-                      setInputForActiveThread(next);
-                      queueMicrotask(() => {
-                        const pos = start + 1;
-                        if (inputRef.current) {
-                          inputRef.current.selectionStart = pos;
-                          inputRef.current.selectionEnd = pos;
-                        }
-                      });
-                      return;
-                    }
-                    if (paletteOpen) {
-                      e.preventDefault();
-                      applyPaletteItem(paletteItems[paletteSelectedIndex]);
-                      return;
-                    }
-                    e.preventDefault();
-                    sendMessage().catch(() => {});
-                  }}
-                  placeholder="Message..."
+              <div className="chat" ref={chatRef}>
+                <ApprovalStack
+                  approvalItems={approvalItems}
+                  approvalBusyId={approvalBusyId}
+                  onSubmitApproval={submitApproval}
+                  onClose={() => setApprovalItems([])}
                 />
+                <ChatMessageFeed renderItems={renderItems} />
               </div>
-            </div>
-            {status === "running" ? (
-              <button className="composer-action composer-stop" onClick={interrupt} aria-label="Stop" title="Stop">
-                <StopIcon />
-              </button>
-            ) : (
-              <button className="composer-action composer-send" onClick={sendMessage} aria-label="Send" title="Send">
-                <SendIcon />
-              </button>
-            )}
-            {isCompactWorkspaceLayout ? (
-              <button
-                className={`composer-action composer-workspace-toggle ${isWorkspacePanelOpen ? "active" : ""}`}
-                onClick={() => setIsWorkspacePanelOpen((current) => !current)}
-                aria-label="Workspace files"
-                title="Workspace files"
-                type="button"
-              >
-                <FolderIcon open={isWorkspacePanelOpen} />
-              </button>
-            ) : null}
-            <button
-              className="composer-action composer-new-chat"
-              onClick={() => startThread({ replaceCurrentTab: true }).catch(() => {})}
-              aria-label="New chat"
-              title="New chat"
-              disabled={interactionBusy}
-            >
-              <NewChatIcon />
-            </button>
-          </div>
-            </div>
-            {isCompactWorkspaceLayout && isWorkspacePanelOpen ? workspacePanel : null}
-          </div>
-          {shouldShowWorkspacePanelDesktop(isCompactWorkspaceLayout) ? (
-            <div className="workspace-panel-shell">
-              <div
-                className={`workspace-panel-resizer ${isResizingWorkspacePanel ? "active" : ""}`}
-                onMouseDown={(event) => {
-                  workspaceResizeRef.current = {
-                    startX: event.clientX,
-                    startWidth: workspacePanelWidth,
-                  };
-                  setIsResizingWorkspacePanel(true);
+              <AppComposerPresenter
+                activityDetail={activityDetail}
+                paletteOpen={paletteOpen}
+                paletteRef={paletteRef}
+                visiblePaletteItems={visiblePaletteItems}
+                paletteWindowStart={paletteWindowStart}
+                paletteSelectedIndex={paletteSelectedIndex}
+                activeTokenType={activeToken?.type || ""}
+                onApplyPaletteItem={applyPaletteItem}
+                collaborationMode={collaborationMode}
+                composerLocked={composerLocked}
+                modeSwitchBusy={modeSwitchBusy}
+                onToggleComposerMode={() => {
+                  toggleComposerMode().catch(() => {});
+                  focusComposer();
                 }}
-                role="separator"
-                aria-orientation="vertical"
-                aria-label="Resize workspace files panel"
+                inputRef={inputRef}
+                input={input}
+                onInputChange={onInputChange}
+                onInputFocus={onInputFocus}
+                onInputBlur={onInputBlur}
+                onInputSelect={onInputSelect}
+                onInputKeyDown={onInputKeyDown}
+                status={status}
+                onInterrupt={interrupt}
+                onSendMessage={sendMessage}
+                isCompactWorkspaceLayout={isCompactWorkspaceLayout}
+                isWorkspacePanelOpen={isWorkspacePanelOpen}
+                onToggleWorkspacePanel={() => setIsWorkspacePanelOpen((current) => !current)}
+                onNewChat={() => startThread({ replaceCurrentTab: true }).catch(() => {})}
+                interactionBusy={interactionBusy}
+                StopIcon={StopIcon}
+                SendIcon={SendIcon}
+                FolderIcon={FolderIcon}
+                NewChatIcon={NewChatIcon}
               />
-              {workspacePanel}
-            </div>
-          ) : null}
-        </div>
+            </>
+          }
+          isCompactWorkspaceLayout={isCompactWorkspaceLayout}
+          isWorkspacePanelOpen={isWorkspacePanelOpen}
+          workspacePanel={workspacePanel}
+          isResizingWorkspacePanel={isResizingWorkspacePanel}
+          onStartWorkspacePanelResize={(event) => {
+            workspaceResizeRef.current = {
+              startX: event.clientX,
+              startWidth: workspacePanelWidth,
+            };
+            setIsResizingWorkspacePanel(true);
+          }}
+        />
       </main>
       </AppMainPresenter>
     </div>
