@@ -9,18 +9,16 @@ import AppComposerPresenter from "../components/AppComposerPresenter";
 import AppSidebarContentPanel from "../components/AppSidebarContentPanel";
 import FloatingGuardianSettingsPanel from "../components/FloatingGuardianSettingsPanel";
 import WorkspacePreviewOverlay from "../components/WorkspacePreviewOverlay";
+import WorkspacePanel from "../../workspace/components/WorkspacePanel";
 import ApprovalStack from "../../approvals/components/ApprovalStack";
 import useApprovalFlow from "../../approvals/hooks/useApprovalFlow";
 import ChatMessageFeed from "../../chat/components/ChatMessageFeed";
 import { AGENT_CONFIG_DEFS } from "../../common/constants";
 import { api } from "../../common/api";
 import {
-  ChevronIcon,
-  FileIcon,
   FolderIcon,
   MenuIcon,
   NewChatIcon,
-  RefreshIcon,
   SendIcon,
   SidebarChevronIcon,
   StopIcon,
@@ -32,9 +30,6 @@ import {
   formatPlanChecklistText,
   groupMessagesForRender,
   normalizeThreadId,
-  normalizeWorkspacePath,
-  statusClassName,
-  statusPriority,
   summarizeReasoningStatus,
 } from "../../common/utils";
 import TopTabs from "../../tabs/components/TopTabs";
@@ -57,6 +52,7 @@ import useComposerFocusEffects from "../hooks/useComposerFocusEffects";
 import usePaletteEffects from "../hooks/usePaletteEffects";
 import useThreadBootstrapEffects from "../hooks/useThreadBootstrapEffects";
 import useMessageCommandActions from "../hooks/useMessageCommandActions";
+import useAppUiEffects from "../hooks/useAppUiEffects";
 import useThreadScopedState from "../../thread/hooks/useThreadScopedState";
 import { getSidebarStyle, getWorkspacePanelStyle } from "../state/layoutSelectors";
 
@@ -840,56 +836,31 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
     persistWorkspacePreviewHeight,
     clearWorkspacePreviewSize,
   });
-  useEffect(() => {
-    if (!activeToken || activeToken.type !== "project") {
-      setProjectSuggestions([]);
-      return;
-    }
-    const prefix = activeToken.query || "";
-    {
-      const query = new URLSearchParams({ prefix, limit: "200" });
-      const ctx = workspaceContextQuery();
-      if (ctx) {
-        const ctxParams = new URLSearchParams(ctx);
-        ctxParams.forEach((value, key) => query.set(key, value));
-      }
-      api(`/api/workspace/suggestions?${query.toString()}`)
-      .then((result) => {
-        const items = Array.isArray(result.items) ? result.items : [];
-        setProjectSuggestions(items.filter((v) => typeof v === "string" && v));
-      })
-      .catch(() => {
-        setProjectSuggestions([]);
-      });
-    }
-  }, [activeToken?.type, activeToken?.query]);
-  useEffect(() => {
-    if (floatingAgentSettings && floatingAgentSettings !== activeAgentSettings) {
-      setFloatingAgentSettings("");
-    }
-  }, [activeAgentSettings, floatingAgentSettings]);
-  useEffect(() => {
-    if (!isProjectModeModalOpen || typeof window === "undefined") {
-      return undefined;
-    }
-    const onKeyDown = (event) => {
-      if (event.key === "Escape") {
-        setPendingProjectTarget("");
-        setIsProjectModeModalOpen(false);
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isProjectModeModalOpen]);
-
-  useEffect(() => {
-    sendMessageRef.current = sendMessage;
-    startThreadRef.current = startThread;
-    closeThreadTabRef.current = closeThreadTab;
-    viewThreadRef.current = viewThread;
-    selectProjectRef.current = selectProject;
-    focusComposerRef.current = focusComposer;
-    setInputForActiveThreadRef.current = setInputForActiveThread;
+  useAppUiEffects({
+    activeToken,
+    workspaceContextQuery,
+    api,
+    setProjectSuggestions,
+    floatingAgentSettings,
+    activeAgentSettings,
+    setFloatingAgentSettings,
+    isProjectModeModalOpen,
+    setPendingProjectTarget,
+    setIsProjectModeModalOpen,
+    sendMessageRef,
+    sendMessage,
+    startThreadRef,
+    startThread,
+    closeThreadTabRef,
+    closeThreadTab,
+    viewThreadRef,
+    viewThread,
+    selectProjectRef,
+    selectProject,
+    focusComposerRef,
+    focusComposer,
+    setInputForActiveThreadRef,
+    setInputForActiveThread,
   });
 
   const filteredProjects = useMemo(() => {
@@ -967,251 +938,29 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
   const settingsBusy = !!agentConfigLoading || !!agentConfigSaving;
   const currentProjectLabel = activeProjectTab?.name || sessionSummary?.project_name || sessionSummary?.project_key || "-";
   const workspaceRootLabel = basename(activeProjectTab?.path || sessionSummary?.workspace || "") || "Workspace";
+  const workspacePanelStyle = getWorkspacePanelStyle(isCompactWorkspaceLayout, workspacePanelWidth);
   const workspaceStatusItems = useMemo(
     () => (workspaceStatus && typeof workspaceStatus.items === "object" ? workspaceStatus.items : {}),
     [workspaceStatus]
   );
-  const workspaceDirectoryStatus = useMemo(() => {
-    const next = {};
-    for (const [path, value] of Object.entries(workspaceStatusItems)) {
-      const normalizedPath = normalizeWorkspacePath(path);
-      const code = value?.code || "";
-      if (!normalizedPath || !code) {
-        continue;
-      }
-      const parts = normalizedPath.split("/");
-      parts.pop();
-      let current = "";
-      for (const part of parts) {
-        current = current ? `${current}/${part}` : part;
-        const existing = next[current] || "";
-        if (statusPriority(code) > statusPriority(existing)) {
-          next[current] = code;
-        }
-      }
-    }
-    return next;
-  }, [workspaceStatusItems]);
-  const deletedWorkspaceEntries = Object.entries(workspaceStatusItems)
-    .filter(([path, value]) => value?.code === "D" && !workspaceTree[""]?.some((item) => item.path === path))
-    .sort((a, b) => a[0].localeCompare(b[0]));
-
-  const getWorkspaceTreeChildren = (item) => {
-    if (!item || item.type !== "directory") {
-      return [];
-    }
-    const itemPath = normalizeWorkspacePath(item.path);
-    const cachedChildren = Array.isArray(workspaceTree[itemPath]) ? workspaceTree[itemPath] : [];
-    if (cachedChildren.length) {
-      return cachedChildren;
-    }
-    return Array.isArray(item.children) ? item.children : [];
-  };
-
-  const collectCompactWorkspaceEntry = (item) => {
-    const segments = [];
-    let currentItem = item;
-    let currentChildren = getWorkspaceTreeChildren(currentItem);
-
-    while (currentItem && currentItem.type === "directory") {
-      segments.push(currentItem);
-      if (!Array.isArray(currentChildren) || currentChildren.length !== 1) {
-        break;
-      }
-      const nextItem = currentChildren[0];
-      if (!nextItem || nextItem.type !== "directory") {
-        break;
-      }
-      currentItem = nextItem;
-      currentChildren = getWorkspaceTreeChildren(currentItem);
-    }
-
-    const leafItem = segments[segments.length - 1] || item;
-    const leafPath = normalizeWorkspacePath(leafItem.path);
-    const leafChildren = getWorkspaceTreeChildren(leafItem);
-    const statusCode = segments.reduce((best, segment) => {
-      const segmentPath = normalizeWorkspacePath(segment.path);
-      const segmentCode = workspaceDirectoryStatus[segmentPath] || workspaceStatusItems[segmentPath]?.code || "";
-      return statusPriority(segmentCode) > statusPriority(best) ? segmentCode : best;
-    }, "");
-
-    return {
-      leafItem,
-      leafPath,
-      leafChildren,
-      segments,
-      statusCode,
-      label: segments.map((segment) => segment.name).join("/"),
-      isExpanded: !!expandedWorkspaceDirs[leafPath],
-    };
-  };
-
-  const copyWorkspacePathToClipboard = useCallback(async (path) => {
-    const text = normalizeWorkspacePath(path);
-    if (!text) {
-      return;
-    }
-    try {
-      if (navigator?.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text);
-      } else {
-        const textarea = document.createElement("textarea");
-        textarea.value = text;
-        textarea.setAttribute("readonly", "true");
-        textarea.style.position = "fixed";
-        textarea.style.left = "-9999px";
-        textarea.style.top = "-9999px";
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand("copy");
-        document.body.removeChild(textarea);
-      }
-      showToast(`Copied ${text}`, "success");
-    } catch (_err) {
-      showToast("Failed to copy path.", "error");
-    }
-  }, [showToast]);
-
-  const renderWorkspaceTree = (path = "", depth = 0) => {
-    const normalizedPath = normalizeWorkspacePath(path);
-    const items = Array.isArray(workspaceTree[normalizedPath]) ? workspaceTree[normalizedPath] : [];
-    if (!items.length && normalizedPath) {
-      return null;
-    }
-    return items.map((item) => {
-      const itemPath = normalizeWorkspacePath(item.path);
-      const isDirectory = item.type === "directory";
-      if (isDirectory) {
-        const compactEntry = collectCompactWorkspaceEntry(item);
-        const hasChildren = !!compactEntry.leafItem.has_children || compactEntry.leafChildren.length > 0;
-        const isSelected = workspacePreview?.path === compactEntry.leafPath;
-        return (
-          <div key={compactEntry.leafPath} className="workspace-tree-node">
-            <button
-              type="button"
-              className={`workspace-tree-item directory ${compactEntry.isExpanded ? "expanded" : ""} ${isSelected ? "selected" : ""} ${statusClassName(compactEntry.statusCode)}`}
-              style={{ paddingLeft: `${12 + depth * 16}px` }}
-              title={compactEntry.leafPath}
-              onClick={() => {
-                toggleWorkspaceDirectory(compactEntry.leafPath);
-              }}
-              onKeyDown={(event) => {
-                const ctrlKey = event.metaKey || event.ctrlKey;
-                if (ctrlKey && event.key.toLowerCase() === "c") {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  copyWorkspacePathToClipboard(compactEntry.leafPath).catch(() => {});
-                }
-              }}
-            >
-              <span className="workspace-tree-icon caret">
-                {hasChildren ? <ChevronIcon expanded={compactEntry.isExpanded} /> : null}
-              </span>
-              <span className="workspace-tree-icon glyph">
-                <FolderIcon open={compactEntry.isExpanded} />
-              </span>
-              <span className="workspace-tree-label workspace-tree-label-compact">{compactEntry.label}</span>
-              {compactEntry.statusCode ? <span className="workspace-tree-badge">{compactEntry.statusCode}</span> : null}
-            </button>
-            {compactEntry.isExpanded ? renderWorkspaceTree(compactEntry.leafPath, depth + compactEntry.segments.length) : null}
-          </div>
-        );
-      }
-      const statusCode = workspaceStatusItems[itemPath]?.code || "";
-      const isSelected = workspacePreview?.path === itemPath;
-      return (
-        <div key={itemPath} className="workspace-tree-node">
-          <button
-            type="button"
-            className={`workspace-tree-item file ${isSelected ? "selected" : ""} ${statusClassName(statusCode)}`}
-            style={{ paddingLeft: `${12 + depth * 16}px` }}
-            title={itemPath}
-            onClick={() => {
-              openWorkspaceFile(itemPath, statusCode).catch(() => {});
-            }}
-            onKeyDown={(event) => {
-              const ctrlKey = event.metaKey || event.ctrlKey;
-              if (ctrlKey && event.key.toLowerCase() === "c") {
-                event.preventDefault();
-                event.stopPropagation();
-                copyWorkspacePathToClipboard(itemPath).catch(() => {});
-              }
-            }}
-          >
-            <span className="workspace-tree-icon caret" />
-            <span className="workspace-tree-icon glyph"><FileIcon /></span>
-            <span className="workspace-tree-label">{item.name}</span>
-            {statusCode ? <span className="workspace-tree-badge">{statusCode}</span> : null}
-          </button>
-        </div>
-      );
-    });
-  };
-  const workspacePanelStyle = getWorkspacePanelStyle(isCompactWorkspaceLayout, workspacePanelWidth);
   const workspacePanel = (
-    <aside
-      className={`workspace-panel ${isCompactWorkspaceLayout ? "compact" : "desktop"} ${isWorkspacePanelOpen ? "open" : ""}`}
-      style={workspacePanelStyle}
-    >
-      <div className="workspace-panel-head">
-        <div>
-          <div className="workspace-panel-title">Workspace Files</div>
-          <div className="workspace-panel-subtitle">{workspaceRootLabel}</div>
-        </div>
-        <button
-          className="workspace-refresh"
-          type="button"
-          onClick={() => {
-            refreshWorkspaceBrowser().catch((err) => {
-              setWorkspaceError(err.message || "Failed to refresh workspace tree.");
-            });
-          }}
-          aria-label="Refresh workspace browser"
-          title="Refresh workspace browser"
-        >
-          <RefreshIcon />
-        </button>
-      </div>
-      {workspaceError ? <div className="workspace-panel-state">{workspaceError}</div> : null}
-      {!(activeProjectTab?.path || sessionSummary?.workspace) ? (
-        <div className="workspace-panel-state">Select a workspace to browse files.</div>
-      ) : null}
-      {activeProjectTab?.path || sessionSummary?.workspace ? (
-        <div className="workspace-tree">
-          {deletedWorkspaceEntries.length ? (
-            <div className="workspace-tree-group">
-              <div className="workspace-tree-group-label">Deleted</div>
-              {deletedWorkspaceEntries.map(([path, value]) => (
-                <button
-                  key={`deleted:${path}`}
-                  type="button"
-                  className="workspace-tree-item file deleted"
-                  title={path}
-                  onClick={() => openWorkspaceFile(path, value?.code || "D").catch(() => {})}
-                  onKeyDown={(event) => {
-                    const ctrlKey = event.metaKey || event.ctrlKey;
-                    if (ctrlKey && event.key.toLowerCase() === "c") {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      copyWorkspacePathToClipboard(path).catch(() => {});
-                    }
-                  }}
-                >
-                  <span className="workspace-tree-icon caret" />
-                  <span className="workspace-tree-icon glyph"><FileIcon /></span>
-                  <span className="workspace-tree-label">{path}</span>
-                  <span className="workspace-tree-badge">{value?.code || "D"}</span>
-                </button>
-              ))}
-            </div>
-          ) : null}
-          {renderWorkspaceTree("", 0)}
-          {Array.isArray(workspaceTree[""]) && workspaceTree[""].length ? null : (
-            <div className="workspace-panel-state">No files available.</div>
-          )}
-        </div>
-      ) : null}
-    </aside>
+    <WorkspacePanel
+      isCompactWorkspaceLayout={isCompactWorkspaceLayout}
+      isWorkspacePanelOpen={isWorkspacePanelOpen}
+      workspacePanelStyle={workspacePanelStyle}
+      workspaceRootLabel={workspaceRootLabel}
+      workspaceError={workspaceError}
+      activeWorkspacePath={activeProjectTab?.path || sessionSummary?.workspace || ""}
+      workspaceStatusItems={workspaceStatusItems}
+      workspaceTree={workspaceTree}
+      expandedWorkspaceDirs={expandedWorkspaceDirs}
+      workspacePreview={workspacePreview}
+      toggleWorkspaceDirectory={toggleWorkspaceDirectory}
+      openWorkspaceFile={openWorkspaceFile}
+      refreshWorkspaceBrowser={refreshWorkspaceBrowser}
+      setWorkspaceError={setWorkspaceError}
+      showToast={showToast}
+    />
   );
 
   const isDesktopSidebarCollapsed = !isMobileLayout && isSidebarCollapsed;
