@@ -70,6 +70,35 @@
 - [x] turn 완료/오류/중단 이벤트 처리 정상
 - [x] 빌드/테스트 통과
 
+### Stage 3.1. 상호작용 흐름 모듈화
+- [x] thread/session/turn 상호작용 흐름의 훅 모듈화 적용
+- [x] viewport/resize/keyboard 상호작용 흐름의 훅 모듈화 적용
+- [x] 컨테이너는 훅 조립 중심 구조로 정리
+- [x] 기존 동작/계약(API/SSE/세션) 유지 확인
+
+진입 조건
+- [x] Stage 3 완료
+- [x] Always Gate 항목 유지
+
+완료 조건
+- [x] 메시지 송신/중단 정상
+- [x] turn 완료/오류/중단 이벤트 처리 정상
+- [x] 빌드/테스트 통과
+
+### Stage 3.2. UI 적용 전 구조 안정화
+- [x] 오버레이 렌더 경계 분리 적용
+- [x] 사이드바/센터/컴포저 렌더 조합 경계 분리 적용
+- [x] composer palette/입력 이벤트 흐름 모듈화 적용
+- [x] UI Kit 적용 전 컨테이너 구조 안정화 확인
+
+진입 조건
+- [x] Stage 3.1 완료
+- [x] Always Gate 항목 유지
+
+완료 조건
+- [x] 주요 UI 회귀 없음
+- [x] 빌드/테스트 통과
+
 ### Stage 4. UI Kit 재사용성 강화
 - [ ] 1차 UI Kit 컴포넌트 적용(`Button`, `IconButton`, `Input`, `Textarea`, `Modal`, `Tabs`, `Toast`, `Badge`, `Panel`)
 - [ ] 디자인 토큰(CSS 변수) 정의(color/spacing/radius/typography/layer/motion)
@@ -77,7 +106,7 @@
 - [ ] 컴포넌트 사용 규칙 문서화
 
 진입 조건
-- [ ] Stage 3 완료
+- [x] Stage 3.2 완료
 - [x] Always Gate 항목 유지
 
 완료 조건

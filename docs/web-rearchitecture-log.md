@@ -20,6 +20,61 @@ Rule:
   - ...
 ```
 
+## 2026-05-26 14:50 (local, inferred)
+- Objective:
+  - TopTabs+Center 조합 분리 및 Composer 분리 1~3단계(렌더/팔레트/키입력) 반영.
+- Files changed:
+  - web/frontend/src/features/app/containers/AuthenticatedAppContainer.tsx
+  - web/frontend/src/features/app/components/AppCenterPanePresenter.tsx
+  - web/frontend/src/features/app/components/AppComposerPresenter.tsx
+  - web/frontend/src/features/app/hooks/useComposerPalette.ts
+  - web/frontend/src/features/app/hooks/useComposerInputHandlers.ts
+- Changes:
+  - `TopTabs + workspace-layout + center-pane` 조합을 `AppCenterPanePresenter`로 추출해 컨테이너의 레이아웃 JSX를 축소.
+  - composer 렌더 블록을 `AppComposerPresenter`로 추출하고, 기존 상태/핸들러는 주입 방식으로 유지.
+  - palette 계산(`activeToken/paletteItems/visiblePaletteItems`)을 `useComposerPalette` 훅으로 이동.
+  - textarea 입력 이벤트 분기(모드 토글, palette 탐색/적용, 히스토리 탐색, Enter/Shift+Enter 처리)를 `useComposerInputHandlers` 훅으로 이동.
+- Validation:
+  - `cd web/frontend && npm run lint` 통과 (0 errors, 52 warnings).
+  - `cd web/frontend && npm test -- --runInBand` 통과 (19/19).
+  - `cd web/frontend && npm run build` 통과.
+- Next step:
+  - composer focus/selection 관련 effect를 별도 훅으로 추가 분리할지, 현재 수준에서 UI Kit 적용으로 넘어갈지 결정.
+
+## 2026-05-26 14:25 (local, inferred)
+- Objective:
+  - UI Kit 전 컨테이너 분리 2차: 사이드바 콘텐츠 패널을 별도 presenter로 추출.
+- Files changed:
+  - web/frontend/src/features/app/containers/AuthenticatedAppContainer.tsx
+  - web/frontend/src/features/app/components/AppSidebarContentPanel.tsx
+- Changes:
+  - 에이전트/프로젝트/스레드 목록과 상단 토글(알림/테마)을 `AppSidebarContentPanel`로 이동.
+  - 컨테이너는 사이드바 데이터/액션 주입과 레이아웃 셸 유지 역할로 축소.
+- Validation:
+  - `cd web/frontend && npm run lint` 통과 (0 errors, 52 warnings).
+  - `cd web/frontend && npm test -- --runInBand` 통과 (19/19).
+  - `cd web/frontend && npm run build` 통과.
+- Next step:
+  - 다음 소배치로 composer 블록 또는 top tabs + center pane 조합 영역 분리.
+
+## 2026-05-26 14:05 (local, inferred)
+- Objective:
+  - UI Kit 적용 전 소배치 분리: `AuthenticatedAppContainer`에서 독립 오버레이 렌더 블록 추출.
+- Files changed:
+  - web/frontend/src/features/app/containers/AuthenticatedAppContainer.tsx
+  - web/frontend/src/features/app/components/FloatingGuardianSettingsPanel.tsx
+  - web/frontend/src/features/app/components/WorkspacePreviewOverlay.tsx
+- Changes:
+  - Guardian 규칙 편집 플로팅 패널 렌더를 `FloatingGuardianSettingsPanel`로 분리하고 기존 상태/핸들러를 주입 방식으로 유지.
+  - Workspace preview backdrop/panel 렌더 및 리사이즈 시작 이벤트를 `WorkspacePreviewOverlay`로 분리.
+  - 컨테이너는 도메인 상태/행동 소유를 유지하고, 렌더 조합 책임만 축소.
+- Validation:
+  - `cd web/frontend && npm run lint` 통과 (0 errors, 52 warnings).
+  - `cd web/frontend && npm test -- --runInBand` 통과 (19/19).
+  - `cd web/frontend && npm run build` 통과.
+- Next step:
+  - 다음 소배치로 sidebar content 또는 composer 블록을 presenter 컴포넌트로 추가 분리.
+
 ## 2026-05-11 14:55 (local)
 - Objective:
   - Stage 4 4차 분해: 키보드/레이아웃/리사이즈 effect를 3개 훅으로 분리.
