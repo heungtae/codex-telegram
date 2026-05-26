@@ -99,6 +99,35 @@
 - [x] 주요 UI 회귀 없음
 - [x] 빌드/테스트 통과
 
+### Stage 3.3. 도메인 경계 재정렬
+- [x] agent 설정 흐름 도메인 훅 분리 적용
+- [x] turn/reasoning 메시지 mutation 도메인 분리 적용
+- [x] effect orchestration 목적별 훅 분리 적용
+- [x] message command 액션 도메인 훅 분리 적용
+- [x] 컨테이너 책임 재정렬 후 동작/계약 유지 확인
+
+진입 조건
+- [x] Stage 3.2 완료
+- [x] Always Gate 항목 유지
+
+완료 조건
+- [x] 주요 UI 회귀 없음
+- [x] 빌드/테스트 통과
+
+### Stage 3.4. 프리젠테이션 경계 고도화
+- [x] workspace 트리 계산 로직 도메인 모델 분리 적용
+- [x] workspace 패널 렌더 블록 presenter 분리 적용
+- [x] app UI side-effect 흐름 훅 분리 적용
+- [x] 컨테이너 책임 축소 후 기존 동작/계약 유지 확인
+
+진입 조건
+- [x] Stage 3.3 완료
+- [x] Always Gate 항목 유지
+
+완료 조건
+- [x] 주요 UI 회귀 없음
+- [x] 빌드/테스트 통과
+
 ### Stage 4. UI Kit 재사용성 강화
 - [ ] 1차 UI Kit 컴포넌트 적용(`Button`, `IconButton`, `Input`, `Textarea`, `Modal`, `Tabs`, `Toast`, `Badge`, `Panel`)
 - [ ] 디자인 토큰(CSS 변수) 정의(color/spacing/radius/typography/layer/motion)
@@ -106,7 +135,7 @@
 - [ ] 컴포넌트 사용 규칙 문서화
 
 진입 조건
-- [x] Stage 3.2 완료
+- [x] Stage 3.4 완료
 - [x] Always Gate 항목 유지
 
 완료 조건

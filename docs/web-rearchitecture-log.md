@@ -20,7 +20,51 @@ Rule:
   - ...
 ```
 
-## 2026-05-26 14:50 (local, inferred)
+## 2026-05-26 17:19 (local)
+- Objective:
+  - `AuthenticatedAppContainer` 추가 분리: workspace 패널 경계와 UI effect 경계를 도메인 단위로 재정렬.
+- Files changed:
+  - web/frontend/src/features/app/containers/AuthenticatedAppContainer.tsx
+  - web/frontend/src/features/app/hooks/useAppUiEffects.ts
+  - web/frontend/src/features/workspace/components/WorkspacePanel.tsx
+  - web/frontend/src/features/workspace/workspaceTreeModel.ts
+- Changes:
+  - workspace 트리 표시용 계산/가공 로직을 `workspaceTreeModel`로 이동해 컨테이너에서 도메인 계산 책임을 축소.
+  - workspace 렌더 블록을 `WorkspacePanel`로 분리해 presenter 경계를 명확화.
+  - 앱 레벨 UI side-effect를 `useAppUiEffects`로 분리해 컨테이너의 effect 밀도를 완화.
+- Validation:
+  - `cd web/frontend && npx tsc -p . --noEmit` 통과.
+  - `cd web/frontend && npm run lint` 통과 (0 errors, warnings only).
+  - `cd web/frontend && npm test -- --runInBand` 통과 (19/19).
+  - `cd web/frontend && npm run build` 통과.
+- Next step:
+  - 남은 대형 렌더 블록을 도메인 presenter로 순차 분리해 UI Kit 적용 전 컨테이너 길이를 추가 축소.
+
+## 2026-05-26 15:35 (local)
+- Objective:
+  - `AuthenticatedAppContainer` 추가 분리 1~4단계(도메인 훅/메시지 mutation/effect orchestration/메시지 액션) 적용.
+- Files changed:
+  - web/frontend/src/features/app/containers/AuthenticatedAppContainer.tsx
+  - web/frontend/src/features/app/hooks/useAgentConfigDomain.ts
+  - web/frontend/src/features/app/hooks/useTurnMessageMutations.ts
+  - web/frontend/src/features/app/hooks/useChatScrollEffects.ts
+  - web/frontend/src/features/app/hooks/useComposerFocusEffects.ts
+  - web/frontend/src/features/app/hooks/usePaletteEffects.ts
+  - web/frontend/src/features/app/hooks/useThreadBootstrapEffects.ts
+  - web/frontend/src/features/app/hooks/useMessageCommandActions.ts
+- Changes:
+  - agent 설정 흐름(`load/toggle/open/save`)을 `useAgentConfigDomain`으로 이동해 컨테이너의 설정 도메인 책임을 축소.
+  - plan/reasoning 메시지 mutation 로직을 `useTurnMessageMutations`로 이동.
+  - 컨테이너 useEffect 군을 목적별 훅(`chat scroll`, `composer focus`, `palette`, `thread bootstrap`)으로 분리.
+  - 메시지 액션(`sendMessage`, `toggleComposerMode`, `interrupt`, `focus`, `selection`, `palette apply`)을 `useMessageCommandActions`로 이동.
+- Validation:
+  - `cd web/frontend && npm run lint` 통과 (0 errors, 47 warnings).
+  - `cd web/frontend && npm test -- --runInBand` 통과 (19/19).
+  - `cd web/frontend && npm run build` 통과.
+- Next step:
+  - 분리된 훅별 단위 테스트 보강 여부 결정 및 필요 시 추가.
+
+## 2026-05-26 14:50 (local)
 - Objective:
   - TopTabs+Center 조합 분리 및 Composer 분리 1~3단계(렌더/팔레트/키입력) 반영.
 - Files changed:
@@ -41,7 +85,7 @@ Rule:
 - Next step:
   - composer focus/selection 관련 effect를 별도 훅으로 추가 분리할지, 현재 수준에서 UI Kit 적용으로 넘어갈지 결정.
 
-## 2026-05-26 14:25 (local, inferred)
+## 2026-05-26 14:25 (local)
 - Objective:
   - UI Kit 전 컨테이너 분리 2차: 사이드바 콘텐츠 패널을 별도 presenter로 추출.
 - Files changed:
@@ -57,7 +101,7 @@ Rule:
 - Next step:
   - 다음 소배치로 composer 블록 또는 top tabs + center pane 조합 영역 분리.
 
-## 2026-05-26 14:05 (local, inferred)
+## 2026-05-26 14:05 (local)
 - Objective:
   - UI Kit 적용 전 소배치 분리: `AuthenticatedAppContainer`에서 독립 오버레이 렌더 블록 추출.
 - Files changed:
