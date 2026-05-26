@@ -50,6 +50,13 @@ import useResizeInteractions from "../hooks/useResizeInteractions";
 import useGlobalKeyboardShortcuts from "../hooks/useGlobalKeyboardShortcuts";
 import useComposerPalette from "../hooks/useComposerPalette";
 import useComposerInputHandlers from "../hooks/useComposerInputHandlers";
+import useAgentConfigDomain from "../hooks/useAgentConfigDomain";
+import useTurnMessageMutations from "../hooks/useTurnMessageMutations";
+import useChatScrollEffects from "../hooks/useChatScrollEffects";
+import useComposerFocusEffects from "../hooks/useComposerFocusEffects";
+import usePaletteEffects from "../hooks/usePaletteEffects";
+import useThreadBootstrapEffects from "../hooks/useThreadBootstrapEffects";
+import useMessageCommandActions from "../hooks/useMessageCommandActions";
 import useThreadScopedState from "../../thread/hooks/useThreadScopedState";
 import { getSidebarStyle, getWorkspacePanelStyle } from "../state/layoutSelectors";
 
@@ -622,292 +629,65 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
     setSkillSuggestions([...new Set(skills.filter((v) => typeof v === "string" && v))]);
   }
 
-  const patchSessionAgent = (agentName, enabled) => {
-    setSessionSummary((prev) => {
-      if (!prev || !Array.isArray(prev.agents)) {
-        return prev;
-      }
-      return {
-        ...prev,
-        agents: prev.agents.map((agent) =>
-          agent.name === agentName ? { ...agent, enabled } : agent
-        ),
-      };
-    });
-  };
+  const {
+    loadAgentConfig,
+    toggleAgent,
+    openAgentSettings,
+    toggleFloatingAgentSettings,
+    updateAgentDraft,
+    saveAgentSettings,
+  } = useAgentConfigDomain({
+    api,
+    activeAgentSettings,
+    agentConfigs,
+    agentConfigRawEditors,
+    agentConfigSaving,
+    agentConfigLoading,
+    setSessionSummary,
+    setAgentConfigs,
+    setAgentConfigRawEditors,
+    setActiveAgentSettings,
+    setFloatingAgentSettings,
+    setAgentConfigLoading,
+    setAgentConfigSaving,
+    setAgentConfigError,
+  });
 
-  const syncAgentConfig = (agentName, config, syncRulesEditor = true) => {
-    setAgentConfigs((prev) => ({ ...prev, [agentName]: config }));
-    if (agentName === "guardian" && syncRulesEditor) {
-      setAgentConfigRawEditors((prev) => ({
-        ...prev,
-        [agentName]: formatGuardianRulesEditor(config),
-      }));
-    }
-  };
-
-  const loadAgentConfig = async (
-    agentName,
-    options: { syncRulesEditor?: boolean } = {}
-  ) => {
-    const { syncRulesEditor = true } = options;
-    const def = AGENT_CONFIG_DEFS[agentName];
-    if (!def) {
-      return null;
-    }
-    setAgentConfigError("");
-    setAgentConfigLoading(agentName);
-    try {
-      const config = await api(def.path);
-      syncAgentConfig(agentName, config, syncRulesEditor);
-      return config;
-    } finally {
-      setAgentConfigLoading((current) => (current === agentName ? "" : current));
-    }
-  };
-
-  const buildAgentPayload = (
-    agentName,
-    draft,
-    options: { includeRules?: boolean } = {}
-  ) => {
-    const { includeRules = false } = options;
-    if (agentName !== "guardian") {
-      return draft;
-    }
-    const payload = {
-      enabled: !!draft.enabled,
-      timeout_seconds: Number(draft.timeout_seconds ?? 20),
-      failure_policy: String(draft.failure_policy ?? "manual_fallback"),
-      explainability: String(draft.explainability ?? "decision_only"),
-    };
-    if (!includeRules) {
-      return payload;
-    }
-    const rawRules = agentConfigRawEditors[agentName] ?? formatGuardianRulesEditor(draft);
-    return { ...payload, rules_toml: rawRules };
-  };
-
-  const toggleAgent = async (agentName) => {
-    const def = AGENT_CONFIG_DEFS[agentName];
-    if (!def || agentConfigSaving || agentConfigLoading) {
-      return;
-    }
-    setAgentConfigError("");
-    setAgentConfigSaving(agentName);
-    try {
-      const current = agentConfigs[agentName] || (await loadAgentConfig(agentName));
-      if (!current) {
-        return;
-      }
-      const saved = await api(def.path, {
-        method: "POST",
-        body: JSON.stringify({ ...current, enabled: !current.enabled }),
-      });
-      setAgentConfigs((prev) => ({ ...prev, [agentName]: saved }));
-      patchSessionAgent(agentName, !!saved.enabled);
-    } catch (err) {
-      setAgentConfigError(err.message || "Failed to update agent.");
-    } finally {
-      setAgentConfigSaving("");
-    }
-  };
-
-  const openAgentSettings = async (agentName) => {
-    const def = AGENT_CONFIG_DEFS[agentName];
-    if (!def) {
-      return;
-    }
-    if (activeAgentSettings === agentName) {
-      setActiveAgentSettings("");
-      setFloatingAgentSettings((current) => (current === agentName ? "" : current));
-      setAgentConfigError("");
-      return;
-    }
-    setActiveAgentSettings(agentName);
-    if (agentName !== "guardian") {
-      setFloatingAgentSettings("");
-    }
-    if (agentConfigs[agentName]) {
-      if (agentName === "guardian" && !agentConfigRawEditors[agentName]) {
-        setAgentConfigRawEditors((prev) => ({
-          ...prev,
-          [agentName]: formatGuardianRulesEditor(agentConfigs[agentName]),
-        }));
-      }
-      setAgentConfigError("");
-      return;
-    }
-    try {
-      await loadAgentConfig(agentName);
-    } catch (err) {
-      setAgentConfigError(err.message || "Failed to load settings.");
-    }
-  };
-
-  const toggleFloatingAgentSettings = (agentName) => {
-    if (!agentName || activeAgentSettings !== agentName) {
-      return;
-    }
-    setFloatingAgentSettings((current) => (current === agentName ? "" : agentName));
-    setAgentConfigError("");
-  };
-
-  const updateAgentDraft = (agentName, key, value) => {
-    setAgentConfigs((prev) => ({
-      ...prev,
-      [agentName]: {
-        ...(prev[agentName] || {}),
-        [key]: value,
-      },
-    }));
-  };
-
-  const saveAgentSettings = async (
-    agentName = activeAgentSettings,
-    options: { includeRules?: boolean } = {}
-  ) => {
-    const { includeRules = agentName === activeAgentSettings && agentName === "guardian" } = options;
-    const def = AGENT_CONFIG_DEFS[agentName];
-    const draft = agentConfigs[agentName];
-    if (!def || !draft || agentConfigSaving || agentConfigLoading) {
-      return;
-    }
-    setAgentConfigError("");
-    setAgentConfigSaving(agentName);
-    try {
-      const payload = buildAgentPayload(agentName, draft, { includeRules });
-      const saved = await api(def.path, {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-      syncAgentConfig(agentName, saved, includeRules);
-      patchSessionAgent(agentName, !!saved.enabled);
-    } catch (err) {
-      setAgentConfigError(err.message || "Failed to save settings.");
-    } finally {
-      setAgentConfigSaving("");
-    }
-  };
-
-  const sendMessage = async () => {
-    if (!input.trim()) {
-      return;
-    }
-    const text = input.trim();
-    const activeThreadId = resolveCurrentThreadId();
-    if (activeThreadId) {
-      if (activeThreadId !== normalizeThreadId(activeThread) && activeProjectTabId) {
-        setActiveThreadForProjectTab(activeProjectTabId, activeThreadId);
-      }
-      updateThreadUi(activeThreadId, { input: "" });
-    }
-    pendingComposerFocusRef.current = true;
-    setInputForActiveThread("");
-    if (text.startsWith("/")) {
-      await runCommand(text);
-      return;
-    }
-    const messageThreadId = activeThreadId;
-    appendMessageToThread(messageThreadId, { role: "user", text, turnId: "" });
-    setStatusForThread(messageThreadId, "running");
-    try {
-      const result = await api("/api/chat/messages", {
-        method: "POST",
-        body: JSON.stringify({
-          text,
-          thread_id: messageThreadId || undefined,
-          project_key: activeProjectKey || undefined,
-        }),
-      });
-      const resultTurnId = typeof result?.turn_id === "string" ? result.turn_id : "";
-      const resultThreadId = normalizeThreadId(result?.thread_id) || messageThreadId;
-      if (resultThreadId && activeProjectTabId) {
-        const threadInfo = threadItems.find((item) => normalizeThreadId(item?.id) === resultThreadId);
-        openThreadInProjectTab(activeProjectTabId, {
-          id: resultThreadId,
-          title: threadInfo?.title || resultThreadId,
-        });
-      }
-      if (resultTurnId && resultThreadId) {
-        turnThreadIdRef.current[resultTurnId] = resultThreadId;
-      }
-      if (result.local_command) {
-        const responseThreadId = resultThreadId;
-        appendMessageToThread(responseThreadId, {
-          role: "assistant",
-          text: result.output || "",
-          threadId: responseThreadId,
-          turnId: resultTurnId,
-        });
-        setStatusForThread(responseThreadId, "idle");
-        loadSessionSummary().catch(() => {});
-      }
-    } catch (err) {
-      setStatusForThread(messageThreadId, "idle");
-      appendMessageToThread(messageThreadId, {
-        role: "system",
-        text: err.message || "Request failed.",
-        threadId: messageThreadId,
-        turnId: "",
-        streaming: false,
-      });
-      loadSessionSummary().catch(() => {});
-    }
-  };
-
-  const toggleComposerMode = async () => {
-    if (status === "running" || modeSwitchBusy) {
-      return;
-    }
-    setModeSwitchBusy(true);
-    try {
-      const result = await api("/api/command", {
-        method: "POST",
-        body: JSON.stringify({ command_line: "/mode toggle" }),
-      });
-      const nextMode = normalizeCollaborationMode(result?.meta?.collaboration_mode);
-      setCollaborationMode(nextMode);
-    } catch (err) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "system",
-          text: err.message || "Failed to switch mode.",
-          threadId: normalizeThreadId(activeThread),
-          turnId: "",
-          streaming: false,
-        },
-      ]);
-    } finally {
-      setModeSwitchBusy(false);
-    }
-  };
-
-  const focusComposer = (cursor = null) => {
-    queueMicrotask(() => {
-      const el = inputRef.current;
-      if (!el || el.disabled) {
-        return;
-      }
-      el.focus();
-      if (typeof cursor === "number") {
-        el.selectionStart = cursor;
-        el.selectionEnd = cursor;
-        composerSelectionRef.current = { start: cursor, end: cursor };
-      }
-    });
-  };
-
-  const rememberComposerSelection = (el) => {
-    if (!el) {
-      return;
-    }
-    composerSelectionRef.current = {
-      start: typeof el.selectionStart === "number" ? el.selectionStart : null,
-      end: typeof el.selectionEnd === "number" ? el.selectionEnd : null,
-    };
-  };
+  const {
+    sendMessage,
+    toggleComposerMode,
+    interrupt,
+    focusComposer,
+    rememberComposerSelection,
+    applyPaletteItem: applyPaletteItemRaw,
+  } = useMessageCommandActions({
+    api,
+    input,
+    inputRef,
+    turnThreadIdRef,
+    activeThread,
+    activeProjectKey,
+    activeProjectTabId,
+    threadItems,
+    status,
+    modeSwitchBusy,
+    normalizeThreadId,
+    normalizeCollaborationMode,
+    resolveCurrentThreadId,
+    openThreadInProjectTab,
+    setActiveThreadForProjectTab,
+    setInputForActiveThread,
+    setMessages,
+    setModeSwitchBusy,
+    setCollaborationMode,
+    setStatusForThread,
+    updateThreadUi,
+    appendMessageToThread,
+    runCommand,
+    loadSessionSummary,
+    pendingComposerFocusRef,
+    composerSelectionRef,
+  });
 
   const autoResizeInput = () => {
     const el = inputRef.current;
@@ -919,14 +699,19 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
     el.style.height = `${Math.max(40, next)}px`;
   };
 
-  const interrupt = async () => {
-    const activeThreadId = normalizeThreadId(activeThread);
-    await api("/api/threads/interrupt", {
-      method: "POST",
-      body: JSON.stringify({ thread_id: activeThreadId || undefined }),
-    });
-    setStatusForThread(activeThreadId, "idle");
+  const applyPaletteItem = (item) => {
+    applyPaletteItemRaw(item, activeToken, input);
   };
+
+  const { upsertPlanMessage, upsertPlanChecklist, appendReasoningStatus, completeReasoning } =
+    useTurnMessageMutations({
+      applyMessageMutationForThread,
+      normalizeThreadId,
+      formatPlanChecklistText,
+      summarizeReasoningStatus,
+      reasoningStateRef,
+      setActivityDetailForThread,
+    });
 
   useTurnSession({
     me,
@@ -968,123 +753,47 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
     resolveThreadIdFromTurn,
   });
 
-  useEffect(() => {
-    const activeThreadId = normalizeThreadId(activeThreadRef.current);
-    const preview = (Array.isArray(messages) ? messages : []).slice(-5).map((m) => ({
-      role: m?.role || "",
-      threadId: m?.threadId || "",
-      turnId: m?.turnId || "",
-      itemId: m?.itemId || "",
-      kind: m?.kind || "",
-      streaming: !!m?.streaming,
-      text: typeof m?.text === "string" ? m.text.slice(0, 120) : "",
-      visibleInCurrentThread:
-        !m?.threadId || normalizeThreadId(m.threadId) === activeThreadId,
-    }));
-    debugLog("[CHAT-RENDER]", {
-      activeThreadId,
-      messageCount: Array.isArray(messages) ? messages.length : 0,
-      renderItemCount: Array.isArray(renderItems) ? renderItems.length : 0,
-      tailMessages: preview,
-    });
-  }, [messages, renderItems, activeThreadRef]);
-
-  useEffect(() => {
-    if (!chatRef.current) {
-      return;
-    }
-    chatRef.current.scrollTop = chatRef.current.scrollHeight;
-  }, [messages]);
-
-  useEffect(() => {
-    if (!chatRef.current) {
-      return;
-    }
-    const panels = chatRef.current.querySelectorAll(".file-change-panel-scroll");
-    panels.forEach((panel) => {
-      panel.scrollTop = panel.scrollHeight;
-    });
-  }, [renderItems]);
-
-  useEffect(() => {
-    if (status === "running" || !pendingComposerFocusRef.current) {
-      return;
-    }
-    pendingComposerFocusRef.current = false;
-    focusComposer(input.length);
-  }, [input.length, status]);
-
-  useEffect(() => {
-    autoResizeInput();
-  }, [input]);
-  useEffect(() => {
-    if (!composerFocusWantedRef.current || typeof window === "undefined") {
-      return undefined;
-    }
-    const el = inputRef.current;
-    if (!el || el.disabled) {
-      return undefined;
-    }
-    if (document.activeElement === el) {
-      rememberComposerSelection(el);
-      return undefined;
-    }
-    const frame = window.requestAnimationFrame(() => {
-      if (!composerFocusWantedRef.current) {
-        return;
-      }
-      const current = inputRef.current;
-      if (!current || current.disabled || document.activeElement === current) {
-        return;
-      }
-      current.focus();
-      const { start, end } = composerSelectionRef.current;
-      if (typeof start === "number" && typeof end === "number") {
-        current.selectionStart = start;
-        current.selectionEnd = end;
-      }
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [input, paletteOpen, paletteSelectedIndex]);
-
-  useEffect(() => {
-    setPaletteSelectedIndex(0);
-  }, [activeToken?.type, activeToken?.query]);
-  useEffect(() => {
-    loadThreads({ projectKey: activeProjectKey, projectTabId: activeProjectTabId }).catch(() => {});
-  }, []);
-  useEffect(() => {
-    if (!activeProjectTabId) {
-      return;
-    }
-    const selectedThreadId = resolveCurrentThreadId(activeProjectTabId);
-    setActiveThreadForProjectTab(activeProjectTabId, selectedThreadId);
-    restoreWorkspaceForThread(selectedThreadId);
-    if (selectedThreadId) {
-      viewThread(selectedThreadId).catch(() => {});
-    } else {
-      setMessages([]);
-    }
-    loadSessionSummary().catch(() => {});
-    loadThreads({ projectKey: activeProjectKey, projectTabId: activeProjectTabId, ensureDefaultTab: false }).catch(() => {});
-  }, [activeProjectTabId]);
-  useEffect(() => {
-    if (paletteSelectedIndex < paletteItems.length) {
-      return;
-    }
-    setPaletteSelectedIndex(0);
-  }, [paletteItems.length, paletteSelectedIndex]);
-  useEffect(() => {
-    if (!paletteOpen || !paletteRef.current) {
-      return;
-    }
-    const container = paletteRef.current;
-    const active = container.querySelector(".slash-item.active");
-    if (!active) {
-      return;
-    }
-    active.scrollIntoView({ block: "nearest" });
-  }, [paletteOpen, paletteSelectedIndex, visiblePaletteItems.length]);
+  useChatScrollEffects({
+    normalizeThreadId,
+    activeThreadRef,
+    messages,
+    renderItems,
+    debugLog,
+    chatRef,
+  });
+  useComposerFocusEffects({
+    status,
+    pendingComposerFocusRef,
+    focusComposer,
+    input,
+    autoResizeInput,
+    composerFocusWantedRef,
+    inputRef,
+    rememberComposerSelection,
+    composerSelectionRef,
+    paletteOpen,
+    paletteSelectedIndex,
+  });
+  usePaletteEffects({
+    activeToken,
+    setPaletteSelectedIndex,
+    paletteItems,
+    paletteSelectedIndex,
+    paletteOpen,
+    paletteRef,
+    visiblePaletteItems,
+  });
+  useThreadBootstrapEffects({
+    loadThreads,
+    activeProjectKey,
+    activeProjectTabId,
+    resolveCurrentThreadId,
+    setActiveThreadForProjectTab,
+    restoreWorkspaceForThread,
+    viewThread,
+    setMessages,
+    loadSessionSummary,
+  });
   useViewportLayout({
     mobileBreakpoint: MOBILE_BREAKPOINT,
     workspacePanelBreakpoint: WORKSPACE_PANEL_BREAKPOINT,
@@ -1223,26 +932,6 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
     normalizeThreadId,
   });
 
-  const applyPaletteItem = (item) => {
-    if (!activeToken) {
-      return;
-    }
-    let next = input;
-    let cursor = input.length;
-    if (activeToken.type === "slash") {
-      next = `${item} `;
-      cursor = next.length;
-    } else if (activeToken.type === "project") {
-      next = `${input.slice(0, activeToken.start)}@${item}${input.slice(activeToken.end)}`;
-      cursor = activeToken.start + item.length + 1;
-    } else {
-      next = `${input.slice(0, activeToken.start)}$${item}${input.slice(activeToken.end)}`;
-      cursor = activeToken.start + item.length + 1;
-    }
-    setInputForActiveThread(next);
-    focusComposer(cursor);
-  };
-
   const { onInputChange, onInputFocus, onInputBlur, onInputSelect, onInputKeyDown } = useComposerInputHandlers({
     composerLocked,
     input,
@@ -1262,145 +951,6 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
     toggleComposerMode,
     sendMessage,
   });
-
-  function upsertPlanMessage(mode, payload) {
-    const itemId = typeof payload?.item_id === "string" ? payload.item_id : "";
-    const text = typeof payload?.text === "string" ? payload.text : "";
-    if (!itemId || !text) {
-      return;
-    }
-    const targetThreadId = normalizeThreadId(payload?.thread_id);
-    applyMessageMutationForThread(targetThreadId, (prev) => {
-      const next = [...prev];
-      const existingIndex = next.findIndex(
-        (message) => message.kind === "plan" && message.itemId === itemId
-      );
-      const streaming = mode !== "final";
-      if (existingIndex >= 0) {
-        const existing = next[existingIndex];
-        next[existingIndex] = {
-          ...existing,
-          role: "assistant",
-          kind: "plan",
-          itemId,
-          threadId: normalizeThreadId(payload?.thread_id),
-          turnId: typeof payload?.turn_id === "string" ? payload.turn_id : existing?.turnId || "",
-          text: mode === "append" ? `${existing.text || ""}${text}` : text,
-          streaming,
-        };
-        return next;
-      }
-      next.push({
-        role: "assistant",
-        kind: "plan",
-        itemId,
-        threadId: normalizeThreadId(payload?.thread_id),
-        turnId: typeof payload?.turn_id === "string" ? payload.turn_id : "",
-        text,
-        streaming,
-      });
-      return next;
-    });
-  };
-
-  function upsertPlanChecklist(payload) {
-    const text = formatPlanChecklistText(payload?.explanation, payload?.plan);
-    const turnId = typeof payload?.turn_id === "string" ? payload.turn_id : "";
-    if (!text || !turnId) {
-      return;
-    }
-    const targetThreadId = normalizeThreadId(payload?.thread_id);
-    applyMessageMutationForThread(targetThreadId, (prev) => {
-      const next = [...prev];
-      const existingIndex = next.findIndex(
-        (message) => message.kind === "plan_checklist" && message.turnId === turnId
-      );
-      const value = {
-        role: "system",
-        kind: "plan_checklist",
-        threadId: normalizeThreadId(payload?.thread_id),
-        turnId,
-        text,
-        plan: Array.isArray(payload?.plan) ? payload.plan : [],
-        explanation: typeof payload?.explanation === "string" ? payload.explanation : "",
-        streaming: false,
-      };
-      if (existingIndex >= 0) {
-        next[existingIndex] = { ...next[existingIndex], ...value };
-        return next;
-      }
-      next.push(value);
-      return next;
-    });
-  };
-
-  function appendReasoningStatus(payload) {
-    const itemId = typeof payload?.item_id === "string" ? payload.item_id : "";
-    if (!itemId) {
-      return;
-    }
-    const existing = reasoningStateRef.current[itemId] || {
-      itemId,
-      turnId: typeof payload?.turn_id === "string" ? payload.turn_id : "",
-      threadId: normalizeThreadId(payload?.thread_id),
-      summary: "",
-      raw: "",
-    };
-    if (payload?.section_break && existing.summary && !existing.summary.endsWith("\n\n")) {
-      existing.summary += "\n\n";
-    }
-    if (payload?.raw) {
-      if (typeof payload?.delta === "string" && payload.delta) {
-        existing.raw += payload.delta;
-      }
-    } else if (typeof payload?.delta === "string" && payload.delta) {
-      existing.summary += payload.delta;
-    }
-    if (!existing.turnId && typeof payload?.turn_id === "string") {
-      existing.turnId = payload.turn_id;
-    }
-    if (!existing.threadId) {
-      existing.threadId = normalizeThreadId(payload?.thread_id);
-    }
-    reasoningStateRef.current[itemId] = existing;
-    const detail = summarizeReasoningStatus(existing.summary) || "Reasoning";
-    const targetThreadId = normalizeThreadId(payload?.thread_id) || existing.threadId || "";
-    setActivityDetailForThread(targetThreadId, detail);
-  };
-
-  function completeReasoning(payload) {
-    const itemId = typeof payload?.item_id === "string" ? payload.item_id : "";
-    const existing = (itemId && reasoningStateRef.current[itemId]) || null;
-    const summaryText = Array.isArray(payload?.summary_text)
-      ? payload.summary_text.filter((entry) => typeof entry === "string" && entry.trim())
-      : [];
-    const rawContent = Array.isArray(payload?.raw_content)
-      ? payload.raw_content.filter((entry) => typeof entry === "string" && entry.trim())
-      : [];
-    const summary = (summaryText.length ? summaryText.join("\n\n") : existing?.summary || "").trim();
-    const raw = (rawContent.length ? rawContent.join("\n\n") : existing?.raw || "").trim();
-    if (itemId) {
-      delete reasoningStateRef.current[itemId];
-    }
-    const targetThreadId = normalizeThreadId(payload?.thread_id) || existing?.threadId || "";
-    setActivityDetailForThread(targetThreadId, "");
-    if (!summary) {
-      return;
-    }
-    applyMessageMutationForThread(targetThreadId, (prev) => [
-      ...prev,
-      {
-        role: "system",
-        kind: "reasoning",
-        threadId: targetThreadId,
-        turnId: typeof payload?.turn_id === "string" ? payload.turn_id : existing?.turnId || "",
-        itemId,
-        text: summary,
-        rawReasoning: raw,
-        streaming: false,
-      },
-    ]);
-  };
 
   const activeAgentDef = activeAgentSettings ? AGENT_CONFIG_DEFS[activeAgentSettings] : null;
   const activeAgentConfig = activeAgentSettings ? agentConfigs[activeAgentSettings] : null;
@@ -2000,12 +1550,4 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
   );
 }
 
-
 export default AuthenticatedAppContainer;
-
-
-
-
-
-
-
