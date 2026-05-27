@@ -1,4 +1,4 @@
-import { normalizeThreadId } from "../common/utils.js";
+import { normalizeThreadId } from "../../common/utils.js";
 
 export function resolveProjectTabThreadId({
   projectTabId,

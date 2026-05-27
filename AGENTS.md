@@ -1,4 +1,4 @@
-# Repository Guidelines
+﻿# Repository Guidelines
 
 ## Purpose
 This repository bridges Codex App Server with Telegram and Web UI.  
@@ -22,6 +22,11 @@ If repository config conflicts with this guide, repository config wins.
 - `utils/`: config, logging, normalization, local command execution
 - `tests/`: regression and module-level tests (`test_*.py`)
 - `docs/`: design/setup docs and plans
+
+## Progress Logging Rule
+- Ongoing implementation progress must be tracked in `docs/web-rearchitecture-log.md` (not in `docs/plans/`).
+- Update this file periodically whenever meaningful file-level changes are made.
+- Each entry should include: date/time, objective, files changed, summary of what changed, validation run, and next step.
 
 ## Agent Operating Model
 ### Planner

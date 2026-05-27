@@ -1,16 +1,16 @@
 import { useEffect, useState } from "react";
 
-import Login from "./features/auth/components/Login";
-import { api } from "./features/common/api";
+import Login from "../features/auth/components/Login";
+import { api } from "../features/common/api";
 import {
   applyDocumentTheme,
   normalizeTheme,
   persistTheme,
   readDocumentTheme,
-} from "./features/common/theme";
-import AuthenticatedApp from "./features/app/AuthenticatedApp";
+} from "../features/common/theme";
+import AuthenticatedApp from "../features/app/AuthenticatedApp";
 
-function App() {
+function AppShell() {
   const [me, setMe] = useState(null);
   const [theme, setTheme] = useState(() => readDocumentTheme());
 
@@ -52,4 +52,4 @@ function App() {
   return <AuthenticatedApp me={me} theme={theme} onToggleTheme={toggleTheme} />;
 }
 
-export default App;
+export default AppShell;

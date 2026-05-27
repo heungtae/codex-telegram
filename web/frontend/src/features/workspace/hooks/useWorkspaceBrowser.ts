@@ -7,6 +7,12 @@ import {
   normalizeWorkspacePath,
 } from "../../common/utils";
 import { collectWorkspaceRefreshPaths } from "../workspaceRefresh";
+import {
+  LoadWorkspaceTreeOptions,
+  WorkspaceContextOptions,
+  WorkspaceStatusResponse,
+  WorkspaceTreeResponse,
+} from "../types";
 
 export default function useWorkspaceBrowser({
   activeThread,
@@ -102,7 +108,7 @@ export default function useWorkspaceBrowser({
     setWorkspacePreview(nextState.preview || null);
   }, [resolveWorkspaceStateId, workspacePath]);
 
-  const workspaceContextQuery = useCallback((extra = {}) => {
+  const workspaceContextQuery = useCallback((extra: WorkspaceContextOptions = {}) => {
     const params = new URLSearchParams();
     const explicitThreadId = normalizeThreadId(extra.thread_id || "");
     let threadId = explicitThreadId || normalizeThreadId(activeThread);
@@ -123,7 +129,7 @@ export default function useWorkspaceBrowser({
     return params.toString();
   }, [activeProjectKey, activeProjectTabId, activeThread, threadProjectTabIdByThreadId]);
 
-  const loadWorkspaceTree = useCallback(async (path = "", options = {}) => {
+  const loadWorkspaceTree = useCallback(async (path = "", options: LoadWorkspaceTreeOptions = {}) => {
     const {
       depth = WORKSPACE_TREE_LOAD_DEPTH,
       force = false,
@@ -144,7 +150,7 @@ export default function useWorkspaceBrowser({
         const ctxParams = new URLSearchParams(ctx);
         ctxParams.forEach((value, key) => query.set(key, value));
       }
-      const result = await api(`/api/workspace/tree?${query.toString()}`);
+      const result = await api(`/api/workspace/tree?${query.toString()}`) as WorkspaceTreeResponse;
       if (requestId !== workspaceLoadRequestRef.current) {
         return [];
       }
@@ -158,13 +164,13 @@ export default function useWorkspaceBrowser({
       }
       throw err;
     }
-  }, [workspaceContextQuery]);
+  }, [workspaceContextQuery, workspacePath]);
 
   const loadWorkspaceStatus = useCallback(async () => {
     const requestId = workspaceLoadRequestRef.current;
     try {
       const ctx = workspaceContextQuery();
-      const result = await api(`/api/workspace/status${ctx ? `?${ctx}` : ""}`);
+      const result = await api(`/api/workspace/status${ctx ? `?${ctx}` : ""}`) as WorkspaceStatusResponse;
       if (requestId !== workspaceLoadRequestRef.current) {
         return null;
       }
@@ -181,7 +187,7 @@ export default function useWorkspaceBrowser({
       setWorkspaceStatus({ is_git: false, items: {} });
       setWorkspaceError(err.message || "Failed to load workspace status.");
     }
-  }, [workspaceContextQuery]);
+  }, [workspaceContextQuery, workspacePath]);
 
   const refreshWorkspaceBrowser = useCallback(async () => {
     if (!workspacePath) {

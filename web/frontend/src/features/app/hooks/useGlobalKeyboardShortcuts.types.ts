@@ -1,0 +1,27 @@
+﻿export type UseGlobalKeyboardShortcutsArgs = {
+  shortcutModalPage: string;
+  interactionBusy: boolean;
+  activeThread: string;
+  activeProjectTabId: string;
+  threadTabsByProjectTabId: Record<string, Array<Record<string, unknown>>>;
+  collaborationMode: string;
+  modeSwitchBusy: boolean;
+  isCompactWorkspaceLayout: boolean;
+  projectSearchQuery: string;
+  filteredProjects: Array<Record<string, unknown>>;
+  selectedProjectIndex: number;
+  activeProjectKey: string;
+  focusComposerRef: { current: ((cursor?: number | null) => void) | null };
+  startThreadRef: { current: ((options?: Record<string, unknown>) => Promise<void>) | null };
+  closeThreadTabRef: { current: ((projectTabId: string, threadId: string) => void) | null };
+  viewThreadRef: { current: ((threadId: string) => Promise<void>) | null };
+  sendMessageRef: { current: (() => Promise<void>) | null };
+  selectProjectRef: { current: ((key: string) => Promise<void>) | null };
+  setShortcutModalPage: (page: string) => void;
+  setProjectSearchQuery: (query: string) => void;
+  setSelectedProjectIndex: (next: number | ((prev: number) => number)) => void;
+  setIsWorkspacePanelOpen: (next: boolean | ((prev: boolean) => boolean)) => void;
+  setCollaborationMode: (mode: string) => void;
+  api: (path: string, options?: Record<string, unknown>) => Promise<Record<string, unknown>>;
+  normalizeThreadId: (value: unknown) => string;
+};
