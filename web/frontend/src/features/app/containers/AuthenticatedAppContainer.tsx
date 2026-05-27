@@ -1,21 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 
-import AuthenticatedAppPresenter from "../components/AuthenticatedAppPresenter";
-import AppMainPresenter from "../components/AppMainPresenter";
-import AppOverlaysPresenter from "../components/AppOverlaysPresenter";
-import AppSidebarPresenter from "../components/AppSidebarPresenter";
-import AppCenterPanePresenter from "../components/AppCenterPanePresenter";
-import AppComposerPresenter from "../components/AppComposerPresenter";
+import AuthenticatedAppLayout from "../components/AuthenticatedAppLayout";
+import AppConversationPane from "../components/AppConversationPane";
 import AppSidebarContentPanel from "../components/AppSidebarContentPanel";
 import AppSidebarFrame from "../components/AppSidebarFrame";
-import AppMainFrame from "../components/AppMainFrame";
 import FloatingGuardianSettingsPanel from "../components/FloatingGuardianSettingsPanel";
-import WorkspacePreviewOverlay from "../components/WorkspacePreviewOverlay";
-import { ProjectModeModal, ProjectPickerModal } from "../components/ProjectModals";
-import WorkspacePanel from "../../workspace/components/WorkspacePanel";
-import ApprovalStack from "../../approvals/components/ApprovalStack";
+import AppOverlayLayer from "../components/AppOverlayLayer";
+import AppWorkspacePanelSlot from "../components/AppWorkspacePanelSlot";
 import useApprovalFlow from "../../approvals/hooks/useApprovalFlow";
-import ChatMessageFeed from "../../chat/components/ChatMessageFeed";
 import { AGENT_CONFIG_DEFS } from "../../common/constants";
 import { api } from "../../common/api";
 import {
@@ -28,14 +20,12 @@ import {
 } from "../../common/components/Icons";
 import { persistTurnNotificationEnabled, readTurnNotificationEnabled } from "../../common/theme";
 import {
-  basename,
   formatGuardianRulesEditor,
   formatPlanChecklistText,
   groupMessagesForRender,
   normalizeThreadId,
   summarizeReasoningStatus,
 } from "../../common/utils";
-import TopTabs from "../../tabs/components/TopTabs";
 import useSessionDomain from "../hooks/useSessionDomain";
 import useThreadsDomain from "../hooks/useThreadsDomain";
 import useUiDomain from "../hooks/useUiDomain";
@@ -57,7 +47,7 @@ import useThreadBootstrapEffects from "../hooks/useThreadBootstrapEffects";
 import useMessageCommandActions from "../hooks/useMessageCommandActions";
 import useAppUiEffects from "../hooks/useAppUiEffects";
 import useThreadScopedState from "../../thread/hooks/useThreadScopedState";
-import { getSidebarStyle, getWorkspacePanelStyle } from "../state/layoutSelectors";
+import { getSidebarStyle } from "../state/layoutSelectors";
 
 const WORKSPACE_PREVIEW_HEIGHT_STORAGE_KEY = "codex-web-workspace-preview-height";
 const WORKSPACE_PREVIEW_WIDTH_STORAGE_KEY = "codex-web-workspace-preview-width";
@@ -940,21 +930,14 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
       : "";
   const settingsBusy = !!agentConfigLoading || !!agentConfigSaving;
   const currentProjectLabel = activeProjectTab?.name || sessionSummary?.project_name || sessionSummary?.project_key || "-";
-  const workspaceRootLabel = basename(activeProjectTab?.path || sessionSummary?.workspace || "") || "Workspace";
-  const workspacePanelStyle = getWorkspacePanelStyle(isCompactWorkspaceLayout, workspacePanelWidth);
-  const workspaceStatusItems = useMemo(
-    () => (workspaceStatus && typeof workspaceStatus.items === "object" ? workspaceStatus.items : {}),
-    [workspaceStatus]
-  );
   const workspacePanel = (
-    <WorkspacePanel
+    <AppWorkspacePanelSlot
       isCompactWorkspaceLayout={isCompactWorkspaceLayout}
       isWorkspacePanelOpen={isWorkspacePanelOpen}
-      workspacePanelStyle={workspacePanelStyle}
-      workspaceRootLabel={workspaceRootLabel}
-      workspaceError={workspaceError}
+      workspacePanelWidth={workspacePanelWidth}
       activeWorkspacePath={activeProjectTab?.path || sessionSummary?.workspace || ""}
-      workspaceStatusItems={workspaceStatusItems}
+      workspaceError={workspaceError}
+      workspaceStatus={workspaceStatus}
       workspaceTree={workspaceTree}
       expandedWorkspaceDirs={expandedWorkspaceDirs}
       workspacePreview={workspacePreview}
@@ -977,98 +960,82 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
     setPendingProjectTarget("");
     setIsProjectModeModalOpen(false);
   };
-  const projectModeModal = (
-    <ProjectModeModal
-      isOpen={isProjectModeModalOpen}
-      onClose={closeProjectModeModal}
-      onChooseProjectClickMode={chooseProjectClickMode}
-    />
-  );
 
   const closeProjectPickerModal = () => {
     setShortcutModalPage("main");
     setProjectSearchQuery("");
   };
-  const projectPickerModal = (
-    <ProjectPickerModal
-      isOpen={shortcutModalPage === "project"}
-      projectSearchQuery={projectSearchQuery}
-      onProjectSearchQueryChange={setProjectSearchQuery}
-      filteredProjects={filteredProjects}
-      selectedProjectIndex={selectedProjectIndex}
-      onSelectedProjectIndexChange={setSelectedProjectIndex}
-      onSelectProject={(projectKey) => {
-        selectProject(projectKey).catch(() => {});
-        closeProjectPickerModal();
-      }}
-      onClose={closeProjectPickerModal}
-    />
-  );
-
-  const shortcutModal = null;
 
   return (
-    <AuthenticatedAppPresenter>
-    <div className={`app ${isMobileLayout ? "mobile-layout" : ""}`}>
-      <AppOverlaysPresenter
-        projectModeModal={projectModeModal}
-        projectPickerModal={projectPickerModal}
-        shortcutModal={shortcutModal}
-        toastNotification={toastNotification}
-      />
-      <AppSidebarPresenter>
-      <AppSidebarFrame
-        isMobileLayout={isMobileLayout}
-        isSidebarOpen={isSidebarOpen}
-        isDesktopSidebarCollapsed={isDesktopSidebarCollapsed}
-        sidebarStyle={sidebarStyle}
-        isResizingSidebar={isResizingSidebar}
-        onToggleSidebarOpen={setIsSidebarOpen}
-        onToggleSidebarCollapsed={() => setIsSidebarCollapsed((current) => !current)}
-        onStartSidebarResize={() => setIsResizingSidebar(true)}
-        SidebarChevronIcon={SidebarChevronIcon}
-      >
-        <AppSidebarContentPanel
-          turnNotificationEnabled={turnNotificationEnabled}
-          setTurnNotificationEnabled={setTurnNotificationEnabled}
-          persistTurnNotificationEnabled={persistTurnNotificationEnabled}
-          onToggleTheme={onToggleTheme}
-          theme={theme}
-          sessionSummary={sessionSummary}
-          toggleAgent={toggleAgent}
-          agentConfigLoading={agentConfigLoading}
-          agentConfigSaving={agentConfigSaving}
-          openAgentSettings={openAgentSettings}
-          activeSubagents={activeSubagents}
-          agentConfigError={agentConfigError}
-          activeAgentDef={activeAgentDef}
-          activeAgentConfig={activeAgentConfig}
-          settingsBusy={settingsBusy}
-          updateAgentDraft={updateAgentDraft}
-          activeAgentSettings={activeAgentSettings}
-          guardianRuleSummary={guardianRuleSummary}
-          floatingAgentSettings={floatingAgentSettings}
-          toggleFloatingAgentSettings={toggleFloatingAgentSettings}
-          loadAgentConfig={loadAgentConfig}
-          setAgentConfigError={setAgentConfigError}
-          saveAgentSettings={saveAgentSettings}
-          interactionBusy={interactionBusy}
-          projectItems={projectItems}
-          activeProjectKey={activeProjectKey}
-          selectProject={selectProject}
-          threadItems={threadItems}
-          activeThread={activeThread}
-          viewThread={viewThread}
+    <AuthenticatedAppLayout
+      isMobileLayout={isMobileLayout}
+      overlays={
+        <AppOverlayLayer
+          isProjectModeModalOpen={isProjectModeModalOpen}
+          onCloseProjectModeModal={closeProjectModeModal}
+          onChooseProjectClickMode={chooseProjectClickMode}
+          isProjectPickerOpen={shortcutModalPage === "project"}
+          projectSearchQuery={projectSearchQuery}
+          onProjectSearchQueryChange={setProjectSearchQuery}
+          filteredProjects={filteredProjects}
+          selectedProjectIndex={selectedProjectIndex}
+          onSelectedProjectIndexChange={setSelectedProjectIndex}
+          onSelectProject={(projectKey) => {
+            selectProject(projectKey).catch(() => {});
+            closeProjectPickerModal();
+          }}
+          onCloseProjectPicker={closeProjectPickerModal}
+          toastNotification={toastNotification}
         />
-      </AppSidebarFrame>
-      </AppSidebarPresenter>
-      <AppMainPresenter>
-      <AppMainFrame
-        isMobileLayout={isMobileLayout}
-        isSidebarOpen={isSidebarOpen}
-        onToggleSidebarOpen={setIsSidebarOpen}
-        MenuIcon={MenuIcon}
-      >
+      }
+      sidebar={
+        <AppSidebarFrame
+          isMobileLayout={isMobileLayout}
+          isSidebarOpen={isSidebarOpen}
+          isDesktopSidebarCollapsed={isDesktopSidebarCollapsed}
+          sidebarStyle={sidebarStyle}
+          isResizingSidebar={isResizingSidebar}
+          onToggleSidebarOpen={setIsSidebarOpen}
+          onToggleSidebarCollapsed={() => setIsSidebarCollapsed((current) => !current)}
+          onStartSidebarResize={() => setIsResizingSidebar(true)}
+          SidebarChevronIcon={SidebarChevronIcon}
+        >
+          <AppSidebarContentPanel
+            turnNotificationEnabled={turnNotificationEnabled}
+            setTurnNotificationEnabled={setTurnNotificationEnabled}
+            persistTurnNotificationEnabled={persistTurnNotificationEnabled}
+            onToggleTheme={onToggleTheme}
+            theme={theme}
+            sessionSummary={sessionSummary}
+            toggleAgent={toggleAgent}
+            agentConfigLoading={agentConfigLoading}
+            agentConfigSaving={agentConfigSaving}
+            openAgentSettings={openAgentSettings}
+            activeSubagents={activeSubagents}
+            agentConfigError={agentConfigError}
+            activeAgentDef={activeAgentDef}
+            activeAgentConfig={activeAgentConfig}
+            settingsBusy={settingsBusy}
+            updateAgentDraft={updateAgentDraft}
+            activeAgentSettings={activeAgentSettings}
+            guardianRuleSummary={guardianRuleSummary}
+            floatingAgentSettings={floatingAgentSettings}
+            toggleFloatingAgentSettings={toggleFloatingAgentSettings}
+            loadAgentConfig={loadAgentConfig}
+            setAgentConfigError={setAgentConfigError}
+            saveAgentSettings={saveAgentSettings}
+            interactionBusy={interactionBusy}
+            projectItems={projectItems}
+            activeProjectKey={activeProjectKey}
+            selectProject={selectProject}
+            threadItems={threadItems}
+            activeThread={activeThread}
+            viewThread={viewThread}
+          />
+        </AppSidebarFrame>
+      }
+      main={
+        <>
         <FloatingGuardianSettingsPanel
           visible={floatingAgentSettings === "guardian"}
           settingsBusy={settingsBusy}
@@ -1081,89 +1048,68 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
           saveAgentSettings={saveAgentSettings}
           setAgentConfigError={setAgentConfigError}
         />
-        <AppCenterPanePresenter
-          topTabs={
-            <TopTabs
-              projectTabs={projectTabs}
-              activeProjectTabId={activeProjectTabId}
-              projectTabStatusById={projectTabStatusById}
-              onSelectProjectTab={(tabId) => {
-                setActiveProjectTabId(tabId);
-                if (isMobileLayout) {
-                  setIsSidebarOpen(false);
-                }
-              }}
-              onCloseProjectTab={closeProjectTab}
-              threadTabs={threadTabsByProjectTabId[activeProjectTabId] || []}
-              activeThread={activeThread}
-              onSelectThread={viewThread}
-              onCloseThread={(threadId) => closeThreadTab(activeProjectTabId, threadId)}
-              onAddThread={() => startThread().catch(() => {})}
-              disableAddThread={!activeProjectKey || interactionBusy}
-            />
-          }
-          centerPane={
-            <>
-              <WorkspacePreviewOverlay
-                workspacePreview={workspacePreview}
-                isResizingWorkspacePreview={isResizingWorkspacePreview}
-                isMobileLayout={isMobileLayout}
-                workspacePreviewWidth={workspacePreviewWidth}
-                workspacePreviewHeight={workspacePreviewHeight}
-                workspacePreviewResizeRef={workspacePreviewResizeRef}
-                setIsResizingWorkspacePreview={setIsResizingWorkspacePreview}
-                setWorkspacePreview={setWorkspacePreview}
-                resetWorkspacePreviewSize={resetWorkspacePreviewSize}
-              />
-              <div className="chat" ref={chatRef}>
-                <ApprovalStack
-                  approvalItems={approvalItems}
-                  approvalBusyId={approvalBusyId}
-                  onSubmitApproval={submitApproval}
-                  onClose={() => setApprovalItems([])}
-                />
-                <ChatMessageFeed renderItems={renderItems} />
-              </div>
-              <AppComposerPresenter
-                activityDetail={activityDetail}
-                paletteOpen={paletteOpen}
-                paletteRef={paletteRef}
-                visiblePaletteItems={visiblePaletteItems}
-                paletteWindowStart={paletteWindowStart}
-                paletteSelectedIndex={paletteSelectedIndex}
-                activeTokenType={activeToken?.type || ""}
-                onApplyPaletteItem={applyPaletteItem}
-                collaborationMode={collaborationMode}
-                composerLocked={composerLocked}
-                modeSwitchBusy={modeSwitchBusy}
-                onToggleComposerMode={() => {
-                  toggleComposerMode().catch(() => {});
-                  focusComposer();
-                }}
-                inputRef={inputRef}
-                input={input}
-                onInputChange={onInputChange}
-                onInputFocus={onInputFocus}
-                onInputBlur={onInputBlur}
-                onInputSelect={onInputSelect}
-                onInputKeyDown={onInputKeyDown}
-                status={status}
-                onInterrupt={interrupt}
-                onSendMessage={sendMessage}
-                isCompactWorkspaceLayout={isCompactWorkspaceLayout}
-                isWorkspacePanelOpen={isWorkspacePanelOpen}
-                onToggleWorkspacePanel={() => setIsWorkspacePanelOpen((current) => !current)}
-                onNewChat={() => startThread({ replaceCurrentTab: true }).catch(() => {})}
-                interactionBusy={interactionBusy}
-                StopIcon={StopIcon}
-                SendIcon={SendIcon}
-                FolderIcon={FolderIcon}
-                NewChatIcon={NewChatIcon}
-              />
-            </>
-          }
+        <AppConversationPane
+          projectTabs={projectTabs}
+          activeProjectTabId={activeProjectTabId}
+          projectTabStatusById={projectTabStatusById}
+          onSelectProjectTab={(tabId) => {
+            setActiveProjectTabId(tabId);
+            if (isMobileLayout) {
+              setIsSidebarOpen(false);
+            }
+          }}
+          onCloseProjectTab={closeProjectTab}
+          threadTabs={threadTabsByProjectTabId[activeProjectTabId] || []}
+          activeThread={activeThread}
+          onSelectThread={viewThread}
+          onCloseThread={(threadId) => closeThreadTab(activeProjectTabId, threadId)}
+          onAddThread={() => startThread().catch(() => {})}
+          disableAddThread={!activeProjectKey || interactionBusy}
+          workspacePreview={workspacePreview}
+          isResizingWorkspacePreview={isResizingWorkspacePreview}
+          isMobileLayout={isMobileLayout}
+          workspacePreviewWidth={workspacePreviewWidth}
+          workspacePreviewHeight={workspacePreviewHeight}
+          workspacePreviewResizeRef={workspacePreviewResizeRef}
+          setIsResizingWorkspacePreview={setIsResizingWorkspacePreview}
+          setWorkspacePreview={setWorkspacePreview}
+          resetWorkspacePreviewSize={resetWorkspacePreviewSize}
+          chatRef={chatRef}
+          approvalItems={approvalItems}
+          approvalBusyId={approvalBusyId}
+          onSubmitApproval={submitApproval}
+          onCloseApprovals={() => setApprovalItems([])}
+          renderItems={renderItems}
+          activityDetail={activityDetail}
+          paletteOpen={paletteOpen}
+          paletteRef={paletteRef}
+          visiblePaletteItems={visiblePaletteItems}
+          paletteWindowStart={paletteWindowStart}
+          paletteSelectedIndex={paletteSelectedIndex}
+          activeTokenType={activeToken?.type || ""}
+          onApplyPaletteItem={applyPaletteItem}
+          collaborationMode={collaborationMode}
+          composerLocked={composerLocked}
+          modeSwitchBusy={modeSwitchBusy}
+          onToggleComposerMode={() => {
+            toggleComposerMode().catch(() => {});
+            focusComposer();
+          }}
+          inputRef={inputRef}
+          input={input}
+          onInputChange={onInputChange}
+          onInputFocus={onInputFocus}
+          onInputBlur={onInputBlur}
+          onInputSelect={onInputSelect}
+          onInputKeyDown={onInputKeyDown}
+          status={status}
+          onInterrupt={interrupt}
+          onSendMessage={sendMessage}
           isCompactWorkspaceLayout={isCompactWorkspaceLayout}
           isWorkspacePanelOpen={isWorkspacePanelOpen}
+          onToggleWorkspacePanel={() => setIsWorkspacePanelOpen((current) => !current)}
+          onNewChat={() => startThread({ replaceCurrentTab: true }).catch(() => {})}
+          interactionBusy={interactionBusy}
           workspacePanel={workspacePanel}
           isResizingWorkspacePanel={isResizingWorkspacePanel}
           onStartWorkspacePanelResize={(event) => {
@@ -1173,11 +1119,17 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
             };
             setIsResizingWorkspacePanel(true);
           }}
+          StopIcon={StopIcon}
+          SendIcon={SendIcon}
+          FolderIcon={FolderIcon}
+          NewChatIcon={NewChatIcon}
         />
-      </AppMainFrame>
-      </AppMainPresenter>
-    </div>
-    </AuthenticatedAppPresenter>
+        </>
+      }
+      isSidebarOpen={isSidebarOpen}
+      onToggleSidebarOpen={setIsSidebarOpen}
+      MenuIcon={MenuIcon}
+    />
   );
 }
 
