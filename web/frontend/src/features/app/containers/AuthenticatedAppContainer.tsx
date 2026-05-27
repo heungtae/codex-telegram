@@ -2,11 +2,10 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import AuthenticatedAppLayout from "../components/AuthenticatedAppLayout";
 import AppConversationPane from "../components/AppConversationPane";
-import AppSidebarContentPanel from "../components/AppSidebarContentPanel";
-import AppSidebarFrame from "../components/AppSidebarFrame";
-import FloatingGuardianSettingsPanel from "../components/FloatingGuardianSettingsPanel";
+import AppSidebarPane from "../components/AppSidebarPane";
 import AppOverlayLayer from "../components/AppOverlayLayer";
 import AppWorkspacePanelSlot from "../components/AppWorkspacePanelSlot";
+import AppFloatingAgentSettingsPane from "../components/AppFloatingAgentSettingsPane";
 import useApprovalFlow from "../../approvals/hooks/useApprovalFlow";
 import { AGENT_CONFIG_DEFS } from "../../common/constants";
 import { api } from "../../common/api";
@@ -20,7 +19,6 @@ import {
 } from "../../common/components/Icons";
 import { persistTurnNotificationEnabled, readTurnNotificationEnabled } from "../../common/theme";
 import {
-  formatGuardianRulesEditor,
   formatPlanChecklistText,
   groupMessagesForRender,
   normalizeThreadId,
@@ -46,6 +44,8 @@ import usePaletteEffects from "../hooks/usePaletteEffects";
 import useThreadBootstrapEffects from "../hooks/useThreadBootstrapEffects";
 import useMessageCommandActions from "../hooks/useMessageCommandActions";
 import useAppUiEffects from "../hooks/useAppUiEffects";
+import useProjectPickerViewModel from "../hooks/useProjectPickerViewModel";
+import useComposerViewModel from "../hooks/useComposerViewModel";
 import useThreadScopedState from "../../thread/hooks/useThreadScopedState";
 import { getSidebarStyle } from "../state/layoutSelectors";
 
@@ -856,17 +856,20 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
     setInputForActiveThread,
   });
 
-  const filteredProjects = useMemo(() => {
-    const query = projectSearchQuery.toLowerCase();
-    if (!query) {
-      return projectItems;
-    }
-    return projectItems.filter(
-      (item) =>
-        (item.name && item.name.toLowerCase().includes(query)) ||
-        (item.key && item.key.toLowerCase().includes(query))
-    );
-  }, [projectItems, projectSearchQuery]);
+  const {
+    filteredProjects,
+    closeProjectModeModal,
+    closeProjectPickerModal,
+    selectProjectFromPicker,
+  } = useProjectPickerViewModel({
+    projectItems,
+    projectSearchQuery,
+    setPendingProjectTarget,
+    setIsProjectModeModalOpen,
+    setShortcutModalPage,
+    setProjectSearchQuery,
+    selectProject,
+  });
 
   useGlobalKeyboardShortcuts({
     shortcutModalPage,
@@ -916,18 +919,47 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
     sendMessage,
   });
 
+  const composerViewModel = useComposerViewModel({
+    activeToken,
+    activityDetail,
+    paletteOpen,
+    paletteRef,
+    visiblePaletteItems,
+    paletteWindowStart,
+    paletteSelectedIndex,
+    applyPaletteItem,
+    collaborationMode,
+    composerLocked,
+    modeSwitchBusy,
+    toggleComposerMode,
+    focusComposer,
+    inputRef,
+    input,
+    onInputChange,
+    onInputFocus,
+    onInputBlur,
+    onInputSelect,
+    onInputKeyDown,
+    status,
+    interrupt,
+    sendMessage,
+    isCompactWorkspaceLayout,
+    isWorkspacePanelOpen,
+    setIsWorkspacePanelOpen,
+    startThread,
+    interactionBusy,
+    StopIcon,
+    SendIcon,
+    FolderIcon,
+    NewChatIcon,
+  });
+
   const activeAgentDef = activeAgentSettings ? AGENT_CONFIG_DEFS[activeAgentSettings] : null;
   const activeAgentConfig = activeAgentSettings ? agentConfigs[activeAgentSettings] : null;
-  const floatingAgentConfig = floatingAgentSettings ? agentConfigs[floatingAgentSettings] : null;
   const guardianRuleSummary =
     activeAgentSettings === "guardian"
       ? (activeAgentConfig?.rule_summary || { enabled: 0, total: 0, action_counts: {}, top: [] })
       : null;
-  const guardianRulesEditor =
-    activeAgentSettings === "guardian"
-      ? (agentConfigRawEditors[activeAgentSettings] ??
-        formatGuardianRulesEditor(activeAgentConfig))
-      : "";
   const settingsBusy = !!agentConfigLoading || !!agentConfigSaving;
   const currentProjectLabel = activeProjectTab?.name || sessionSummary?.project_name || sessionSummary?.project_key || "-";
   const workspacePanel = (
@@ -956,16 +988,6 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
     sidebarWidth,
     collapsedWidth: SIDEBAR_COLLAPSED_WIDTH,
   });
-  const closeProjectModeModal = () => {
-    setPendingProjectTarget("");
-    setIsProjectModeModalOpen(false);
-  };
-
-  const closeProjectPickerModal = () => {
-    setShortcutModalPage("main");
-    setProjectSearchQuery("");
-  };
-
   return (
     <AuthenticatedAppLayout
       isMobileLayout={isMobileLayout}
@@ -980,16 +1002,13 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
           filteredProjects={filteredProjects}
           selectedProjectIndex={selectedProjectIndex}
           onSelectedProjectIndexChange={setSelectedProjectIndex}
-          onSelectProject={(projectKey) => {
-            selectProject(projectKey).catch(() => {});
-            closeProjectPickerModal();
-          }}
+          onSelectProject={(projectKey) => selectProjectFromPicker(projectKey).catch(() => {})}
           onCloseProjectPicker={closeProjectPickerModal}
           toastNotification={toastNotification}
         />
       }
       sidebar={
-        <AppSidebarFrame
+        <AppSidebarPane
           isMobileLayout={isMobileLayout}
           isSidebarOpen={isSidebarOpen}
           isDesktopSidebarCollapsed={isDesktopSidebarCollapsed}
@@ -999,49 +1018,46 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
           onToggleSidebarCollapsed={() => setIsSidebarCollapsed((current) => !current)}
           onStartSidebarResize={() => setIsResizingSidebar(true)}
           SidebarChevronIcon={SidebarChevronIcon}
-        >
-          <AppSidebarContentPanel
-            turnNotificationEnabled={turnNotificationEnabled}
-            setTurnNotificationEnabled={setTurnNotificationEnabled}
-            persistTurnNotificationEnabled={persistTurnNotificationEnabled}
-            onToggleTheme={onToggleTheme}
-            theme={theme}
-            sessionSummary={sessionSummary}
-            toggleAgent={toggleAgent}
-            agentConfigLoading={agentConfigLoading}
-            agentConfigSaving={agentConfigSaving}
-            openAgentSettings={openAgentSettings}
-            activeSubagents={activeSubagents}
-            agentConfigError={agentConfigError}
-            activeAgentDef={activeAgentDef}
-            activeAgentConfig={activeAgentConfig}
-            settingsBusy={settingsBusy}
-            updateAgentDraft={updateAgentDraft}
-            activeAgentSettings={activeAgentSettings}
-            guardianRuleSummary={guardianRuleSummary}
-            floatingAgentSettings={floatingAgentSettings}
-            toggleFloatingAgentSettings={toggleFloatingAgentSettings}
-            loadAgentConfig={loadAgentConfig}
-            setAgentConfigError={setAgentConfigError}
-            saveAgentSettings={saveAgentSettings}
-            interactionBusy={interactionBusy}
-            projectItems={projectItems}
-            activeProjectKey={activeProjectKey}
-            selectProject={selectProject}
-            threadItems={threadItems}
-            activeThread={activeThread}
-            viewThread={viewThread}
-          />
-        </AppSidebarFrame>
+          turnNotificationEnabled={turnNotificationEnabled}
+          setTurnNotificationEnabled={setTurnNotificationEnabled}
+          persistTurnNotificationEnabled={persistTurnNotificationEnabled}
+          onToggleTheme={onToggleTheme}
+          theme={theme}
+          sessionSummary={sessionSummary}
+          toggleAgent={toggleAgent}
+          agentConfigLoading={agentConfigLoading}
+          agentConfigSaving={agentConfigSaving}
+          openAgentSettings={openAgentSettings}
+          activeSubagents={activeSubagents}
+          agentConfigError={agentConfigError}
+          activeAgentDef={activeAgentDef}
+          activeAgentConfig={activeAgentConfig}
+          settingsBusy={settingsBusy}
+          updateAgentDraft={updateAgentDraft}
+          activeAgentSettings={activeAgentSettings}
+          guardianRuleSummary={guardianRuleSummary}
+          floatingAgentSettings={floatingAgentSettings}
+          toggleFloatingAgentSettings={toggleFloatingAgentSettings}
+          loadAgentConfig={loadAgentConfig}
+          setAgentConfigError={setAgentConfigError}
+          saveAgentSettings={saveAgentSettings}
+          interactionBusy={interactionBusy}
+          projectItems={projectItems}
+          activeProjectKey={activeProjectKey}
+          selectProject={selectProject}
+          threadItems={threadItems}
+          activeThread={activeThread}
+          viewThread={viewThread}
+        />
       }
       main={
         <>
-        <FloatingGuardianSettingsPanel
-          visible={floatingAgentSettings === "guardian"}
-          settingsBusy={settingsBusy}
-          floatingAgentConfig={floatingAgentConfig}
+        <AppFloatingAgentSettingsPane
+          activeAgentSettings={activeAgentSettings}
           floatingAgentSettings={floatingAgentSettings}
-          guardianRulesEditor={guardianRulesEditor}
+          agentConfigs={agentConfigs}
+          agentConfigRawEditors={agentConfigRawEditors}
+          settingsBusy={settingsBusy}
           setFloatingAgentSettings={setFloatingAgentSettings}
           setAgentConfigRawEditors={setAgentConfigRawEditors}
           loadAgentConfig={loadAgentConfig}
@@ -1080,36 +1096,7 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
           onSubmitApproval={submitApproval}
           onCloseApprovals={() => setApprovalItems([])}
           renderItems={renderItems}
-          activityDetail={activityDetail}
-          paletteOpen={paletteOpen}
-          paletteRef={paletteRef}
-          visiblePaletteItems={visiblePaletteItems}
-          paletteWindowStart={paletteWindowStart}
-          paletteSelectedIndex={paletteSelectedIndex}
-          activeTokenType={activeToken?.type || ""}
-          onApplyPaletteItem={applyPaletteItem}
-          collaborationMode={collaborationMode}
-          composerLocked={composerLocked}
-          modeSwitchBusy={modeSwitchBusy}
-          onToggleComposerMode={() => {
-            toggleComposerMode().catch(() => {});
-            focusComposer();
-          }}
-          inputRef={inputRef}
-          input={input}
-          onInputChange={onInputChange}
-          onInputFocus={onInputFocus}
-          onInputBlur={onInputBlur}
-          onInputSelect={onInputSelect}
-          onInputKeyDown={onInputKeyDown}
-          status={status}
-          onInterrupt={interrupt}
-          onSendMessage={sendMessage}
-          isCompactWorkspaceLayout={isCompactWorkspaceLayout}
-          isWorkspacePanelOpen={isWorkspacePanelOpen}
-          onToggleWorkspacePanel={() => setIsWorkspacePanelOpen((current) => !current)}
-          onNewChat={() => startThread({ replaceCurrentTab: true }).catch(() => {})}
-          interactionBusy={interactionBusy}
+          {...composerViewModel}
           workspacePanel={workspacePanel}
           isResizingWorkspacePanel={isResizingWorkspacePanel}
           onStartWorkspacePanelResize={(event) => {

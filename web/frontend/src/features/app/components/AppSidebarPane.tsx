@@ -1,9 +1,16 @@
-import SidebarAgentsPanel from "./SidebarAgentsPanel";
-import SidebarHeaderActions from "./SidebarHeaderActions";
-import SidebarProjectsPanel from "./SidebarProjectsPanel";
-import SidebarThreadsPanel from "./SidebarThreadsPanel";
+import AppSidebarContentPanel from "./AppSidebarContentPanel";
+import AppSidebarFrame from "./AppSidebarFrame";
 
-export default function AppSidebarContentPanel({
+export default function AppSidebarPane({
+  isMobileLayout,
+  isSidebarOpen,
+  isDesktopSidebarCollapsed,
+  sidebarStyle,
+  isResizingSidebar,
+  onToggleSidebarOpen,
+  onToggleSidebarCollapsed,
+  onStartSidebarResize,
+  SidebarChevronIcon,
   turnNotificationEnabled,
   setTurnNotificationEnabled,
   persistTurnNotificationEnabled,
@@ -36,15 +43,23 @@ export default function AppSidebarContentPanel({
   viewThread,
 }) {
   return (
-    <>
-      <SidebarHeaderActions
+    <AppSidebarFrame
+      isMobileLayout={isMobileLayout}
+      isSidebarOpen={isSidebarOpen}
+      isDesktopSidebarCollapsed={isDesktopSidebarCollapsed}
+      sidebarStyle={sidebarStyle}
+      isResizingSidebar={isResizingSidebar}
+      onToggleSidebarOpen={onToggleSidebarOpen}
+      onToggleSidebarCollapsed={onToggleSidebarCollapsed}
+      onStartSidebarResize={onStartSidebarResize}
+      SidebarChevronIcon={SidebarChevronIcon}
+    >
+      <AppSidebarContentPanel
         turnNotificationEnabled={turnNotificationEnabled}
         setTurnNotificationEnabled={setTurnNotificationEnabled}
         persistTurnNotificationEnabled={persistTurnNotificationEnabled}
         onToggleTheme={onToggleTheme}
         theme={theme}
-      />
-      <SidebarAgentsPanel
         sessionSummary={sessionSummary}
         toggleAgent={toggleAgent}
         agentConfigLoading={agentConfigLoading}
@@ -63,19 +78,14 @@ export default function AppSidebarContentPanel({
         loadAgentConfig={loadAgentConfig}
         setAgentConfigError={setAgentConfigError}
         saveAgentSettings={saveAgentSettings}
-      />
-      <SidebarProjectsPanel
         interactionBusy={interactionBusy}
         projectItems={projectItems}
         activeProjectKey={activeProjectKey}
         selectProject={selectProject}
-      />
-      <SidebarThreadsPanel
-        interactionBusy={interactionBusy}
         threadItems={threadItems}
         activeThread={activeThread}
         viewThread={viewThread}
       />
-    </>
+    </AppSidebarFrame>
   );
 }

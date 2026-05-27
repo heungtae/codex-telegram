@@ -20,6 +20,130 @@ Rule:
   - ...
 ```
 
+## 2026-05-27 17:00 (local)
+- Objective:
+  - 컴포넌트 분리 8차: `AppSidebarContentPanel` 내부 섹션 분해.
+- Files changed:
+  - web/frontend/src/features/app/components/AppSidebarContentPanel.tsx
+  - web/frontend/src/features/app/components/SidebarHeaderActions.tsx
+  - web/frontend/src/features/app/components/SidebarAgentsPanel.tsx
+  - web/frontend/src/features/app/components/SidebarProjectsPanel.tsx
+  - web/frontend/src/features/app/components/SidebarThreadsPanel.tsx
+  - web/frontend/src/features/app/components/__tests__/SidebarHeaderActions.test.ts
+  - web/frontend/src/features/app/components/__tests__/SidebarAgentsPanel.test.ts
+  - web/frontend/src/features/app/components/__tests__/SidebarProjectsPanel.test.ts
+  - web/frontend/src/features/app/components/__tests__/SidebarThreadsPanel.test.ts
+- Changes:
+  - sidebar header notification/theme controls를 `SidebarHeaderActions`로 분리.
+  - agents/subagents/agent settings card를 `SidebarAgentsPanel`로 분리.
+  - projects list와 empty/busy state를 `SidebarProjectsPanel`로 분리.
+  - threads list와 active/empty state를 `SidebarThreadsPanel`로 분리.
+  - `AppSidebarContentPanel`은 하위 sidebar 섹션 조립만 담당하도록 축소.
+- Validation:
+  - `node --import tsx --test src/features/app/components/__tests__/SidebarHeaderActions.test.ts src/features/app/components/__tests__/SidebarAgentsPanel.test.ts src/features/app/components/__tests__/SidebarProjectsPanel.test.ts src/features/app/components/__tests__/SidebarThreadsPanel.test.ts src/features/app/components/__tests__/AppSidebarPane.test.ts` 통과.
+  - `npx tsc -p . --noEmit` 통과.
+  - `npm run lint` 통과 (0 errors, 47 warnings).
+  - `npm test` 통과 (36/36).
+  - `npm run build` 통과.
+- Next step:
+  - 9번 ref orchestration 정리 계획을 별도 수립.
+
+## 2026-05-27 16:50 (local)
+- Objective:
+  - 컴포넌트 분리 4~7차: sidebar pane, floating agent settings, project picker/composer view-model 분리.
+- Files changed:
+  - web/frontend/src/features/app/containers/AuthenticatedAppContainer.tsx
+  - web/frontend/src/features/app/components/AppSidebarPane.tsx
+  - web/frontend/src/features/app/components/AppFloatingAgentSettingsPane.tsx
+  - web/frontend/src/features/app/hooks/useProjectPickerViewModel.ts
+  - web/frontend/src/features/app/hooks/useComposerViewModel.ts
+  - web/frontend/src/features/app/components/__tests__/AppSidebarPane.test.ts
+  - web/frontend/src/features/app/components/__tests__/AppFloatingAgentSettingsPane.test.ts
+  - web/frontend/src/features/app/hooks/__tests__/useProjectPickerViewModel.test.ts
+  - web/frontend/src/features/app/hooks/__tests__/useComposerViewModel.test.ts
+- Changes:
+  - sidebar frame/content panel props 조립을 `AppSidebarPane`으로 이동.
+  - floating guardian settings 계산/렌더 조립을 `AppFloatingAgentSettingsPane`으로 이동.
+  - project picker filter/close/select handler packaging을 `useProjectPickerViewModel`로 이동.
+  - composer props와 mode/new-chat/workspace toggle handler packaging을 `useComposerViewModel`로 이동.
+  - SSE/turn/session 상태 전이 로직은 변경하지 않음.
+- Validation:
+  - `node --import tsx --test src/features/app/components/__tests__/AppSidebarPane.test.ts src/features/app/components/__tests__/AppFloatingAgentSettingsPane.test.ts src/features/app/hooks/__tests__/useProjectPickerViewModel.test.ts src/features/app/hooks/__tests__/useComposerViewModel.test.ts` 통과.
+  - `npx tsc -p . --noEmit` 통과.
+  - `npm run lint` 통과 (0 errors, 47 warnings).
+  - `npm test` 통과 (30/30).
+  - `npm run build` 통과.
+- Next step:
+  - sidebar content 내부 분해 또는 ref orchestration 정리를 별도 단계로 진행.
+
+## 2026-05-27 16:36 (local)
+- Objective:
+  - 컴포넌트 분리 3차: workspace panel slot, overlay layer, main layout 조립 분리.
+- Files changed:
+  - web/frontend/src/features/app/containers/AuthenticatedAppContainer.tsx
+  - web/frontend/src/features/app/components/AppWorkspacePanelSlot.tsx
+  - web/frontend/src/features/app/components/AppOverlayLayer.tsx
+  - web/frontend/src/features/app/components/AuthenticatedAppLayout.tsx
+  - web/frontend/src/features/app/components/__tests__/AppWorkspacePanelSlot.test.ts
+  - web/frontend/src/features/app/components/__tests__/AppOverlayLayer.test.ts
+  - web/frontend/src/features/app/components/__tests__/AuthenticatedAppLayout.test.ts
+- Changes:
+  - workspace panel label/style/status item 조립을 `AppWorkspacePanelSlot`으로 이동.
+  - project mode/picker modal과 toast overlay 조립을 `AppOverlayLayer`로 이동.
+  - root app layout, sidebar/main presenter, mobile main frame 조립을 `AuthenticatedAppLayout`으로 이동.
+  - SSE/turn/session 상태 전이 로직은 변경하지 않음.
+- Validation:
+  - `node --import tsx --test src/features/app/components/__tests__/AppWorkspacePanelSlot.test.ts src/features/app/components/__tests__/AppOverlayLayer.test.ts src/features/app/components/__tests__/AuthenticatedAppLayout.test.ts` 통과.
+  - `npx tsc -p . --noEmit` 통과.
+  - `npm run lint` 통과 (0 errors, 47 warnings).
+  - `npm test` 통과 (25/25).
+  - `npm run build` 통과.
+- Next step:
+  - 사이드바 props 조립 또는 agent settings view-model 분리를 다음 단위로 진행.
+
+## 2026-05-27 16:24 (local)
+- Objective:
+  - 컴포넌트 분리 2차: center pane/chat/composer 조립부 분리.
+- Files changed:
+  - web/frontend/src/features/app/containers/AuthenticatedAppContainer.tsx
+  - web/frontend/src/features/app/components/AppConversationPane.tsx
+  - web/frontend/src/features/app/components/__tests__/AppConversationPane.test.ts
+- Changes:
+  - `TopTabs`, `WorkspacePreviewOverlay`, `ApprovalStack`, `ChatMessageFeed`, `AppComposerPresenter` 조립을 `AppConversationPane`으로 이동.
+  - 컨테이너는 도메인 상태와 핸들러를 props로 전달하는 orchestration만 유지.
+  - SSE/turn/session 상태 전이 로직은 변경하지 않음.
+- Validation:
+  - `node --import tsx --test src/features/app/components/__tests__/AppConversationPane.test.ts` 통과.
+  - `npx tsc -p . --noEmit` 통과.
+  - `npm run lint` 통과 (0 errors, 47 warnings).
+  - `npm test` 통과 (22/22).
+  - `npm run build` 통과.
+- Next step:
+  - 필요 시 사이드바 내부 패널을 다음 단위로 분리.
+
+## 2026-05-27 15:40 (local)
+- Objective:
+  - 컴포넌트 분리 1차 진입: 컨테이너 하단 JSX 책임 축소.
+- Files changed:
+  - web/frontend/src/features/app/containers/AuthenticatedAppContainer.tsx
+  - web/frontend/src/features/app/components/ProjectModals.tsx
+  - web/frontend/src/features/app/components/AppSidebarFrame.tsx
+  - web/frontend/src/features/app/components/AppMainFrame.tsx
+  - web/frontend/src/features/app/components/__tests__/ProjectModals.test.ts
+- Changes:
+  - project mode / project picker modal JSX를 `ProjectModals` 컴포넌트로 분리.
+  - sidebar shell/footer/backdrop/resizer 책임을 `AppSidebarFrame`으로 분리.
+  - mobile main menu wrapper를 `AppMainFrame`으로 분리.
+  - SSE/turn/session 상태 전이 로직은 변경하지 않음.
+- Validation:
+  - `node --import tsx --test src/features/app/components/__tests__/ProjectModals.test.ts` 통과.
+  - `npx tsc -p . --noEmit` 통과.
+  - `npm run lint` 통과 (0 errors, 47 warnings).
+  - `npm test` 통과 (21/21).
+  - `npm run build` 통과.
+- Next step:
+  - 필요 시 center pane/chat 조립부를 다음 단위로 분리.
+
 ## 2026-05-26 17:19 (local)
 - Objective:
   - `AuthenticatedAppContainer` 추가 분리: workspace 패널 경계와 UI effect 경계를 도메인 단위로 재정렬.
