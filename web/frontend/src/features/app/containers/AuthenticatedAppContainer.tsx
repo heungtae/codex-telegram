@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import AuthenticatedAppPresenter from "../components/AuthenticatedAppPresenter";
 import AppMainPresenter from "../components/AppMainPresenter";
@@ -7,8 +7,11 @@ import AppSidebarPresenter from "../components/AppSidebarPresenter";
 import AppCenterPanePresenter from "../components/AppCenterPanePresenter";
 import AppComposerPresenter from "../components/AppComposerPresenter";
 import AppSidebarContentPanel from "../components/AppSidebarContentPanel";
+import AppSidebarFrame from "../components/AppSidebarFrame";
+import AppMainFrame from "../components/AppMainFrame";
 import FloatingGuardianSettingsPanel from "../components/FloatingGuardianSettingsPanel";
 import WorkspacePreviewOverlay from "../components/WorkspacePreviewOverlay";
+import { ProjectModeModal, ProjectPickerModal } from "../components/ProjectModals";
 import WorkspacePanel from "../../workspace/components/WorkspacePanel";
 import ApprovalStack from "../../approvals/components/ApprovalStack";
 import useApprovalFlow from "../../approvals/hooks/useApprovalFlow";
@@ -970,115 +973,37 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
     sidebarWidth,
     collapsedWidth: SIDEBAR_COLLAPSED_WIDTH,
   });
-  const projectModeModal = isProjectModeModalOpen ? (
-    <div
-      className="modal-backdrop"
-      role="presentation"
-      onMouseDown={() => {
-        setPendingProjectTarget("");
-        setIsProjectModeModalOpen(false);
-      }}
-    >
-      <div
-        className="modal-card"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Project open mode"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="modal-title">Choose Project Tab Behavior</div>
-        <div className="modal-desc">
-          Choose whether clicking a project opens it in a new tab or replaces the current tab.
-        </div>
-        <div className="modal-actions">
-          <button
-            type="button"
-            className="primary"
-            onMouseDown={(event) => event.stopPropagation()}
-            onClick={() => chooseProjectClickMode("open_new_tab")}
-          >
-            Open in New Tab
-          </button>
-          <button
-            type="button"
-            className="secondary"
-            onMouseDown={(event) => event.stopPropagation()}
-            onClick={() => chooseProjectClickMode("replace_current")}
-          >
-            Replace Current Tab
-          </button>
-          <button
-            type="button"
-            className="ghost"
-            onMouseDown={(event) => event.stopPropagation()}
-            onClick={() => {
-              setPendingProjectTarget("");
-              setIsProjectModeModalOpen(false);
-            }}
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
-  ) : null;
+  const closeProjectModeModal = () => {
+    setPendingProjectTarget("");
+    setIsProjectModeModalOpen(false);
+  };
+  const projectModeModal = (
+    <ProjectModeModal
+      isOpen={isProjectModeModalOpen}
+      onClose={closeProjectModeModal}
+      onChooseProjectClickMode={chooseProjectClickMode}
+    />
+  );
 
-  const projectPickerModal = shortcutModalPage === "project" ? (
-    <div
-      className="modal-backdrop"
-      role="presentation"
-      onMouseDown={() => {
-        setShortcutModalPage("main");
-        setProjectSearchQuery("");
+  const closeProjectPickerModal = () => {
+    setShortcutModalPage("main");
+    setProjectSearchQuery("");
+  };
+  const projectPickerModal = (
+    <ProjectPickerModal
+      isOpen={shortcutModalPage === "project"}
+      projectSearchQuery={projectSearchQuery}
+      onProjectSearchQueryChange={setProjectSearchQuery}
+      filteredProjects={filteredProjects}
+      selectedProjectIndex={selectedProjectIndex}
+      onSelectedProjectIndexChange={setSelectedProjectIndex}
+      onSelectProject={(projectKey) => {
+        selectProject(projectKey).catch(() => {});
+        closeProjectPickerModal();
       }}
-    >
-      <div
-        className="modal-card project-picker-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Project picker"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="project-picker-search">
-          <input
-            type="text"
-            className="project-picker-input"
-            placeholder="Search projects..."
-            value={projectSearchQuery}
-            onChange={(e) => setProjectSearchQuery(e.target.value)}
-            autoFocus
-          />
-        </div>
-        <div className="project-picker-list">
-          {filteredProjects.length === 0 ? (
-            <div className="project-picker-empty">No projects found</div>
-          ) : (
-            filteredProjects.map((item, idx) => (
-              <button
-                key={item.key}
-                className={`project-picker-item ${idx === selectedProjectIndex ? "selected" : ""}`}
-                onClick={() => {
-                  selectProject(item.key).catch(() => {});
-                  setShortcutModalPage("main");
-                  setProjectSearchQuery("");
-                }}
-                onMouseEnter={() => setSelectedProjectIndex(idx)}
-              >
-                <span className="project-picker-name">{item.name || item.key}</span>
-                <span className="project-picker-key">{item.key}</span>
-                {item.default ? <span className="project-picker-badge">default</span> : null}
-              </button>
-            ))
-          )}
-        </div>
-        <div className="project-picker-footer">
-          <span><kbd>?묅넃</kbd> Navigate</span>
-          <span><kbd>Enter</kbd> Select</span>
-          <span><kbd>Esc</kbd> Close</span>
-        </div>
-      </div>
-    </div>
-  ) : null;
+      onClose={closeProjectPickerModal}
+    />
+  );
 
   const shortcutModal = null;
 
@@ -1092,101 +1017,58 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
         toastNotification={toastNotification}
       />
       <AppSidebarPresenter>
-      <aside
-        id="app-sidebar"
-        className={`sidebar ${isMobileLayout ? "mobile" : "desktop"} ${isSidebarOpen ? "open" : ""} ${isDesktopSidebarCollapsed ? "collapsed" : ""}`}
-        style={sidebarStyle}
-        aria-hidden={isMobileLayout ? !isSidebarOpen : undefined}
+      <AppSidebarFrame
+        isMobileLayout={isMobileLayout}
+        isSidebarOpen={isSidebarOpen}
+        isDesktopSidebarCollapsed={isDesktopSidebarCollapsed}
+        sidebarStyle={sidebarStyle}
+        isResizingSidebar={isResizingSidebar}
+        onToggleSidebarOpen={setIsSidebarOpen}
+        onToggleSidebarCollapsed={() => setIsSidebarCollapsed((current) => !current)}
+        onStartSidebarResize={() => setIsResizingSidebar(true)}
+        SidebarChevronIcon={SidebarChevronIcon}
       >
-        {!isDesktopSidebarCollapsed ? (
-          <div className="sidebar-content">
-            <AppSidebarContentPanel
-              turnNotificationEnabled={turnNotificationEnabled}
-              setTurnNotificationEnabled={setTurnNotificationEnabled}
-              persistTurnNotificationEnabled={persistTurnNotificationEnabled}
-              onToggleTheme={onToggleTheme}
-              theme={theme}
-              sessionSummary={sessionSummary}
-              toggleAgent={toggleAgent}
-              agentConfigLoading={agentConfigLoading}
-              agentConfigSaving={agentConfigSaving}
-              openAgentSettings={openAgentSettings}
-              activeSubagents={activeSubagents}
-              agentConfigError={agentConfigError}
-              activeAgentDef={activeAgentDef}
-              activeAgentConfig={activeAgentConfig}
-              settingsBusy={settingsBusy}
-              updateAgentDraft={updateAgentDraft}
-              activeAgentSettings={activeAgentSettings}
-              guardianRuleSummary={guardianRuleSummary}
-              floatingAgentSettings={floatingAgentSettings}
-              toggleFloatingAgentSettings={toggleFloatingAgentSettings}
-              loadAgentConfig={loadAgentConfig}
-              setAgentConfigError={setAgentConfigError}
-              saveAgentSettings={saveAgentSettings}
-              interactionBusy={interactionBusy}
-              projectItems={projectItems}
-              activeProjectKey={activeProjectKey}
-              selectProject={selectProject}
-              threadItems={threadItems}
-              activeThread={activeThread}
-              viewThread={viewThread}
-            />
-          </div>
-        ) : null}
-        <div className="sidebar-footer">
-          <button
-            className="sidebar-collapse-btn"
-            type="button"
-            onClick={() => {
-              if (isMobileLayout) {
-                setIsSidebarOpen(false);
-                return;
-              }
-              setIsSidebarCollapsed((current) => !current);
-            }}
-            aria-label={isMobileLayout ? "Collapse left panel" : isDesktopSidebarCollapsed ? "Expand left panel" : "Collapse left panel"}
-            title={isMobileLayout ? "Collapse left panel" : isDesktopSidebarCollapsed ? "Expand left panel" : "Collapse left panel"}
-          >
-            <SidebarChevronIcon collapsed={isMobileLayout ? false : isDesktopSidebarCollapsed} />
-          </button>
-        </div>
-      </aside>
-      {isMobileLayout ? (
-        <button
-          className={`sidebar-backdrop ${isSidebarOpen ? "open" : ""}`}
-          type="button"
-          onClick={() => setIsSidebarOpen(false)}
-          aria-label="Close navigation menu"
+        <AppSidebarContentPanel
+          turnNotificationEnabled={turnNotificationEnabled}
+          setTurnNotificationEnabled={setTurnNotificationEnabled}
+          persistTurnNotificationEnabled={persistTurnNotificationEnabled}
+          onToggleTheme={onToggleTheme}
+          theme={theme}
+          sessionSummary={sessionSummary}
+          toggleAgent={toggleAgent}
+          agentConfigLoading={agentConfigLoading}
+          agentConfigSaving={agentConfigSaving}
+          openAgentSettings={openAgentSettings}
+          activeSubagents={activeSubagents}
+          agentConfigError={agentConfigError}
+          activeAgentDef={activeAgentDef}
+          activeAgentConfig={activeAgentConfig}
+          settingsBusy={settingsBusy}
+          updateAgentDraft={updateAgentDraft}
+          activeAgentSettings={activeAgentSettings}
+          guardianRuleSummary={guardianRuleSummary}
+          floatingAgentSettings={floatingAgentSettings}
+          toggleFloatingAgentSettings={toggleFloatingAgentSettings}
+          loadAgentConfig={loadAgentConfig}
+          setAgentConfigError={setAgentConfigError}
+          saveAgentSettings={saveAgentSettings}
+          interactionBusy={interactionBusy}
+          projectItems={projectItems}
+          activeProjectKey={activeProjectKey}
+          selectProject={selectProject}
+          threadItems={threadItems}
+          activeThread={activeThread}
+          viewThread={viewThread}
         />
-      ) : !isDesktopSidebarCollapsed ? (
-        <div
-          className={`sidebar-resizer ${isResizingSidebar ? "active" : ""}`}
-          onMouseDown={() => setIsResizingSidebar(true)}
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="Resize sidebar"
-        />
-      ) : (
-        <div className="sidebar-resizer sidebar-resizer-collapsed" aria-hidden="true" />
-      )}
+      </AppSidebarFrame>
       </AppSidebarPresenter>
       <AppMainPresenter>
-      <main className="main">
-        {isMobileLayout ? (
-          <div className="mobile-main-actions">
-            <button
-              className="menu-toggle icon-only"
-              type="button"
-              onClick={() => setIsSidebarOpen((current) => !current)}
-              aria-label="Toggle navigation menu"
-              aria-expanded={isSidebarOpen}
-              aria-controls="app-sidebar"
-            >
-              <MenuIcon />
-            </button>
-          </div>
-        ) : null}
+      <AppMainFrame
+        isMobileLayout={isMobileLayout}
+        isSidebarOpen={isSidebarOpen}
+        onToggleSidebarOpen={setIsSidebarOpen}
+        MenuIcon={MenuIcon}
+      >
         <FloatingGuardianSettingsPanel
           visible={floatingAgentSettings === "guardian"}
           settingsBusy={settingsBusy}
@@ -1292,7 +1174,7 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
             setIsResizingWorkspacePanel(true);
           }}
         />
-      </main>
+      </AppMainFrame>
       </AppMainPresenter>
     </div>
     </AuthenticatedAppPresenter>
