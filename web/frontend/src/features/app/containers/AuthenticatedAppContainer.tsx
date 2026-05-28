@@ -44,6 +44,7 @@ import usePaletteEffects from "../hooks/usePaletteEffects";
 import useThreadBootstrapEffects from "../hooks/useThreadBootstrapEffects";
 import useMessageCommandActions from "../hooks/useMessageCommandActions";
 import useAppUiEffects from "../hooks/useAppUiEffects";
+import useAppCommandRefs from "../hooks/useAppCommandRefs";
 import useProjectPickerViewModel from "../hooks/useProjectPickerViewModel";
 import useComposerViewModel from "../hooks/useComposerViewModel";
 import useThreadScopedState from "../../thread/hooks/useThreadScopedState";
@@ -198,13 +199,7 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
   const initialLoadRef = useRef(true);
   const streamedTurnIdsRef = useRef({});
   const assistantItemCompletedByTurnRef = useRef({});
-  const sendMessageRef = useRef(null);
-  const startThreadRef = useRef(null);
-  const closeThreadTabRef = useRef(null);
-  const viewThreadRef = useRef(null);
-  const selectProjectRef = useRef(null);
-  const focusComposerRef = useRef(null);
-  const setInputForActiveThreadRef = useRef(null);
+  const commandRefs = useAppCommandRefs();
   const inputHistoryIndexRef = useRef(-1);
   const {
     paletteSelectedIndex,
@@ -840,19 +835,13 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
     isProjectModeModalOpen,
     setPendingProjectTarget,
     setIsProjectModeModalOpen,
-    sendMessageRef,
+    commandRefs,
     sendMessage,
-    startThreadRef,
     startThread,
-    closeThreadTabRef,
     closeThreadTab,
-    viewThreadRef,
     viewThread,
-    selectProjectRef,
     selectProject,
-    focusComposerRef,
     focusComposer,
-    setInputForActiveThreadRef,
     setInputForActiveThread,
   });
 
@@ -884,12 +873,7 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
     filteredProjects,
     selectedProjectIndex,
     activeProjectKey,
-    focusComposerRef,
-    startThreadRef,
-    closeThreadTabRef,
-    viewThreadRef,
-    sendMessageRef,
-    selectProjectRef,
+    commandRefs,
     setShortcutModalPage,
     setProjectSearchQuery,
     setSelectedProjectIndex,

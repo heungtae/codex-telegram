@@ -15,12 +15,7 @@ export default function useGlobalKeyboardShortcuts(args: UseGlobalKeyboardShortc
     filteredProjects,
     selectedProjectIndex,
     activeProjectKey,
-    focusComposerRef,
-    startThreadRef,
-    closeThreadTabRef,
-    viewThreadRef,
-    sendMessageRef,
-    selectProjectRef,
+    commandRefs,
     setShortcutModalPage,
     setProjectSearchQuery,
     setSelectedProjectIndex,
@@ -61,21 +56,21 @@ export default function useGlobalKeyboardShortcuts(args: UseGlobalKeyboardShortc
         switch (event.key) {
           case "n":
           case "N":
-            focusComposerRef.current?.();
+            commandRefs.focusComposer.current?.();
             if (!interactionBusy) {
-              startThreadRef.current?.({ replaceCurrentTab: true }).catch(() => {});
+              commandRefs.startThread.current?.({ replaceCurrentTab: true }).catch(() => {});
             }
             break;
           case "t":
           case "T":
             if (!interactionBusy && activeProjectKey) {
-              startThreadRef.current?.().catch(() => {});
+              commandRefs.startThread.current?.().catch(() => {});
             }
             break;
           case "w":
           case "W":
             if (activeThread && activeProjectTabId) {
-              closeThreadTabRef.current?.(activeProjectTabId, activeThread);
+              commandRefs.closeThreadTab.current?.(activeProjectTabId, activeThread);
             }
             break;
           case "p":
@@ -94,9 +89,9 @@ export default function useGlobalKeyboardShortcuts(args: UseGlobalKeyboardShortc
             const threadTabs = threadTabsByProjectTabId[activeProjectTabId] || [];
             const currentIndex = threadTabs.findIndex((t) => normalizeThreadId(t.id) === normalizeThreadId(activeThread));
             if (currentIndex > 0) {
-              viewThreadRef.current?.(String(threadTabs[currentIndex - 1].id));
+              commandRefs.viewThread.current?.(String(threadTabs[currentIndex - 1].id));
             } else if (threadTabs.length > 0) {
-              viewThreadRef.current?.(String(threadTabs[threadTabs.length - 1].id));
+              commandRefs.viewThread.current?.(String(threadTabs[threadTabs.length - 1].id));
             }
             break;
           }
@@ -104,9 +99,9 @@ export default function useGlobalKeyboardShortcuts(args: UseGlobalKeyboardShortc
             const threadTabs = threadTabsByProjectTabId[activeProjectTabId] || [];
             const currentIndex = threadTabs.findIndex((t) => normalizeThreadId(t.id) === normalizeThreadId(activeThread));
             if (currentIndex < threadTabs.length - 1 && currentIndex >= 0) {
-              viewThreadRef.current?.(String(threadTabs[currentIndex + 1].id));
+              commandRefs.viewThread.current?.(String(threadTabs[currentIndex + 1].id));
             } else if (threadTabs.length > 0) {
-              viewThreadRef.current?.(String(threadTabs[0].id));
+              commandRefs.viewThread.current?.(String(threadTabs[0].id));
             }
             break;
           }
@@ -122,7 +117,7 @@ export default function useGlobalKeyboardShortcuts(args: UseGlobalKeyboardShortc
             const num = parseInt(event.key, 10);
             const threadTabs = threadTabsByProjectTabId[activeProjectTabId] || [];
             if (threadTabs[num - 1]) {
-              viewThreadRef.current?.(String(threadTabs[num - 1].id));
+              commandRefs.viewThread.current?.(String(threadTabs[num - 1].id));
             }
             break;
           }
@@ -152,7 +147,7 @@ export default function useGlobalKeyboardShortcuts(args: UseGlobalKeyboardShortc
       switch (event.key) {
         case "Enter":
           if (!isInputFocused || event.shiftKey) {
-            sendMessageRef.current?.().catch(() => {});
+            commandRefs.sendMessage.current?.().catch(() => {});
           }
           break;
         case "p":
@@ -183,7 +178,7 @@ export default function useGlobalKeyboardShortcuts(args: UseGlobalKeyboardShortc
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [shortcutModalPage, interactionBusy, activeThread, activeProjectTabId, threadTabsByProjectTabId, collaborationMode, modeSwitchBusy, isCompactWorkspaceLayout, focusComposerRef]);
+  }, [shortcutModalPage, interactionBusy, activeThread, activeProjectTabId, threadTabsByProjectTabId, collaborationMode, modeSwitchBusy, isCompactWorkspaceLayout, commandRefs]);
 
   useEffect(() => {
     if (shortcutModalPage !== "project" || typeof window === "undefined") {
@@ -201,7 +196,7 @@ export default function useGlobalKeyboardShortcuts(args: UseGlobalKeyboardShortc
       if (event.key === "Enter") {
         const target = filteredProjects[selectedProjectIndex];
         if (target && typeof target.key === "string") {
-          selectProjectRef.current?.(target.key).catch(() => {});
+          commandRefs.selectProject.current?.(target.key).catch(() => {});
           setShortcutModalPage("main");
           setProjectSearchQuery("");
         }

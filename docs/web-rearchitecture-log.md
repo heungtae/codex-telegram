@@ -20,6 +20,57 @@ Rule:
   - ...
 ```
 
+## 2026-05-28 16:36 (local)
+- Objective:
+  - 컴포넌트 분리 10차: SSE/turn/session event orchestration 최종 분리.
+- Files changed:
+  - web/frontend/src/features/app/hooks/useTurnSession.ts
+  - web/frontend/src/features/app/events/sseEventUtils.ts
+  - web/frontend/src/features/app/events/turnDeltaEvent.ts
+  - web/frontend/src/features/app/events/turnLifecycleEvents.ts
+  - web/frontend/src/features/app/events/sseMessageEvents.ts
+  - web/frontend/src/features/app/events/__tests__/sseEventUtils.test.ts
+  - web/frontend/src/features/app/events/__tests__/turnDeltaEvent.test.ts
+  - web/frontend/src/features/app/events/__tests__/turnLifecycleEvents.test.ts
+  - web/frontend/src/features/app/events/__tests__/sseMessageEvents.test.ts
+- Changes:
+  - `useTurnSession`의 SSE parse/log/text/item helper를 `sseEventUtils`로 추출.
+  - `turn_delta`, started/failed/cancelled lifecycle, system/file/web/image/app event 처리를 event handler 모듈로 이동.
+  - `useTurnSession`은 SSE 연결과 event listener wiring을 담당하도록 축소.
+  - running 중 Thread 선택 비활성화 등 기존 interaction 동작은 변경하지 않음.
+- Validation:
+  - `node --import tsx --test src/features/app/events/__tests__/sseEventUtils.test.ts src/features/app/events/__tests__/turnDeltaEvent.test.ts src/features/app/events/__tests__/turnLifecycleEvents.test.ts src/features/app/events/__tests__/sseMessageEvents.test.ts` 통과.
+  - `npx tsc -p . --noEmit` 통과.
+  - `npm run lint` 통과 (0 errors, 47 warnings).
+  - `npm test` 통과 (50/50).
+  - `npm run build` 통과.
+- Next step:
+  - 브라우저에서 turn lifecycle 수동 확인 후 필요 시 frontend/docs만 스테이징.
+
+## 2026-05-27 17:12 (local)
+- Objective:
+  - 컴포넌트 분리 9차: app command ref orchestration 정리.
+- Files changed:
+  - web/frontend/src/features/app/containers/AuthenticatedAppContainer.tsx
+  - web/frontend/src/features/app/hooks/useAppCommandRefs.ts
+  - web/frontend/src/features/app/hooks/useAppUiEffects.ts
+  - web/frontend/src/features/app/hooks/useGlobalKeyboardShortcuts.ts
+  - web/frontend/src/features/app/hooks/useGlobalKeyboardShortcuts.types.ts
+  - web/frontend/src/features/app/hooks/__tests__/useAppCommandRefs.test.ts
+- Changes:
+  - `sendMessage/startThread/closeThreadTab/viewThread/selectProject/focusComposer/setInputForActiveThread` command refs를 `useAppCommandRefs`로 묶음.
+  - command ref 갱신은 `bindAppCommandRefs`로 명시화하고 `useAppUiEffects`는 해당 helper만 호출하도록 정리.
+  - `useGlobalKeyboardShortcuts`는 개별 ref props 대신 `commandRefs` 객체를 소비하도록 변경.
+  - turn/session lifecycle refs와 SSE/turn 처리 로직은 변경하지 않음.
+- Validation:
+  - `node --import tsx --test src/features/app/hooks/__tests__/useAppCommandRefs.test.ts` 통과.
+  - `npx tsc -p . --noEmit` 통과.
+  - `npm run lint` 통과 (0 errors, 47 warnings).
+  - `npm test` 통과 (38/38).
+  - `npm run build` 통과.
+- Next step:
+  - 10번 SSE/turn/session 주변 최종 분리는 별도 계획으로 진행.
+
 ## 2026-05-27 17:00 (local)
 - Objective:
   - 컴포넌트 분리 8차: `AppSidebarContentPanel` 내부 섹션 분해.

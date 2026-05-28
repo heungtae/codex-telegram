@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { bindAppCommandRefs } from "./useAppCommandRefs";
 
 export default function useAppUiEffects({
   activeToken,
@@ -11,19 +12,13 @@ export default function useAppUiEffects({
   isProjectModeModalOpen,
   setPendingProjectTarget,
   setIsProjectModeModalOpen,
-  sendMessageRef,
+  commandRefs,
   sendMessage,
-  startThreadRef,
   startThread,
-  closeThreadTabRef,
   closeThreadTab,
-  viewThreadRef,
   viewThread,
-  selectProjectRef,
   selectProject,
-  focusComposerRef,
   focusComposer,
-  setInputForActiveThreadRef,
   setInputForActiveThread,
 }) {
   useEffect(() => {
@@ -71,12 +66,14 @@ export default function useAppUiEffects({
   }, [isProjectModeModalOpen]);
 
   useEffect(() => {
-    sendMessageRef.current = sendMessage;
-    startThreadRef.current = startThread;
-    closeThreadTabRef.current = closeThreadTab;
-    viewThreadRef.current = viewThread;
-    selectProjectRef.current = selectProject;
-    focusComposerRef.current = focusComposer;
-    setInputForActiveThreadRef.current = setInputForActiveThread;
+    bindAppCommandRefs(commandRefs, {
+      sendMessage,
+      startThread,
+      closeThreadTab,
+      viewThread,
+      selectProject,
+      focusComposer,
+      setInputForActiveThread,
+    });
   });
 }
