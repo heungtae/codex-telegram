@@ -18,6 +18,7 @@ test("SidebarProjectsPanel renders active project and busy note", () => {
   assert.match(html, /Projects/);
   assert.match(html, /Codex Telegram/);
   assert.match(html, /Project switch is unavailable/);
+  assert.match(html, /class="ui-panel panel"/);
 });
 
 test("SidebarProjectsPanel renders empty state", () => {

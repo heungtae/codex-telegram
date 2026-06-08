@@ -1,4 +1,5 @@
 import { normalizeThreadId } from "../../common/utils";
+import { Panel } from "../../common/components/ui";
 
 export default function SidebarThreadsPanel({
   interactionBusy,
@@ -7,7 +8,7 @@ export default function SidebarThreadsPanel({
   viewThread,
 }) {
   return (
-    <div className="panel threads-panel">
+    <Panel className="threads-panel">
       <div className="panel-head">
         <h3>Threads</h3>
       </div>
@@ -26,6 +27,6 @@ export default function SidebarThreadsPanel({
         ))}
         {threadItems.length ? null : <div className="panel-note">No open threads.</div>}
       </div>
-    </div>
+    </Panel>
   );
 }

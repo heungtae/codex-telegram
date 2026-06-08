@@ -1,3 +1,5 @@
+import { Panel } from "../../common/components/ui";
+
 export default function SidebarProjectsPanel({
   interactionBusy,
   projectItems,
@@ -5,7 +7,7 @@ export default function SidebarProjectsPanel({
   selectProject,
 }) {
   return (
-    <div className="panel">
+    <Panel>
       <div className="panel-head">
         <h3>Projects</h3>
       </div>
@@ -28,6 +30,6 @@ export default function SidebarProjectsPanel({
         ))}
         {projectItems.length ? null : <div className="panel-note">No projects configured.</div>}
       </div>
-    </div>
+    </Panel>
   );
 }

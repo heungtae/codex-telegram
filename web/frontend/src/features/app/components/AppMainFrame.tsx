@@ -1,3 +1,5 @@
+import { IconButton } from "../../common/components/ui";
+
 export default function AppMainFrame({
   children,
   isMobileLayout,
@@ -9,16 +11,15 @@ export default function AppMainFrame({
     <main className="main">
       {isMobileLayout ? (
         <div className="mobile-main-actions">
-          <button
+          <IconButton
             className="menu-toggle icon-only"
-            type="button"
             onClick={() => onToggleSidebarOpen((current) => !current)}
-            aria-label="Toggle navigation menu"
+            ariaLabel="Toggle navigation menu"
             aria-expanded={isSidebarOpen}
             aria-controls="app-sidebar"
           >
             <MenuIcon />
-          </button>
+          </IconButton>
         </div>
       ) : null}
       {children}

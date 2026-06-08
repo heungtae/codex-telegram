@@ -17,6 +17,8 @@ test("ProjectModeModal renders project tab choices when open", () => {
   assert.match(html, /Choose Project Tab Behavior/);
   assert.match(html, /Open in New Tab/);
   assert.match(html, /Replace Current Tab/);
+  assert.match(html, /ui-modal-card/);
+  assert.match(html, /ui-button-primary/);
 });
 
 test("ProjectPickerModal renders filtered projects and selected state", () => {
@@ -38,5 +40,7 @@ test("ProjectPickerModal renders filtered projects and selected state", () => {
 
   assert.match(html, /Codex Telegram/);
   assert.match(html, /codex-api/);
+  assert.match(html, /ui-input project-picker-input/);
+  assert.match(html, /ui-badge ui-badge-accent project-picker-badge/);
   assert.match(html, /project-picker-item selected/);
 });

@@ -20,6 +20,112 @@ Rule:
   - ...
 ```
 
+## 2026-06-08 15:55 (local)
+- Objective:
+  - Stage 4 4차: sidebar Panel과 Toast 표시 계층을 UI Kit으로 정리.
+- Files changed:
+  - web/frontend/src/features/common/components/ui/Panel.tsx
+  - web/frontend/src/features/common/components/ui/Toast.tsx
+  - web/frontend/src/features/common/components/ui/index.ts
+  - web/frontend/src/features/app/components/SidebarProjectsPanel.tsx
+  - web/frontend/src/features/app/components/SidebarThreadsPanel.tsx
+  - web/frontend/src/features/app/components/SidebarAgentsPanel.tsx
+  - web/frontend/src/features/app/components/AppOverlaysPresenter.tsx
+  - web/frontend/src/styles.css
+  - docs/web-ui-kit.md
+- Changes:
+  - sidebar Projects/Threads/Agents 컨테이너를 공통 `Panel` 기반으로 교체.
+  - Toast 표시 마크업을 `Toast`로 추출하고 info/success/error variant와 live region 접근성 추가.
+  - Workspace/Preview panel 레이아웃과 Toast 상태/5초 자동 닫힘 로직은 유지.
+- Validation:
+  - Panel/Toast 및 적용부 targeted tests 통과 (10/10).
+  - `npx tsc -p . --noEmit` 통과.
+  - `npm run lint` 통과 (0 errors, 47 warnings).
+  - `npm test` 통과 (65/65).
+  - `npm run build` 통과.
+  - `git diff --check` 통과 (line ending warnings only).
+- Next step:
+  - 브라우저에서 sidebar Panel 배치와 info/success/error Toast 표시를 수동 확인.
+
+## 2026-05-29 09:51 (local)
+- Objective:
+  - Stage 4 3차: Composer 입력/아이콘 액션을 UI Kit 기반으로 정리.
+- Files changed:
+  - web/frontend/src/features/common/components/ui/Textarea.tsx
+  - web/frontend/src/features/common/components/ui/__tests__/Textarea.test.ts
+  - web/frontend/src/features/common/components/ui/index.ts
+  - web/frontend/src/features/app/components/AppComposerPresenter.tsx
+  - web/frontend/src/features/app/components/__tests__/AppComposerPresenter.test.ts
+  - web/frontend/src/features/app/components/__tests__/AppConversationPane.test.ts
+  - web/frontend/src/styles.css
+  - docs/web-ui-kit.md
+- Changes:
+  - `Textarea` UI Kit 컴포넌트를 추가하고 Composer 입력창에 적용.
+  - Composer send/stop/workspace/new chat icon-only 액션을 `IconButton` 기반으로 교체.
+  - Composer mode toggle, slash palette, input key handling은 기존 feature-owned 로직 유지.
+- Validation:
+  - `npx tsx --test src/features/common/components/ui/__tests__/Textarea.test.ts` 통과.
+  - `npx tsx --test src/features/app/components/__tests__/AppConversationPane.test.ts` 통과.
+  - `npx tsx --test src/features/app/components/__tests__/AppComposerPresenter.test.ts` 통과.
+  - `npx tsc -p . --noEmit` 통과.
+  - `npm run lint` 통과 (0 errors, 47 warnings).
+  - `npm test` 통과 (61/61).
+  - `npm run build` 통과.
+  - `git diff --check` 통과 (line ending warnings only).
+- Next step:
+  - 브라우저에서 Composer 입력/전송/중지/줄바꿈/Tab/slash palette 수동 확인.
+
+## 2026-05-28 17:53 (local)
+- Objective:
+  - Stage 4 2차: IconButton UI Kit 적용 및 TopTabs/header icon controls 정리.
+- Files changed:
+  - web/frontend/src/features/common/components/ui/IconButton.tsx
+  - web/frontend/src/features/common/components/ui/index.ts
+  - web/frontend/src/features/tabs/components/TopTabs.tsx
+  - web/frontend/src/features/app/components/SidebarHeaderActions.tsx
+  - web/frontend/src/features/app/components/AppMainFrame.tsx
+  - web/frontend/src/styles.css
+  - docs/web-ui-kit.md
+- Changes:
+  - `IconButton` 컴포넌트를 추가해 icon-only 버튼의 className/active/aria label 조합을 공통화.
+  - project/turn tab close, add thread, notification/theme toggle, mobile menu toggle을 `IconButton` 기반으로 교체.
+  - 기존 tab 상태 class와 click handler 동작은 유지.
+  - Composer/Toast/Panel 치환은 다음 배치로 유지.
+- Validation:
+  - `node --import tsx --test src/features/common/components/ui/__tests__/IconButton.test.ts src/features/tabs/components/__tests__/TopTabs.test.ts src/features/app/components/__tests__/SidebarHeaderActions.test.ts src/features/app/components/__tests__/AppMainFrame.test.ts` 통과.
+  - `npx tsc -p . --noEmit` 통과.
+  - `npm run lint` 통과 (0 errors, 47 warnings).
+  - `npm test` 통과 (58/58).
+  - `npm run build` 통과.
+- Next step:
+  - tab/header icon controls 수동 확인 후 Composer 또는 Toast/Panel 배치 범위 결정.
+
+## 2026-05-28 17:04 (local)
+- Objective:
+  - Stage 4 1차: UI Kit 기반 컴포넌트와 Project modal 적용.
+- Files changed:
+  - web/frontend/src/features/common/components/ui/Button.tsx
+  - web/frontend/src/features/common/components/ui/Input.tsx
+  - web/frontend/src/features/common/components/ui/Modal.tsx
+  - web/frontend/src/features/common/components/ui/Badge.tsx
+  - web/frontend/src/features/common/components/ui/index.ts
+  - web/frontend/src/features/app/components/ProjectModals.tsx
+  - web/frontend/src/styles.css
+  - docs/web-ui-kit.md
+- Changes:
+  - `Button`, `Input`, `Modal`, `Badge` 1차 UI Kit 컴포넌트 추가.
+  - Project open mode modal과 project picker modal을 UI Kit 기반으로 교체.
+  - CSS token alias(color/spacing/radius/typography/layer)와 UI Kit baseline 스타일 추가.
+  - Composer/Tabs/Toast/Panel 치환은 다음 배치로 유지.
+- Validation:
+  - `node --import tsx --test src/features/common/components/ui/__tests__/Button.test.ts src/features/common/components/ui/__tests__/Input.test.ts src/features/common/components/ui/__tests__/Modal.test.ts src/features/common/components/ui/__tests__/Badge.test.ts src/features/app/components/__tests__/ProjectModals.test.ts` 통과.
+  - `npx tsc -p . --noEmit` 통과.
+  - `npm run lint` 통과 (0 errors, 47 warnings).
+  - `npm test` 통과 (55/55).
+  - `npm run build` 통과.
+- Next step:
+  - Project modal/picker 수동 확인 후 다음 배치(Composer 또는 Tabs/IconButton) 범위 결정.
+
 ## 2026-05-28 16:36 (local)
 - Objective:
   - 컴포넌트 분리 10차: SSE/turn/session event orchestration 최종 분리.

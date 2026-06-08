@@ -1,4 +1,5 @@
 import { SettingsIcon, RefreshIcon, SaveIcon } from "../../common/components/Icons";
+import { Panel } from "../../common/components/ui";
 import { AGENT_CONFIG_DEFS } from "../../common/constants";
 
 export default function SidebarAgentsPanel({
@@ -22,7 +23,7 @@ export default function SidebarAgentsPanel({
   saveAgentSettings,
 }) {
   return (
-    <div className="panel">
+    <Panel>
       <h3>Enabled Agents</h3>
       <div className="thread-list agent-list">
         {(sessionSummary?.agents || []).map((agent) => (
@@ -194,6 +195,6 @@ export default function SidebarAgentsPanel({
           )}
         </div>
       ) : null}
-    </div>
+    </Panel>
   );
 }

@@ -26,4 +26,6 @@ test("AppOverlayLayer renders project modals and toast notification", () => {
   assert.match(html, /Choose Project Tab Behavior/);
   assert.match(html, /Codex Telegram/);
   assert.match(html, /Saved/);
+  assert.match(html, /class="ui-toast ui-toast-info toast-notification"/);
+  assert.match(html, /role="status"/);
 });

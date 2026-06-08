@@ -1,4 +1,5 @@
 import { normalizeThreadId } from "../../common/utils";
+import { IconButton } from "../../common/components/ui";
 
 export default function TopTabs({
   projectTabs,
@@ -28,18 +29,17 @@ export default function TopTabs({
             >
               {tab.name}
             </button>
-            <button
-              type="button"
+            <IconButton
               className="project-tab-close"
               onClick={(event) => {
                 event.stopPropagation();
                 onCloseProjectTab(tab.id);
               }}
-              aria-label={`Close project ${tab.name}`}
+              ariaLabel={`Close project ${tab.name}`}
               title="Close project tab"
             >
               <img className="tab-action-icon" src="/assets/icons-tab-close.svg" alt="" aria-hidden="true" />
-            </button>
+            </IconButton>
           </div>
         ))}
       </div>
@@ -57,30 +57,28 @@ export default function TopTabs({
               <span className="turn-tab-title">{tab.title || tab.id}</span>
               {tab.hasUnreadCompletion ? <span className="turn-tab-dot" /> : null}
             </button>
-            <button
-              type="button"
+            <IconButton
               className="turn-tab-close"
               onClick={(event) => {
                 event.stopPropagation();
                 onCloseThread(tab.id);
               }}
-              aria-label={`Close thread ${tab.title || tab.id}`}
+              ariaLabel={`Close thread ${tab.title || tab.id}`}
               title="Close thread tab"
             >
               <img className="tab-action-icon" src="/assets/icons-tab-close.svg" alt="" aria-hidden="true" />
-            </button>
+            </IconButton>
           </div>
         ))}
-        <button
-          type="button"
+        <IconButton
           className="turn-tab-add"
           onClick={onAddThread}
-          aria-label="Add thread tab"
+          ariaLabel="Add thread tab"
           title="Add thread tab"
           disabled={disableAddThread}
         >
           <img className="tab-action-icon" src="/assets/icons-tab-add.svg" alt="" aria-hidden="true" />
-        </button>
+        </IconButton>
       </div>
     </div>
   );

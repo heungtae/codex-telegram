@@ -42,4 +42,5 @@ test("SidebarAgentsPanel renders enabled agents, subagents, and guardian setting
   assert.match(html, /Running Subagents/);
   assert.match(html, /reviewer/);
   assert.match(html, /Rules: 1\/2 enabled/);
+  assert.match(html, /class="ui-panel panel"/);
 });

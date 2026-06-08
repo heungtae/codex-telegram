@@ -79,4 +79,6 @@ test("AppConversationPane renders tabs, chat feed, and composer controls", () =>
   assert.match(html, /Thread One/);
   assert.match(html, /Hello from assistant/);
   assert.match(html, /draft message/);
+  assert.match(html, /class="ui-textarea composer-input"/);
+  assert.match(html, /class="ui-icon-button composer-action composer-send"/);
 });

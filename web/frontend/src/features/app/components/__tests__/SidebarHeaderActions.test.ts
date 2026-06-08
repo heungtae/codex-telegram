@@ -17,6 +17,8 @@ test("SidebarHeaderActions renders brand and action controls", () => {
   );
 
   assert.match(html, /Codex Web/);
+  assert.match(html, /ui-icon-button is-active notify-toggle icon-only on/);
+  assert.match(html, /ui-icon-button theme-toggle icon-only/);
   assert.match(html, /Toggle turn completion notification/);
   assert.match(html, /Toggle theme/);
 });

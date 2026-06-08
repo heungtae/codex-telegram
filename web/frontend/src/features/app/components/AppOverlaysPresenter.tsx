@@ -1,14 +1,12 @@
+import { Toast } from "../../common/components/ui";
+
 function AppOverlaysPresenter({ projectModeModal, projectPickerModal, shortcutModal, toastNotification }) {
   return (
     <>
       {projectModeModal}
       {projectPickerModal}
       {shortcutModal}
-      {toastNotification ? (
-        <div className="toast-notification">
-          <span className="toast-message">{toastNotification.message}</span>
-        </div>
-      ) : null}
+      {toastNotification ? <Toast message={toastNotification.message} variant={toastNotification.type || "info"} /> : null}
     </>
   );
 }

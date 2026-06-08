@@ -18,6 +18,7 @@ test("SidebarThreadsPanel renders active thread", () => {
   assert.match(html, /Threads/);
   assert.match(html, /Thread One/);
   assert.match(html, /thread-1/);
+  assert.match(html, /class="ui-panel panel threads-panel"/);
 });
 
 test("SidebarThreadsPanel renders empty state", () => {

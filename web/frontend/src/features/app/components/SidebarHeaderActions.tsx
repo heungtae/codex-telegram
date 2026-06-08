@@ -1,4 +1,5 @@
 import { NotificationIcon, ThemeIcon } from "../../common/components/Icons";
+import { IconButton } from "../../common/components/ui";
 
 export default function SidebarHeaderActions({
   turnNotificationEnabled,
@@ -11,28 +12,27 @@ export default function SidebarHeaderActions({
     <div className="sidebar-header-row">
       <div className="brand">Codex Web</div>
       <div className="sidebar-top-actions">
-        <button
+        <IconButton
+          active={turnNotificationEnabled}
           className={`notify-toggle icon-only ${turnNotificationEnabled ? "on" : "off"}`}
-          type="button"
           onClick={() => {
             const next = !turnNotificationEnabled;
             setTurnNotificationEnabled(next);
             persistTurnNotificationEnabled(next);
           }}
-          aria-label="Toggle turn completion notification"
+          ariaLabel="Toggle turn completion notification"
           title={`Turn notification ${turnNotificationEnabled ? "on" : "off"}`}
         >
           <NotificationIcon enabled={turnNotificationEnabled} />
-        </button>
-        <button
+        </IconButton>
+        <IconButton
           className="theme-toggle icon-only"
-          type="button"
           onClick={onToggleTheme}
-          aria-label="Toggle theme"
+          ariaLabel="Toggle theme"
           title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
         >
           <ThemeIcon theme={theme} />
-        </button>
+        </IconButton>
       </div>
     </div>
   );
