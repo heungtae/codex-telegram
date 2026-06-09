@@ -20,6 +20,83 @@ Rule:
   - ...
 ```
 
+## 2026-06-09 11:35 (local)
+- Objective:
+  - useAppRuntime의 domain, composer, effects, presentation orchestration 책임 분리.
+- Files changed:
+  - web/frontend/src/features/app/hooks/useAppRuntime.tsx
+  - web/frontend/src/features/app/hooks/useAppDomainRuntime.ts
+  - web/frontend/src/features/app/hooks/useAppComposerRuntime.ts
+  - web/frontend/src/features/app/hooks/useAppRuntimeEffects.ts
+  - web/frontend/src/features/app/hooks/useAppRuntimePresentation.tsx
+  - web/frontend/src/features/app/hooks/__tests__/useAppDomainRuntime.test.ts
+  - web/frontend/src/features/app/hooks/__tests__/useAppRuntimePresentation.test.ts
+- Changes:
+  - thread-scoped state, project/thread session, workspace, agent action과 공용 refs를 domain runtime으로 이동.
+  - palette, message command, input handler와 composer view model을 composer runtime으로 이동.
+  - turn/SSE, bootstrap, focus, resize, keyboard, UI effects를 effects runtime으로 이동.
+  - workspace panel, Runtime Context, conversation/layout view model 조립을 presentation runtime으로 이동.
+  - useAppRuntime을 네 orchestration 훅만 연결하는 35줄 조정자로 축소.
+- Validation:
+  - orchestration helper 및 기존 Context/container targeted tests 통과 (12/12).
+  - `npx tsc -p . --noEmit` 통과.
+  - `npm run lint` 통과 (0 errors, 45 warnings).
+  - `npm test` 통과 (87/87).
+  - `npm run build` 통과.
+- Next step:
+  - 브라우저에서 프로젝트/스레드 전환, composer 전송/중단, SSE turn 완료, workspace resize, agent settings를 수동 확인.
+  - domain runtime 412줄은 thread/workspace/session 경계가 안정된 후 필요 시 별도 축소.
+
+## 2026-06-09 11:18 (local)
+- Objective:
+  - AuthenticatedAppContainer 단계적 재구성 2차: 도메인/런타임 훅과 화면 조립 코드 축소.
+- Files changed:
+  - web/frontend/src/features/app/hooks/useAppDomains.ts
+  - web/frontend/src/features/app/hooks/useAppRuntime.tsx
+  - web/frontend/src/features/app/hooks/__tests__/useAppDomains.test.ts
+  - web/frontend/src/features/app/hooks/__tests__/useAppRuntime.test.ts
+  - web/frontend/src/features/app/containers/AuthenticatedAppContainer.tsx
+- Changes:
+  - threads, session, UI, approvals 초기화를 `useAppDomains`로 통합.
+  - 기존 세부 orchestration 훅과 Context/view model 조립을 `useAppRuntime`으로 이동.
+  - Context와 conversation props 조립을 테스트 가능한 순수 builder로 분리.
+  - AuthenticatedAppContainer를 두 상위 훅과 layout slot 배치만 담당하는 39줄 컨테이너로 축소.
+- Validation:
+  - 상위 훅/Context/container targeted tests 통과 (8/8).
+  - `npx tsc -p . --noEmit` 통과.
+  - `npm run lint` 통과 (0 errors, 47 warnings).
+  - `npm test` 통과 (83/83).
+  - `npm run build` 통과.
+- Next step:
+  - 브라우저에서 프로젝트/스레드 선택, composer 전송/중단, sidebar, project picker, agent settings 동작을 수동 확인.
+  - 필요 시 useAppRuntime 내부 orchestration을 thread/composer/effects 단위로 추가 분리.
+
+## 2026-06-09 10:26 (local)
+- Objective:
+  - AuthenticatedAppContainer 단계적 재구성 1차: Runtime Context와 저위험 feature container 도입.
+- Files changed:
+  - web/frontend/src/features/app/context/AppRuntimeContext.ts
+  - web/frontend/src/features/app/context/AppRuntimeProvider.tsx
+  - web/frontend/src/features/app/containers/AppSidebarContainer.tsx
+  - web/frontend/src/features/app/containers/AppOverlayContainer.tsx
+  - web/frontend/src/features/app/containers/AppFloatingAgentSettingsContainer.tsx
+  - web/frontend/src/features/app/containers/AuthenticatedAppContainer.tsx
+- Changes:
+  - app 공유 값을 `domains`, `runtime`, `presentation` slice로 제공하는 Runtime Context 추가.
+  - Context provider와 slice hook 파일을 분리해 Fast Refresh 경계 유지.
+  - Sidebar, Overlay, Floating Agent Settings props 조립을 기능별 container로 이동.
+  - AuthenticatedAppContainer는 Context 값을 생성하고 layout slot에 feature container를 배치하도록 변경.
+  - Conversation과 turn/session orchestration은 이번 배치에서 유지.
+- Validation:
+  - Runtime Context/container 및 기존 presenter targeted tests 통과 (8/8).
+  - `npx tsc -p . --noEmit` 통과.
+  - `npm run lint` 통과 (0 errors, 47 warnings).
+  - `npm test` 통과 (80/80).
+  - `npm run build` 통과.
+  - `git diff --check` 통과 (line ending warnings only).
+- Next step:
+  - 브라우저에서 sidebar, project modal/picker, toast, floating guardian settings를 수동 확인 후 `useAppDomains`와 `useAppRuntime` 단계적 통합.
+
 ## 2026-06-08 18:00 (local)
 - Objective:
   - SidebarAgentsPanel의 enabled agents, running subagents, settings card 책임 분리.
