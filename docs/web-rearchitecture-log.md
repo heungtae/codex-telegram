@@ -20,6 +20,62 @@ Rule:
   - ...
 ```
 
+## 2026-06-08 18:00 (local)
+- Objective:
+  - SidebarAgentsPanel의 enabled agents, running subagents, settings card 책임 분리.
+- Files changed:
+  - web/frontend/src/features/app/components/SidebarAgentsPanel.tsx
+  - web/frontend/src/features/app/components/EnabledAgentsList.tsx
+  - web/frontend/src/features/app/components/RunningSubagentsList.tsx
+  - web/frontend/src/features/app/components/AgentSettingsCard.tsx
+  - web/frontend/src/features/app/components/GuardianRulesSummary.tsx
+  - web/frontend/src/features/app/components/__tests__/EnabledAgentsList.test.ts
+  - web/frontend/src/features/app/components/__tests__/RunningSubagentsList.test.ts
+  - web/frontend/src/features/app/components/__tests__/AgentSettingsCard.test.ts
+  - web/frontend/src/features/app/components/__tests__/GuardianRulesSummary.test.ts
+- Changes:
+  - enabled agent 목록과 settings 버튼 렌더를 `EnabledAgentsList`로 추출.
+  - running subagent fallback label/title 렌더를 `RunningSubagentsList`로 추출.
+  - settings field, refresh/save action, loading state를 `AgentSettingsCard`로 추출.
+  - guardian rule summary와 Rules TOML 버튼을 `GuardianRulesSummary`로 추출.
+  - `SidebarAgentsPanel`은 `Panel` 내부 조립과 error 표시를 담당하도록 200줄에서 52줄로 축소.
+- Validation:
+  - Agent 하위 컴포넌트 및 sidebar targeted tests 통과 (9/9).
+  - `npx tsc -p . --noEmit` 통과.
+  - `npm run lint` 통과 (0 errors, 47 warnings).
+  - `npm test` 통과 (75/75).
+  - `npm run build` 통과.
+  - `git diff --check` 통과 (line ending warnings only).
+- Next step:
+  - 브라우저에서 agent toggle, settings refresh/save, guardian summary, running subagent 표시를 수동 확인.
+
+## 2026-06-08 17:42 (local)
+- Objective:
+  - WorkspacePanel의 헤더, 재귀 트리, 삭제 파일 목록 표시 책임 분리.
+- Files changed:
+  - web/frontend/src/features/workspace/components/WorkspacePanel.tsx
+  - web/frontend/src/features/workspace/components/WorkspacePanelHeader.tsx
+  - web/frontend/src/features/workspace/components/WorkspaceTree.tsx
+  - web/frontend/src/features/workspace/components/WorkspaceDeletedEntries.tsx
+  - web/frontend/src/features/workspace/components/__tests__/WorkspacePanelHeader.test.ts
+  - web/frontend/src/features/workspace/components/__tests__/WorkspaceTree.test.ts
+  - web/frontend/src/features/workspace/components/__tests__/WorkspaceDeletedEntries.test.ts
+- Changes:
+  - workspace root label과 refresh action을 `WorkspacePanelHeader`로 추출.
+  - compact directory와 재귀 file/directory 렌더를 `WorkspaceTree`로 추출.
+  - 삭제 파일 목록과 status badge 렌더를 `WorkspaceDeletedEntries`로 추출.
+  - `WorkspacePanel`은 파생 데이터, 경로 복사 callback, 하위 컴포넌트 조립을 담당하도록 231줄에서 106줄로 축소.
+  - 외부 props, CSS class, 파일 열기/토글/복사 동작은 유지.
+- Validation:
+  - Workspace 하위 컴포넌트 및 `AppWorkspacePanelSlot` targeted tests 통과 (4/4).
+  - `npx tsc -p . --noEmit` 통과.
+  - `npm run lint` 통과 (0 errors, 47 warnings).
+  - `npm test` 통과 (68/68).
+  - `npm run build` 통과.
+  - `git diff --check` 통과 (line ending warnings only).
+- Next step:
+  - 브라우저에서 workspace refresh, tree expand, file open, path copy, deleted file 표시를 수동 확인.
+
 ## 2026-06-08 15:55 (local)
 - Objective:
   - Stage 4 4차: sidebar Panel과 Toast 표시 계층을 UI Kit으로 정리.
