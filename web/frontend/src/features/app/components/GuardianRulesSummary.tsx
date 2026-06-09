@@ -1,4 +1,5 @@
 import { SettingsIcon } from "../../common/components/Icons";
+import { EmptyState } from "../../common/components/ui";
 
 export default function GuardianRulesSummary({
   guardianRuleSummary,
@@ -30,7 +31,9 @@ export default function GuardianRulesSummary({
           ))}
         </div>
       ) : (
-        <div className="agent-settings-empty">No guardian policy rules configured.</div>
+        <EmptyState className="agent-settings-empty">
+          No guardian policy rules configured.
+        </EmptyState>
       )}
       <div className="agent-settings-summary-footer">
         <button

@@ -1,4 +1,5 @@
 import { RefreshIcon, SaveIcon } from "../../common/components/Icons";
+import { FormField, Select } from "../../common/components/ui";
 import GuardianRulesSummary from "./GuardianRulesSummary";
 
 export default function AgentSettingsCard({
@@ -29,9 +30,12 @@ export default function AgentSettingsCard({
       {activeAgentConfig ? (
         <div className="agent-settings-form">
           {activeAgentDef.fields.map((field) => (
-            <label key={field.key} className="agent-field">
-              <span>{field.label}</span>
-              <select
+            <FormField
+              key={field.key}
+              className="agent-field"
+              label={field.label}
+            >
+              <Select
                 value={String(activeAgentConfig[field.key] ?? "")}
                 onChange={(e) => {
                   const raw = e.target.value;
@@ -45,8 +49,8 @@ export default function AgentSettingsCard({
                     {String(option)}
                   </option>
                 ))}
-              </select>
-            </label>
+              </Select>
+            </FormField>
           ))}
           {activeAgentSettings === "guardian" ? (
             <GuardianRulesSummary

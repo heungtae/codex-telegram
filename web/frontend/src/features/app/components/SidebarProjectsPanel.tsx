@@ -1,4 +1,4 @@
-import { Panel } from "../../common/components/ui";
+import { EmptyState, Panel } from "../../common/components/ui";
 
 export default function SidebarProjectsPanel({
   interactionBusy,
@@ -11,7 +11,11 @@ export default function SidebarProjectsPanel({
       <div className="panel-head">
         <h3>Projects</h3>
       </div>
-      {interactionBusy ? <div className="panel-note">Project switch is unavailable while a turn is running.</div> : null}
+      {interactionBusy ? (
+        <EmptyState tone="notice" className="panel-note">
+          Project switch is unavailable while a turn is running.
+        </EmptyState>
+      ) : null}
       <div className="thread-list project-list">
         {projectItems.map((item) => (
           <button
@@ -28,7 +32,9 @@ export default function SidebarProjectsPanel({
             <div className="thread-sub">{item.key}</div>
           </button>
         ))}
-        {projectItems.length ? null : <div className="panel-note">No projects configured.</div>}
+        {projectItems.length ? null : (
+          <EmptyState className="panel-note">No projects configured.</EmptyState>
+        )}
       </div>
     </Panel>
   );

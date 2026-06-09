@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from "react";
 import { normalizeWorkspacePath } from "../../common/utils";
+import { EmptyState } from "../../common/components/ui";
 import { buildWorkspaceDirectoryStatus } from "../workspaceTreeModel";
 import WorkspaceDeletedEntries from "./WorkspaceDeletedEntries";
 import WorkspacePanelHeader from "./WorkspacePanelHeader";
@@ -78,7 +79,11 @@ export default function WorkspacePanel({
         setWorkspaceError={setWorkspaceError}
       />
       {workspaceError ? <div className="workspace-panel-state">{workspaceError}</div> : null}
-      {!activeWorkspacePath ? <div className="workspace-panel-state">Select a workspace to browse files.</div> : null}
+      {!activeWorkspacePath ? (
+        <EmptyState tone="notice" className="workspace-panel-state">
+          Select a workspace to browse files.
+        </EmptyState>
+      ) : null}
       {activeWorkspacePath ? (
         <div className="workspace-tree">
           <WorkspaceDeletedEntries
@@ -97,7 +102,9 @@ export default function WorkspacePanel({
             copyWorkspacePathToClipboard={copyWorkspacePathToClipboard}
           />
           {Array.isArray(workspaceTree[""]) && workspaceTree[""].length ? null : (
-            <div className="workspace-panel-state">No files available.</div>
+            <EmptyState className="workspace-panel-state">
+              No files available.
+            </EmptyState>
           )}
         </div>
       ) : null}

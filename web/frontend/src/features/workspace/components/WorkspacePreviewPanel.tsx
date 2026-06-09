@@ -1,5 +1,6 @@
 import { FileChangeDiff, FileCodePreview } from "./FilePreviewParts";
 import { CloseIcon, ResetSizeIcon } from "../../common/components/Icons";
+import { EmptyState } from "../../common/components/ui";
 
 export default function WorkspacePreviewPanel({
   workspacePreview,
@@ -66,9 +67,9 @@ export default function WorkspacePreviewPanel({
           <FileChangeDiff diff={workspacePreview.diff} />
         </div>
       ) : !workspacePreview.previewAvailable ? (
-        <div className="workspace-preview-empty">
+        <EmptyState tone="notice" className="workspace-preview-empty">
           {workspacePreview.isBinary ? "Binary file preview is unavailable." : "Preview is unavailable."}
-        </div>
+        </EmptyState>
       ) : (
         <>
           {workspacePreview.truncated ? (

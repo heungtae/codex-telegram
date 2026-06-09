@@ -224,6 +224,14 @@ select {
   color: var(--muted);
 }
 
+.ui-empty-state {
+  color: var(--muted);
+}
+
+.ui-empty-state-notice {
+  line-height: 1.5;
+}
+
 .thread-list {
   max-height: 230px;
   overflow-y: auto;
@@ -545,20 +553,15 @@ select {
   gap: 10px;
 }
 
-.agent-field {
+.ui-form-field {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-size: 12px;
-  color: var(--muted);
 }
 
-.agent-field select {
-  border: 1px solid var(--border);
-  border-radius: 0;
-  padding: 9px 10px;
-  background: #0e1724;
-  color: var(--text);
+.ui-form-field-label {
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .agent-field-textarea {
@@ -572,7 +575,7 @@ select {
   font: 12px/1.5 ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, monospace;
 }
 
-.agent-field-help {
+.ui-form-field-help {
   font-size: 11px;
   color: var(--muted);
 }
@@ -1053,7 +1056,8 @@ select {
 }
 
 .ui-input,
-.ui-textarea {
+.ui-textarea,
+.ui-select {
   width: 100%;
   padding: 10px 12px;
   border: 1px solid var(--color-border);
@@ -1069,8 +1073,16 @@ select {
 }
 
 .ui-input:focus,
-.ui-textarea:focus {
+.ui-textarea:focus,
+.ui-select:focus {
   border-color: var(--accent);
+}
+
+.ui-input:disabled,
+.ui-textarea:disabled,
+.ui-select:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
 }
 
 .ui-badge {
@@ -2693,7 +2705,7 @@ kbd {
   border-top-color: rgba(36, 53, 72, 0.9);
 }
 
-:root[data-theme="dark"] .agent-field select,
+:root[data-theme="dark"] .ui-select,
 :root[data-theme="dark"] .agent-field-textarea,
 :root[data-theme="dark"] .composer textarea,
 :root[data-theme="dark"] .composer-input-shell,

@@ -1,4 +1,4 @@
-import { Badge, Button, Input, Modal } from "../../common/components/ui";
+import { Badge, Button, EmptyState, Input, Modal } from "../../common/components/ui";
 
 export function ProjectModeModal({ isOpen, onClose, onChooseProjectClickMode }) {
   return (
@@ -57,7 +57,7 @@ export function ProjectPickerModal({
       </div>
       <div className="project-picker-list">
         {filteredProjects.length === 0 ? (
-          <div className="project-picker-empty">No projects found</div>
+          <EmptyState className="project-picker-empty">No projects found</EmptyState>
         ) : (
           filteredProjects.map((item, idx) => (
             <button

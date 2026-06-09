@@ -20,6 +20,77 @@ Rule:
   - ...
 ```
 
+## 2026-06-09 13:44 (local)
+- Objective:
+  - UI Kit FormField 도입과 agent 설정 field 구조 통합.
+- Files changed:
+  - web/frontend/src/features/common/components/ui/FormField.tsx
+  - web/frontend/src/features/common/components/ui/__tests__/FormField.test.ts
+  - web/frontend/src/features/app/components/AgentSettingsCard.tsx
+  - web/frontend/src/features/app/components/FloatingGuardianSettingsPanel.tsx
+  - web/frontend/src/styles.css
+- Changes:
+  - wrapper label, label text, control, optional help text를 조립하는 FormField 추가.
+  - AgentSettingsCard의 동적 Select 필드와 Guardian Rules textarea 필드에 적용.
+  - Guardian Rules textarea를 UI Kit Textarea로 교체.
+  - 값 변환, editor 상태 갱신, disabled 동작과 help 문구 유지.
+- Validation:
+  - FormField 및 agent settings targeted tests 통과 (5/5).
+  - `npx tsc -p . --noEmit` 통과.
+  - `npm run lint` 통과 (0 errors, 45 warnings).
+  - `npm test` 통과 (93/93).
+  - `npm run build` 통과.
+- Next step:
+  - 전체 lint/test/build 검증 후 LoadingState 기본 컴포넌트 도입 검토.
+
+## 2026-06-09 13:38 (local)
+- Objective:
+  - UI Kit 기본 폼 컨트롤 Select 도입.
+- Files changed:
+  - web/frontend/src/features/common/components/ui/Select.tsx
+  - web/frontend/src/features/common/components/ui/__tests__/Select.test.ts
+  - web/frontend/src/features/app/components/AgentSettingsCard.tsx
+  - web/frontend/src/styles.css
+- Changes:
+  - native select attributes와 forwarded ref를 지원하는 Select 컴포넌트 추가.
+  - Input/Textarea와 동일한 공통 border, background, focus, disabled 스타일 적용.
+  - AgentSettingsCard의 raw select를 교체하고 option 생성과 숫자 값 변환 로직 유지.
+- Validation:
+  - Select 및 AgentSettingsCard targeted tests 통과 (4/4).
+  - `npx tsc -p . --noEmit` 통과.
+  - `npm run lint` 통과 (0 errors, 45 warnings).
+  - `npm test` 통과 (91/91).
+  - `npm run build` 통과.
+- Next step:
+  - 전체 lint/test/build 검증 후 FormField 기본 컴포넌트 도입 검토.
+
+## 2026-06-09 13:26 (local)
+- Objective:
+  - UI Kit EmptyState 도입과 반복되는 빈 상태/안내 상태 markup 통합.
+- Files changed:
+  - web/frontend/src/features/common/components/ui/EmptyState.tsx
+  - web/frontend/src/features/common/components/ui/__tests__/EmptyState.test.ts
+  - web/frontend/src/features/app/components/ProjectModals.tsx
+  - web/frontend/src/features/app/components/SidebarProjectsPanel.tsx
+  - web/frontend/src/features/app/components/SidebarThreadsPanel.tsx
+  - web/frontend/src/features/app/components/GuardianRulesSummary.tsx
+  - web/frontend/src/features/workspace/components/WorkspacePanel.tsx
+  - web/frontend/src/features/workspace/components/WorkspacePreviewPanel.tsx
+  - web/frontend/src/features/workspace/components/FilePreviewParts.tsx
+- Changes:
+  - `default`와 `notice` tone을 지원하는 최소 EmptyState 컴포넌트 추가.
+  - 프로젝트/스레드/파일/rule 없음과 workspace/preview 안내 상태를 EmptyState로 교체.
+  - 기존 feature class를 유지해 spacing과 레이아웃 보존.
+  - loading과 error 상태는 feature-owned markup으로 유지.
+- Validation:
+  - EmptyState 및 주요 사용처 targeted tests 통과 (11/11).
+  - `npx tsc -p . --noEmit` 통과.
+  - `npm run lint` 통과 (0 errors, 45 warnings).
+  - `npm test` 통과 (89/89).
+  - `npm run build` 통과.
+- Next step:
+  - 브라우저에서 sidebar, project picker, workspace empty/notice 상태를 확인.
+
 ## 2026-06-09 11:35 (local)
 - Objective:
   - useAppRuntime의 domain, composer, effects, presentation orchestration 책임 분리.
