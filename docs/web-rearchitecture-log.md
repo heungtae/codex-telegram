@@ -20,6 +20,33 @@ Rule:
   - ...
 ```
 
+## 2026-06-12 10:26 (local)
+- Objective:
+  - 단일 `styles.css`를 기능별 SCSS 구조로 전환하고 OpenCode 기반 제품형 UI 디자인을 적용.
+- Files changed:
+  - web/frontend/package.json
+  - web/frontend/package-lock.json
+  - web/frontend/src/main.tsx
+  - web/frontend/src/styles.css (removed)
+  - web/frontend/src/styles/*.scss
+  - web/frontend/src/features/common/constants.ts
+  - web/frontend/src/features/common/theme.ts
+  - web/frontend/src/features/common/__tests__/theme.test.ts
+- Changes:
+  - Sass 1.77.8을 개발 의존성으로 추가하고 전역 스타일을 foundation/shell/overlays/workspace/chat/composer/auth/themes/responsive/toast 영역으로 분리.
+  - JetBrains Mono 외부 웹폰트, 크림/잉크 기반 라이트 토큰, 동일 구조의 다크 토큰, 4px 반경과 flat/hairline 표현을 적용.
+  - 신규 사용자 기본 테마를 light로 변경하고 기존 localStorage 테마를 초기 렌더링에서 복원.
+  - 채팅, composer, workspace, 승인, 로그인, 공용 UI를 OpenCode 디자인 언어로 재해석하되 기존 DOM/className 계약을 유지.
+- Validation:
+  - 테마 테스트 red/green 확인.
+  - `cd web/frontend && npm test` 통과 (95/95).
+  - `cd web/frontend && npx tsc -p . --noEmit` 통과.
+  - `cd web/frontend && npm run lint` 통과 (0 errors, 기존 warnings 47건).
+  - `cd web/frontend && npm run build` 통과.
+  - Playwright로 로그인 화면의 light/dark 및 390x844 mobile viewport 확인.
+- Next step:
+  - Python 3.11+ 환경에서 인증 후 전체 app shell 화면의 시각 회귀 확인.
+
 ## 2026-06-12 09:55 (local)
 - Objective:
   - `DESIGN.md`의 유료 Berkeley Mono 기준을 오픈소스 JetBrains Mono 기준으로 변경.

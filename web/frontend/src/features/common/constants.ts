@@ -22,6 +22,6 @@ export const AGENT_CONFIG_DEFS = {
 
 export const THEME_STORAGE_KEY = "codex-web-theme";
 export const TURN_NOTIFICATION_STORAGE_KEY = "codex-web-turn-notification-enabled";
-export const DEFAULT_THEME = "dark";
+export const DEFAULT_THEME = "light";
 export const GUARDIAN_RULES_TOML_FALLBACK = "# Loading Guardian rules...\\n";
 export const EVENT_PANEL_KINDS = new Set(["file_change", "reasoning", "web_search", "image_generation"]);

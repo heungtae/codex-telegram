@@ -5,12 +5,20 @@ import {
 } from "./constants";
 
 export function normalizeTheme(theme) {
-  return theme === "light" ? "light" : "dark";
+  return theme === "dark" ? "dark" : DEFAULT_THEME;
 }
 
 export function readDocumentTheme() {
   if (typeof document === "undefined") {
     return DEFAULT_THEME;
+  }
+  if (typeof window !== "undefined") {
+    try {
+      const persistedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+      if (persistedTheme === "light" || persistedTheme === "dark") {
+        return persistedTheme;
+      }
+    } catch (_err) {}
   }
   return normalizeTheme(document.documentElement.dataset.theme);
 }

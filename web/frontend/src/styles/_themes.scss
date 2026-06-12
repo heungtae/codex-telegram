@@ -1,0 +1,132 @@
+:root[data-theme="dark"] {
+  body,
+  .app,
+  .main,
+  .center-pane,
+  .workspace-layout,
+  .chat {
+    background: var(--bg);
+  }
+
+  .sidebar,
+  .panel,
+  .top-tabs,
+  .composer,
+  .login-card,
+  .modal-card,
+  .ui-modal-card,
+  .workspace-panel,
+  .workspace-preview-panel,
+  .workspace-preview-modal,
+  .approval,
+  .file-change-panel,
+  .file-change-entry,
+  .msg.assistant {
+    background: var(--panel);
+    border-color: var(--border);
+    color: var(--text);
+  }
+
+  .thread-item:hover,
+  .project-item:hover,
+  .agent-item.clickable:hover:not(:disabled),
+  .workspace-tree-item:hover,
+  .slash-item:hover,
+  .slash-item.active,
+  .project-picker-item:hover,
+  .project-picker-item.selected {
+    background: var(--bg-soft);
+  }
+
+  .thread-item.active,
+  .project-tab-chip.active,
+  .turn-tab-chip.active,
+  .workspace-tree-item.selected,
+  .composer-mode.mode-plan,
+  .composer-workspace-toggle.active,
+  .msg.user {
+    background: var(--panel-soft);
+    border-color: var(--border-strong);
+    color: var(--text);
+  }
+
+  .ui-input,
+  .ui-textarea,
+  .ui-select,
+  .project-picker-input,
+  .login-card input,
+  .composer-inner,
+  .composer-input-shell,
+  .slash-panel {
+    background: var(--bg-soft);
+    border-color: var(--border);
+    color: var(--text);
+  }
+
+  .ui-input:focus,
+  .ui-textarea:focus,
+  .ui-select:focus,
+  .project-picker-input:focus,
+  .login-card input:focus,
+  .composer-input-shell:focus-within {
+    background: var(--panel);
+    border-color: var(--text);
+  }
+
+  .primary,
+  .ui-button-primary,
+  .composer-send {
+    background: var(--text);
+    border-color: var(--text);
+    color: var(--bg);
+  }
+
+  .secondary,
+  .ui-button-secondary,
+  .ui-button-ghost,
+  .ui-icon-button,
+  .theme-toggle,
+  .notify-toggle,
+  .sidebar-collapse-btn,
+  .composer-action,
+  .composer-new-chat,
+  .workspace-refresh,
+  .workspace-preview-action {
+    background: transparent;
+    border-color: var(--border);
+    color: var(--text);
+  }
+
+  .file-change-code {
+    background: #0f0000;
+    border-color: var(--border-strong);
+    color: var(--text);
+  }
+}
+
+:root[data-theme="light"] {
+  body,
+  .app,
+  .main,
+  .center-pane,
+  .workspace-layout,
+  .chat {
+    background: var(--bg);
+  }
+
+  .sidebar,
+  .panel,
+  .top-tabs,
+  .composer,
+  .login-card,
+  .modal-card,
+  .ui-modal-card,
+  .workspace-panel,
+  .workspace-preview-panel,
+  .workspace-preview-modal,
+  .approval {
+    background: var(--panel);
+    border-color: var(--border);
+    color: var(--text);
+  }
+}

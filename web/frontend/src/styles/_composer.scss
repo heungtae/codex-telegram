@@ -1,0 +1,372 @@
+.composer {
+  position: relative;
+  border: 1px solid var(--border);
+  background: rgba(10, 17, 28, 0.82);
+  padding: 10px;
+  border-radius: 0;
+  box-shadow: var(--shadow-sm);
+}
+
+.composer-inner {
+  max-width: 860px;
+  margin: 0 auto;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.input-wrap {
+  position: relative;
+  flex: 1;
+}
+
+.composer-input-shell {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--border);
+  border-radius: 10px 0 0 10px;
+  background: #0e1724;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.composer-input-shell:focus-within {
+  border-color: #5d81b2;
+  box-shadow: 0 0 0 3px rgba(123, 180, 255, 0.18);
+}
+
+.composer-mode {
+  min-width: 80px;
+  border: 0;
+  border-right: 1px solid var(--border);
+  border-top-left-radius: 9px;
+  border-bottom-left-radius: 9px;
+  padding: 7px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  cursor: pointer;
+  color: #dbe8fb;
+  background: linear-gradient(180deg, #1a2f47 0%, #16293f 100%);
+  transition: background 0.16s ease, color 0.16s ease;
+}
+
+.composer-mode:hover:not(:disabled) {
+  background: linear-gradient(180deg, #213853 0%, #1b3049 100%);
+}
+
+.composer-mode:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.composer-mode.mode-plan {
+  color: #bff7ef;
+  background: linear-gradient(180deg, #14554d 0%, #12483f 100%);
+}
+
+.composer-mode.mode-plan:hover:not(:disabled) {
+  background: linear-gradient(180deg, #176259 0%, #14544b 100%);
+}
+
+.composer-mode-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+}
+
+.composer-mode-key {
+  font-size: 9px;
+  letter-spacing: 0.3px;
+  opacity: 0.72;
+}
+
+.composer textarea {
+  width: 100%;
+  min-height: 36px;
+  max-height: 180px;
+  resize: none;
+  overflow: auto;
+  border: 0;
+  border-radius: 0;
+  padding: 8px 10px;
+  background: transparent;
+  color: var(--text);
+}
+
+.composer textarea::placeholder {
+  color: var(--muted);
+}
+
+.composer textarea:focus {
+  outline: none;
+}
+
+.composer-action {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.16s ease, background 0.16s ease, border-color 0.16s ease;
+  flex: 0 0 auto;
+}
+
+.composer-action svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.composer-send {
+  border: none;
+  background: var(--brand);
+  color: #fff;
+}
+
+.composer-send:hover {
+  background: var(--brand-strong);
+  transform: translateY(-1px);
+}
+
+.composer-stop {
+  border: 1px solid rgba(255, 139, 128, 0.35);
+  background: rgba(115, 37, 40, 0.22);
+  color: var(--danger);
+}
+
+.composer-stop:hover {
+  background: rgba(139, 44, 48, 0.32);
+  border-color: rgba(255, 139, 128, 0.5);
+  transform: translateY(-1px);
+}
+
+.composer-new-chat {
+  border: 1px solid var(--border);
+  background: #172538;
+  color: var(--text);
+}
+
+.composer-new-chat:hover {
+  border-color: #496581;
+  background: #1c3048;
+  transform: translateY(-1px);
+}
+
+.composer-new-chat svg {
+  width: 18px;
+  height: 18px;
+}
+
+.slash-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 8px);
+  max-height: 230px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  background: #0e1724;
+  border-radius: 0;
+  box-shadow: var(--shadow-md);
+  padding: 6px;
+  z-index: 20;
+}
+
+.slash-item {
+  width: 100%;
+  text-align: left;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 0;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.slash-item:hover,
+.slash-item.active {
+  background: rgba(28, 120, 108, 0.18);
+  border-color: rgba(54, 199, 187, 0.28);
+}
+
+.primary {
+  border: none;
+  background: var(--brand);
+  color: #fff;
+  border-radius: 0;
+  padding: 12px 14px;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(11, 140, 130, 0.24);
+  transition: transform 0.12s ease, box-shadow 0.16s ease, background 0.16s ease;
+}
+
+.primary:hover {
+  background: var(--brand-strong);
+  transform: translateY(-1px);
+  box-shadow: 0 12px 22px rgba(6, 110, 103, 0.28);
+}
+
+.secondary {
+  border: 1px solid var(--border);
+  background: #172538;
+  color: var(--text);
+  border-radius: 0;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.secondary:hover {
+  border-color: #496581;
+  background: #1c3048;
+}
+
+.danger {
+  border: 1px solid rgba(255, 139, 128, 0.35);
+  background: rgba(115, 37, 40, 0.22);
+  color: var(--danger);
+  border-radius: 0;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+
+.activity-indicator {
+  max-width: 860px;
+  margin: 0 auto 12px;
+  padding: 0 6px;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.composer-activity-indicator {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: calc(100% + 8px);
+  z-index: 4;
+  margin: 0 auto;
+  padding: 8px 12px;
+  border: 1px solid rgba(43, 63, 84, 0.95);
+  border-radius: 0;
+  background: rgba(10, 17, 28, 0.94);
+  box-shadow: 0 14px 28px rgba(2, 8, 18, 0.3);
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+}
+
+/* OpenCode composer treatment */
+.composer {
+  background: var(--panel);
+  border-color: var(--border);
+  box-shadow: none;
+}
+
+.composer-inner,
+.composer-input-shell {
+  background: var(--bg-soft);
+  border-color: var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+}
+
+.composer-input-shell:focus-within {
+  background: var(--panel);
+  border-color: var(--text);
+  box-shadow: none;
+}
+
+.composer textarea {
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+}
+
+.composer textarea::placeholder {
+  color: var(--muted);
+}
+
+.composer-mode,
+.composer-action,
+.composer-new-chat,
+.composer-workspace-toggle {
+  background: transparent;
+  border-color: var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+  color: var(--text);
+}
+
+.composer-mode:hover:not(:disabled),
+.composer-action:hover,
+.composer-new-chat:hover,
+.composer-workspace-toggle:hover {
+  background: var(--panel-soft);
+  border-color: var(--border-strong);
+  transform: none;
+}
+
+.composer-mode.mode-plan,
+.composer-workspace-toggle.active {
+  background: var(--panel-soft);
+  border-color: var(--text);
+  color: var(--text);
+}
+
+.composer-send {
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--bg);
+}
+
+.composer-send:hover {
+  background: var(--brand-strong);
+  border-color: var(--brand-strong);
+}
+
+.composer-stop {
+  background: transparent;
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.slash-panel {
+  background: var(--panel);
+  border-color: var(--border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+}
+
+.slash-item {
+  border-radius: 0;
+}
+
+.slash-item:hover,
+.slash-item.active {
+  background: var(--bg-soft);
+}
+
+.activity-indicator,
+.composer-activity-indicator {
+  color: var(--muted);
+}
+
+.composer-activity-indicator {
+  background: var(--panel);
+  border-color: var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+  backdrop-filter: none;
+}
