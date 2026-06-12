@@ -81,5 +81,5 @@
 3. `utils.config.py`에 새 action/typed field normalize, summary, serialization을 추가한다.
 4. `main.py` approval 흐름에 `manual_fallback` semantics와 typed policy evaluation을 통합한다.
 5. Guardian panel/Web summary에 action counts와 matched policy 표시를 추가한다.
-6. `conf.toml.example`, `README.md`, `docs/DESIGN.md`에 새 rule schema와 예제 정책을 반영한다.
+6. `conf.toml.example`, `README.md`, `docs/ARCHITECTURE.md`에 새 rule schema와 예제 정책을 반영한다.
 7. config parsing, path/command guards, change-scale guard, quality guard, fallback flow에 대한 테스트를 추가하고 실행한다.

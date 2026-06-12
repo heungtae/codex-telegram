@@ -20,6 +20,36 @@ Rule:
   - ...
 ```
 
+## 2026-06-12 09:55 (local)
+- Objective:
+  - `DESIGN.md`의 유료 Berkeley Mono 기준을 오픈소스 JetBrains Mono 기준으로 변경.
+- Files changed:
+  - DESIGN.md
+  - docs/web-rearchitecture-log.md
+- Changes:
+  - 모든 Berkeley Mono 표기를 JetBrains Mono로 교체.
+  - 폰트 대체 안내를 JetBrains Mono 기본 및 fallback 안내로 정리.
+  - UTF-8 무BOM 인코딩을 유지.
+- Validation:
+  - Berkeley Mono 잔여 표기와 UTF-8 BOM 여부를 확인.
+- Next step:
+  - 실제 UI 적용 시 JetBrains Mono 웹폰트 로딩 방식을 결정.
+
+## 2026-06-12 09:31 (local)
+- Objective:
+  - 프로젝트 구조 문서의 역할을 명확히 하기 위해 `DESIGN.md`를 `ARCHITECTURE.md`로 변경.
+- Files changed:
+  - docs/DESIGN.md -> docs/ARCHITECTURE.md
+  - docs/plans/20260315-guardian-approval-policy-rules.md
+  - docs/web-rearchitecture-log.md
+- Changes:
+  - 구조 문서 파일명을 `ARCHITECTURE.md`로 변경하고 제목을 Architecture로 정리.
+  - 기존 계획 문서의 `docs/DESIGN.md` 참조를 새 경로로 갱신.
+- Validation:
+  - 저장소 전체에서 이전 `DESIGN.md` 참조가 남아 있지 않은지 검색.
+- Next step:
+  - UI/UX 설계 문서가 추가되면 `docs/DESIGN.md` 경로를 사용.
+
 ## 2026-06-09 13:44 (local)
 - Objective:
   - UI Kit FormField 도입과 agent 설정 field 구조 통합.
