@@ -9,6 +9,7 @@ export function ProjectModeModal({ isOpen, onClose, onChooseProjectClickMode }) 
       </div>
       <div className="modal-actions">
         <Button
+          type="button"
           variant="primary"
           onMouseDown={(event) => event.stopPropagation()}
           onClick={() => onChooseProjectClickMode("open_new_tab")}
@@ -16,6 +17,7 @@ export function ProjectModeModal({ isOpen, onClose, onChooseProjectClickMode }) 
           Open in New Tab
         </Button>
         <Button
+          type="button"
           variant="secondary"
           onMouseDown={(event) => event.stopPropagation()}
           onClick={() => onChooseProjectClickMode("replace_current")}
@@ -23,6 +25,7 @@ export function ProjectModeModal({ isOpen, onClose, onChooseProjectClickMode }) 
           Replace Current Tab
         </Button>
         <Button
+          type="button"
           variant="ghost"
           onMouseDown={(event) => event.stopPropagation()}
           onClick={onClose}
@@ -62,6 +65,7 @@ export function ProjectPickerModal({
           filteredProjects.map((item, idx) => (
             <button
               key={item.key}
+              type="button"
               className={`project-picker-item ${idx === selectedProjectIndex ? "selected" : ""}`}
               onClick={() => onSelectProject(item.key)}
               onMouseEnter={() => onSelectedProjectIndexChange(idx)}

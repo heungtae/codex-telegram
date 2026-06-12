@@ -1,9 +1,9 @@
 import { createContext, useContext } from "react";
 
 export type AppRuntimeValue = {
-  domains: object;
-  runtime: object;
-  presentation: object;
+  domains: Record<string, unknown>;
+  runtime: Record<string, unknown>;
+  presentation: Record<string, unknown>;
 };
 
 export const AppRuntimeContext = createContext<AppRuntimeValue | null>(null);

@@ -17,7 +17,7 @@ test("buildAppRuntimeContextValue preserves runtime context slices", () => {
   );
 });
 
-test("buildConversationViewModel flattens pane sections", () => {
+test("buildConversationViewModel returns grouped pane sections", () => {
   const onSelectThread = () => {};
   const value = buildConversationViewModel({
     tabs: { onSelectThread },
@@ -27,8 +27,8 @@ test("buildConversationViewModel flattens pane sections", () => {
     icons: { StopIcon: "stop" },
   });
 
-  assert.equal(value.onSelectThread, onSelectThread);
-  assert.equal(value.workspacePanel, "workspace");
-  assert.equal(value.input, "hello");
-  assert.equal(value.StopIcon, "stop");
+  assert.equal(value.tabs.onSelectThread, onSelectThread);
+  assert.equal(value.workspace.workspacePanel, "workspace");
+  assert.equal(value.composer.input, "hello");
+  assert.equal(value.icons.StopIcon, "stop");
 });

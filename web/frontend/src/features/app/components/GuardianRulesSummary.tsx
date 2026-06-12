@@ -26,7 +26,7 @@ export default function GuardianRulesSummary({
           {guardianRuleSummary.top.slice(0, 3).map((rule, index) => (
             <div key={`${rule.name || "rule"}:${index}`} className="agent-settings-summary-item">
               <span>{rule.name || "unnamed-rule"}</span>
-              <span>{`${rule.action || "deny"} 鸚?p${rule.priority || 0}`}</span>
+              <span>{`${rule.action || "deny"} · p${rule.priority || 0}`}</span>
             </div>
           ))}
         </div>

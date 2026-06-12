@@ -124,9 +124,18 @@
   .workspace-panel,
   .workspace-preview-panel,
   .workspace-preview-modal,
-  .approval {
+  .approval,
+  .file-change-panel,
+  .file-change-entry,
+  .msg.assistant {
     background: var(--panel);
     border-color: var(--border);
+    color: var(--text);
+  }
+
+  .file-change-code {
+    background: #fff0f0;
+    border-color: var(--border-strong);
     color: var(--text);
   }
 }

@@ -16,21 +16,23 @@ import useTurnMessageMutations from "./useTurnMessageMutations";
 import useTurnSession from "./useTurnSession";
 import useViewportLayout from "./useViewportLayout";
 import { normalizeCollaborationMode } from "./useAppDomainRuntime";
+import {
+  WORKSPACE_PREVIEW_HEIGHT_STORAGE_KEY,
+  WORKSPACE_PREVIEW_WIDTH_STORAGE_KEY,
+  WORKSPACE_PREVIEW_MIN_HEIGHT,
+  WORKSPACE_PREVIEW_MAX_HEIGHT,
+  WORKSPACE_PREVIEW_DEFAULT_HEIGHT,
+  WORKSPACE_PREVIEW_MIN_WIDTH,
+  WORKSPACE_PREVIEW_MAX_WIDTH,
+  WORKSPACE_PREVIEW_DEFAULT_WIDTH,
+} from "./workspacePreviewConstants";
 
 const SIDEBAR_MIN = 260;
 const SIDEBAR_MAX = 620;
 const WORKSPACE_PANEL_MIN = 280;
 const WORKSPACE_PANEL_MAX = 720;
-const WORKSPACE_PREVIEW_MIN_HEIGHT = 280;
-const WORKSPACE_PREVIEW_MAX_HEIGHT = 820;
-const WORKSPACE_PREVIEW_DEFAULT_HEIGHT = 560;
-const WORKSPACE_PREVIEW_MIN_WIDTH = 420;
-const WORKSPACE_PREVIEW_MAX_WIDTH = 1200;
-const WORKSPACE_PREVIEW_DEFAULT_WIDTH = 860;
 const MOBILE_BREAKPOINT = 900;
 const WORKSPACE_PANEL_BREAKPOINT = 1200;
-const WORKSPACE_PREVIEW_HEIGHT_STORAGE_KEY = "codex-web-workspace-preview-height";
-const WORKSPACE_PREVIEW_WIDTH_STORAGE_KEY = "codex-web-workspace-preview-width";
 
 function persistWorkspacePreviewHeight(height) {
   if (typeof window === "undefined") {

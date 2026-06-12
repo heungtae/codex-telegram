@@ -1,3 +1,52 @@
+import { useCallback, useEffect, useMemo, useRef } from "react";
+
+import { api } from "../../common/api";
+import { groupMessagesForRender, normalizeThreadId } from "../../common/utils";
+import useThreadScopedState from "../../thread/hooks/useThreadScopedState";
+import useAgentConfigDomain from "./useAgentConfigDomain";
+import useAppCommandRefs from "./useAppCommandRefs";
+import useProjectThreadTabs from "./useProjectThreadTabs";
+import useThreadSession from "./useThreadSession";
+import useWorkspaceDomain from "./useWorkspaceDomain";
+import {
+  WORKSPACE_PREVIEW_HEIGHT_STORAGE_KEY,
+  WORKSPACE_PREVIEW_WIDTH_STORAGE_KEY,
+  WORKSPACE_PREVIEW_MIN_HEIGHT,
+  WORKSPACE_PREVIEW_MAX_HEIGHT,
+  WORKSPACE_PREVIEW_DEFAULT_HEIGHT,
+  WORKSPACE_PREVIEW_MIN_WIDTH,
+  WORKSPACE_PREVIEW_MAX_WIDTH,
+  WORKSPACE_PREVIEW_DEFAULT_WIDTH,
+} from "./workspacePreviewConstants";
+
+function readWorkspacePreviewHeight(defaultHeight, minHeight, maxHeight) {
+  if (typeof window === "undefined") {
+    return defaultHeight;
+  }
+  try {
+    const raw = window.localStorage.getItem(WORKSPACE_PREVIEW_HEIGHT_STORAGE_KEY);
+    const parsed = Number.parseInt(raw || "", 10);
+    if (Number.isFinite(parsed)) {
+      return Math.max(minHeight, Math.min(maxHeight, parsed));
+    }
+  } catch (_err) {}
+  return defaultHeight;
+}
+
+function readWorkspacePreviewWidth(defaultWidth, minWidth, maxWidth) {
+  if (typeof window === "undefined") {
+    return defaultWidth;
+  }
+  try {
+    const raw = window.localStorage.getItem(WORKSPACE_PREVIEW_WIDTH_STORAGE_KEY);
+    const parsed = Number.parseInt(raw || "", 10);
+    if (Number.isFinite(parsed)) {
+      return Math.max(minWidth, Math.min(maxWidth, parsed));
+    }
+  } catch (_err) {}
+  return defaultWidth;
+}
+
 export function normalizeCollaborationMode(raw: unknown) {
   if (typeof raw !== "string") {
     return "build";
@@ -60,10 +109,15 @@ export default function useAppDomainRuntime({ me, domains }) {
     audioCtxRef: useRef(null),
     itemPhaseByTurnRef: useRef({}),
     commandRefs: useAppCommandRefs(),
+    toastTimerRef: useRef<ReturnType<typeof setTimeout> | null>(null),
   };
   const showToast = useCallback((message, type = "info") => {
+    if (refs.toastTimerRef.current) clearTimeout(refs.toastTimerRef.current);
     ui.setToastNotification({ message, type });
-    setTimeout(() => ui.setToastNotification(null), 5000);
+    refs.toastTimerRef.current = setTimeout(() => {
+      ui.setToastNotification(null);
+      refs.toastTimerRef.current = null;
+    }, 5000);
   }, [ui.setToastNotification]);
   const debugLoggingEnabled =
     (typeof me?.logging_level === "string" && me.logging_level.toUpperCase() === "DEBUG") ||
@@ -121,6 +175,11 @@ export default function useAppDomainRuntime({ me, domains }) {
     [threads.projectTabs, threads.threadTabsByProjectTabId]
   );
 
+  useEffect(() => {
+    return () => {
+      if (refs.toastTimerRef.current) clearTimeout(refs.toastTimerRef.current);
+    };
+  }, []);
   useEffect(() => {
     refs.activeProjectTabIdRef.current = threads.activeProjectTabId;
   }, [threads.activeProjectTabId]);
@@ -362,51 +421,4 @@ export default function useAppDomainRuntime({ me, domains }) {
     debugLog,
     debugError,
   };
-}
-import { useCallback, useEffect, useMemo, useRef } from "react";
-
-import { api } from "../../common/api";
-import { groupMessagesForRender, normalizeThreadId } from "../../common/utils";
-import useThreadScopedState from "../../thread/hooks/useThreadScopedState";
-import useAgentConfigDomain from "./useAgentConfigDomain";
-import useAppCommandRefs from "./useAppCommandRefs";
-import useProjectThreadTabs from "./useProjectThreadTabs";
-import useThreadSession from "./useThreadSession";
-import useWorkspaceDomain from "./useWorkspaceDomain";
-
-const WORKSPACE_PREVIEW_HEIGHT_STORAGE_KEY = "codex-web-workspace-preview-height";
-const WORKSPACE_PREVIEW_WIDTH_STORAGE_KEY = "codex-web-workspace-preview-width";
-const WORKSPACE_PREVIEW_MIN_HEIGHT = 280;
-const WORKSPACE_PREVIEW_MAX_HEIGHT = 820;
-const WORKSPACE_PREVIEW_DEFAULT_HEIGHT = 560;
-const WORKSPACE_PREVIEW_MIN_WIDTH = 420;
-const WORKSPACE_PREVIEW_MAX_WIDTH = 1200;
-const WORKSPACE_PREVIEW_DEFAULT_WIDTH = 860;
-
-function readWorkspacePreviewHeight(defaultHeight, minHeight, maxHeight) {
-  if (typeof window === "undefined") {
-    return defaultHeight;
-  }
-  try {
-    const raw = window.localStorage.getItem(WORKSPACE_PREVIEW_HEIGHT_STORAGE_KEY);
-    const parsed = Number.parseInt(raw || "", 10);
-    if (Number.isFinite(parsed)) {
-      return Math.max(minHeight, Math.min(maxHeight, parsed));
-    }
-  } catch (_err) {}
-  return defaultHeight;
-}
-
-function readWorkspacePreviewWidth(defaultWidth, minWidth, maxWidth) {
-  if (typeof window === "undefined") {
-    return defaultWidth;
-  }
-  try {
-    const raw = window.localStorage.getItem(WORKSPACE_PREVIEW_WIDTH_STORAGE_KEY);
-    const parsed = Number.parseInt(raw || "", 10);
-    if (Number.isFinite(parsed)) {
-      return Math.max(minWidth, Math.min(maxWidth, parsed));
-    }
-  } catch (_err) {}
-  return defaultWidth;
 }

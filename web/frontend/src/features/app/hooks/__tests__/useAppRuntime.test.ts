@@ -16,7 +16,7 @@ test("buildAppRuntimeContextValue preserves domain, runtime, and presentation sl
   assert.deepEqual(value, { domains, runtime, presentation });
 });
 
-test("buildConversationViewModel combines conversation props without changing callbacks", () => {
+test("buildConversationViewModel returns grouped conversation props without changing callbacks", () => {
   const onSelectThread = () => {};
   const composer = { input: "hello", sendMessage: () => {} };
   const workspacePanel = { type: "workspace" };
@@ -49,8 +49,8 @@ test("buildConversationViewModel combines conversation props without changing ca
     },
   });
 
-  assert.equal(value.onSelectThread, onSelectThread);
-  assert.equal(value.input, "hello");
-  assert.equal(value.workspacePanel, workspacePanel);
-  assert.equal(value.StopIcon, "stop");
+  assert.equal(value.tabs.onSelectThread, onSelectThread);
+  assert.equal(value.composer.input, "hello");
+  assert.equal(value.workspace.workspacePanel, workspacePanel);
+  assert.equal(value.icons.StopIcon, "stop");
 });

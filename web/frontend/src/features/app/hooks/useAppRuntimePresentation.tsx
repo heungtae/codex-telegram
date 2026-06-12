@@ -1,7 +1,20 @@
+import AppWorkspacePanelSlot from "../components/AppWorkspacePanelSlot";
+import { AGENT_CONFIG_DEFS } from "../../common/constants";
+import {
+  FolderIcon,
+  MenuIcon,
+  NewChatIcon,
+  SendIcon,
+  SidebarChevronIcon,
+  StopIcon,
+} from "../../common/components/Icons";
+import { persistTurnNotificationEnabled } from "../../common/theme";
+import { getSidebarStyle } from "../state/layoutSelectors";
+
 type RuntimeContextSlices = {
-  domains: object;
-  runtime: object;
-  presentation: object;
+  domains: Record<string, unknown>;
+  runtime: Record<string, unknown>;
+  presentation: Record<string, unknown>;
 };
 
 export function buildAppRuntimeContextValue({
@@ -30,14 +43,8 @@ export function buildConversationViewModel<
   conversation: TConversation;
   composer: TComposer;
   icons: TIcons;
-}): TTabs & TWorkspace & TConversation & TComposer & TIcons {
-  return {
-    ...tabs,
-    ...workspace,
-    ...conversation,
-    ...composer,
-    ...icons,
-  } as TTabs & TWorkspace & TConversation & TComposer & TIcons;
+}): { tabs: TTabs; workspace: TWorkspace; conversation: TConversation; composer: TComposer; icons: TIcons } {
+  return { tabs, workspace, conversation, composer, icons };
 }
 
 export default function useAppRuntimePresentation(args) {
@@ -261,15 +268,3 @@ export default function useAppRuntimePresentation(args) {
     conversation,
   };
 }
-import AppWorkspacePanelSlot from "../components/AppWorkspacePanelSlot";
-import { AGENT_CONFIG_DEFS } from "../../common/constants";
-import {
-  FolderIcon,
-  MenuIcon,
-  NewChatIcon,
-  SendIcon,
-  SidebarChevronIcon,
-  StopIcon,
-} from "../../common/components/Icons";
-import { persistTurnNotificationEnabled } from "../../common/theme";
-import { getSidebarStyle } from "../state/layoutSelectors";
