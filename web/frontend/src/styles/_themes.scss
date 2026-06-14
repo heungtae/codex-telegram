@@ -10,7 +10,7 @@
 
   .sidebar,
   .panel,
-  .top-tabs,
+  .chat-header,
   .composer,
   .login-card,
   .modal-card,
@@ -39,8 +39,7 @@
   }
 
   .thread-item.active,
-  .project-tab-chip.active,
-  .turn-tab-chip.active,
+  .thread-tab-item.active,
   .workspace-tree-item.selected,
   .composer-mode.mode-plan,
   .composer-workspace-toggle.active,
@@ -87,7 +86,6 @@
   .ui-icon-button,
   .theme-toggle,
   .notify-toggle,
-  .sidebar-collapse-btn,
   .composer-action,
   .composer-new-chat,
   .workspace-refresh,
@@ -116,7 +114,7 @@
 
   .sidebar,
   .panel,
-  .top-tabs,
+  .chat-header,
   .composer,
   .login-card,
   .modal-card,

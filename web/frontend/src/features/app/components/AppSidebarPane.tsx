@@ -1,5 +1,6 @@
 import AppSidebarContentPanel from "./AppSidebarContentPanel";
 import AppSidebarFrame from "./AppSidebarFrame";
+import SidebarAgentsPanel from "./SidebarAgentsPanel";
 
 export default function AppSidebarPane({
   isMobileLayout,
@@ -10,7 +11,6 @@ export default function AppSidebarPane({
   onToggleSidebarOpen,
   onToggleSidebarCollapsed,
   onStartSidebarResize,
-  SidebarChevronIcon,
   turnNotificationEnabled,
   setTurnNotificationEnabled,
   persistTurnNotificationEnabled,
@@ -36,11 +36,19 @@ export default function AppSidebarPane({
   saveAgentSettings,
   interactionBusy,
   projectItems,
-  activeProjectKey,
   selectProject,
+  projectTabs,
+  activeProjectTabId,
+  projectTabStatusById,
+  onSelectProjectTab,
+  onCloseProjectTab,
   threadItems,
+  threadTabsByProjectTabId,
   activeThread,
-  viewThread,
+  onSelectThread,
+  onCloseThread,
+  onAddThread,
+  disableAddThread,
 }) {
   return (
     <AppSidebarFrame
@@ -52,7 +60,28 @@ export default function AppSidebarPane({
       onToggleSidebarOpen={onToggleSidebarOpen}
       onToggleSidebarCollapsed={onToggleSidebarCollapsed}
       onStartSidebarResize={onStartSidebarResize}
-      SidebarChevronIcon={SidebarChevronIcon}
+      settingsContent={
+        <SidebarAgentsPanel
+          sessionSummary={sessionSummary}
+          toggleAgent={toggleAgent}
+          agentConfigLoading={agentConfigLoading}
+          agentConfigSaving={agentConfigSaving}
+          openAgentSettings={openAgentSettings}
+          activeSubagents={activeSubagents}
+          agentConfigError={agentConfigError}
+          activeAgentDef={activeAgentDef}
+          activeAgentConfig={activeAgentConfig}
+          settingsBusy={settingsBusy}
+          updateAgentDraft={updateAgentDraft}
+          activeAgentSettings={activeAgentSettings}
+          guardianRuleSummary={guardianRuleSummary}
+          floatingAgentSettings={floatingAgentSettings}
+          toggleFloatingAgentSettings={toggleFloatingAgentSettings}
+          loadAgentConfig={loadAgentConfig}
+          setAgentConfigError={setAgentConfigError}
+          saveAgentSettings={saveAgentSettings}
+        />
+      }
     >
       <AppSidebarContentPanel
         turnNotificationEnabled={turnNotificationEnabled}
@@ -60,31 +89,24 @@ export default function AppSidebarPane({
         persistTurnNotificationEnabled={persistTurnNotificationEnabled}
         onToggleTheme={onToggleTheme}
         theme={theme}
-        sessionSummary={sessionSummary}
-        toggleAgent={toggleAgent}
-        agentConfigLoading={agentConfigLoading}
-        agentConfigSaving={agentConfigSaving}
-        openAgentSettings={openAgentSettings}
-        activeSubagents={activeSubagents}
-        agentConfigError={agentConfigError}
-        activeAgentDef={activeAgentDef}
-        activeAgentConfig={activeAgentConfig}
-        settingsBusy={settingsBusy}
-        updateAgentDraft={updateAgentDraft}
-        activeAgentSettings={activeAgentSettings}
-        guardianRuleSummary={guardianRuleSummary}
-        floatingAgentSettings={floatingAgentSettings}
-        toggleFloatingAgentSettings={toggleFloatingAgentSettings}
-        loadAgentConfig={loadAgentConfig}
-        setAgentConfigError={setAgentConfigError}
-        saveAgentSettings={saveAgentSettings}
+        onToggleSidebarOpen={onToggleSidebarOpen}
+        onToggleSidebarCollapsed={onToggleSidebarCollapsed}
+        isMobileLayout={isMobileLayout}
         interactionBusy={interactionBusy}
         projectItems={projectItems}
-        activeProjectKey={activeProjectKey}
         selectProject={selectProject}
+        projectTabs={projectTabs}
+        activeProjectTabId={activeProjectTabId}
+        projectTabStatusById={projectTabStatusById}
+        onSelectProjectTab={onSelectProjectTab}
+        onCloseProjectTab={onCloseProjectTab}
         threadItems={threadItems}
+        threadTabsByProjectTabId={threadTabsByProjectTabId}
         activeThread={activeThread}
-        viewThread={viewThread}
+        onSelectThread={onSelectThread}
+        onCloseThread={onCloseThread}
+        onAddThread={onAddThread}
+        disableAddThread={disableAddThread}
       />
     </AppSidebarFrame>
   );

@@ -107,15 +107,16 @@ export default function useThreadSession(args: ThreadSessionArgs) {
     }
   };
 
-  const viewThread = async (threadId: string) => {
+  const viewThread = async (threadId: string, overrideProjectTabId?: string) => {
+    const resolvedProjectTabId = overrideProjectTabId ?? activeProjectTabId;
     if (isMobileLayout) {
       setIsSidebarOpen(false);
     }
     const normalizedThreadId = normalizeThreadId(threadId);
     setActiveThread(normalizedThreadId);
-    if (activeProjectTabId) {
+    if (resolvedProjectTabId) {
       const threadInfo = threadItems.find((item) => normalizeThreadId(String(item?.id ?? "")) === normalizedThreadId);
-      openThreadInProjectTab(activeProjectTabId, {
+      openThreadInProjectTab(resolvedProjectTabId, {
         id: normalizedThreadId,
         title: typeof threadInfo?.title === "string" ? threadInfo.title : normalizedThreadId,
       });
@@ -123,8 +124,8 @@ export default function useThreadSession(args: ThreadSessionArgs) {
     }
     const restored = restoreThreadMessages(normalizedThreadId);
     if (!restored) {
-      const rows = Array.isArray(threadTabsByProjectTabId[activeProjectTabId])
-        ? threadTabsByProjectTabId[activeProjectTabId]
+      const rows = Array.isArray(threadTabsByProjectTabId[resolvedProjectTabId])
+        ? threadTabsByProjectTabId[resolvedProjectTabId]
         : [];
       const threadTab = rows.find((tab) => normalizeThreadId(String(tab.id ?? "")) === normalizedThreadId);
       const isRunning = threadTab?.status === "running";
@@ -265,27 +266,33 @@ export default function useThreadSession(args: ThreadSessionArgs) {
     }
   };
 
-  const startThread = async (options: { replaceCurrentTab?: boolean } = {}) => {
+  const startThread = async (
+    options: { replaceCurrentTab?: boolean } = {},
+    overrideProjectTabId?: string,
+    overrideProjectKey?: string
+  ) => {
     const replaceCurrentTab = !!options.replaceCurrentTab;
+    const resolvedProjectKey = overrideProjectKey ?? activeProjectKey;
+    const resolvedProjectTabId = overrideProjectTabId ?? activeProjectTabId;
     let nextThreadId = "";
-    if (activeProjectKey) {
+    if (resolvedProjectKey) {
       const result = await api("/api/projects/open-thread", {
         method: "POST",
-        body: JSON.stringify({ project_key: activeProjectKey }),
+        body: JSON.stringify({ project_key: resolvedProjectKey }),
       });
       nextThreadId = normalizeThreadId(String(result?.thread_id ?? ""));
-      if (activeProjectTabId && nextThreadId) {
+      if (resolvedProjectTabId && nextThreadId) {
         const currentThreadTabId = normalizeThreadId(
-          activeThreadTabIdByProjectTabId[activeProjectTabId] || activeThread
+          activeThreadTabIdByProjectTabId[resolvedProjectTabId] || activeThread
         );
         if (replaceCurrentTab && currentThreadTabId) {
           setThreadTabsByProjectTabId((prev) => {
-            const rows = Array.isArray(prev[activeProjectTabId]) ? prev[activeProjectTabId] : [];
+            const rows = Array.isArray(prev[resolvedProjectTabId]) ? prev[resolvedProjectTabId] : [];
             const index = rows.findIndex((row) => normalizeThreadId(String(row.id ?? "")) === currentThreadTabId);
             if (index < 0) {
               return {
                 ...prev,
-                [activeProjectTabId]: [...rows, { id: nextThreadId, title: nextThreadId, status: "idle", hasUnreadCompletion: false }],
+                [resolvedProjectTabId]: [...rows, { id: nextThreadId, title: nextThreadId, status: "idle", hasUnreadCompletion: false }],
               };
             }
             const nextRows = [...rows];
@@ -296,19 +303,19 @@ export default function useThreadSession(args: ThreadSessionArgs) {
               status: "idle",
               hasUnreadCompletion: false,
             };
-            return { ...prev, [activeProjectTabId]: nextRows };
+            return { ...prev, [resolvedProjectTabId]: nextRows };
           });
           setThreadProjectTabIdByThreadId((prev) => {
             const next = { ...prev };
             delete next[currentThreadTabId];
-            next[nextThreadId] = activeProjectTabId;
+            next[nextThreadId] = resolvedProjectTabId;
             return next;
           });
           removeWorkspaceBucket(currentThreadTabId);
           ensureWorkspaceBucket(nextThreadId);
-          setActiveThreadForProjectTab(activeProjectTabId, nextThreadId);
+          setActiveThreadForProjectTab(resolvedProjectTabId, nextThreadId);
         } else {
-          openThreadInProjectTab(activeProjectTabId, { id: nextThreadId, title: nextThreadId });
+          openThreadInProjectTab(resolvedProjectTabId, { id: nextThreadId, title: nextThreadId });
         }
       }
     } else {
@@ -323,13 +330,13 @@ export default function useThreadSession(args: ThreadSessionArgs) {
     pendingComposerFocusRef.current = true;
     if (nextThreadId) {
       setActiveThread(nextThreadId);
-      if (activeProjectTabId) {
-        setActiveThreadForProjectTab(activeProjectTabId, nextThreadId);
+      if (resolvedProjectTabId) {
+        setActiveThreadForProjectTab(resolvedProjectTabId, nextThreadId);
       }
     } else {
       await loadSessionSummary();
     }
-    await loadThreads({ projectKey: activeProjectKey, projectTabId: activeProjectTabId });
+    await loadThreads({ projectKey: resolvedProjectKey, projectTabId: resolvedProjectTabId });
   };
 
   const selectProject = async (target: string, forcedMode = "") => {

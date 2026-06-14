@@ -5,10 +5,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import AppSidebarPane from "../AppSidebarPane";
 
-function ChevronIcon({ collapsed }) {
-  return React.createElement("span", null, collapsed ? "collapsed" : "expanded");
-}
-
 test("AppSidebarPane renders sidebar chrome and content panel", () => {
   const html = renderToStaticMarkup(
     React.createElement(AppSidebarPane, {
@@ -20,7 +16,6 @@ test("AppSidebarPane renders sidebar chrome and content panel", () => {
       onToggleSidebarOpen: () => {},
       onToggleSidebarCollapsed: () => {},
       onStartSidebarResize: () => {},
-      SidebarChevronIcon: ChevronIcon,
       turnNotificationEnabled: false,
       setTurnNotificationEnabled: () => {},
       persistTurnNotificationEnabled: () => {},
@@ -46,11 +41,21 @@ test("AppSidebarPane renders sidebar chrome and content panel", () => {
       saveAgentSettings: () => Promise.resolve(),
       interactionBusy: false,
       projectItems: [{ key: "codex-telegram", name: "Codex Telegram" }],
-      activeProjectKey: "codex-telegram",
       selectProject: () => Promise.resolve(),
+      projectTabs: [{ id: "project:codex-telegram", name: "Codex Telegram Tab" }],
+      activeProjectTabId: "project:codex-telegram",
+      projectTabStatusById: {},
+      onSelectProjectTab: () => {},
+      onCloseProjectTab: () => {},
       threadItems: [{ id: "thread-1", title: "Thread One" }],
+      threadTabsByProjectTabId: {
+        "project:codex-telegram": [{ id: "thread-1", title: "Thread One" }],
+      },
       activeThread: "thread-1",
-      viewThread: () => {},
+      onSelectThread: () => {},
+      onCloseThread: () => {},
+      onAddThread: () => {},
+      disableAddThread: false,
     })
   );
 

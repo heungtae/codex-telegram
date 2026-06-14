@@ -5,7 +5,6 @@ import {
   MenuIcon,
   NewChatIcon,
   SendIcon,
-  SidebarChevronIcon,
   StopIcon,
 } from "../../common/components/Icons";
 import { persistTurnNotificationEnabled } from "../../common/theme";
@@ -90,6 +89,36 @@ export default function useAppRuntimePresentation(args) {
         })
       : null;
   const settingsBusy = !!session.agentConfigLoading || !!session.agentConfigSaving;
+  const activeThreadTabs = threads.threadTabsByProjectTabId[threads.activeProjectTabId] || [];
+  const selectProjectTab = (tabId) => {
+    threads.setActiveProjectTabId(tabId);
+    if (ui.isMobileLayout) {
+      ui.setIsSidebarOpen(false);
+    }
+  };
+  const closeThreadTab = (threadId) =>
+    threadActions.closeThreadTab(threads.activeProjectTabId, threadId);
+  const addThread = () => threadActions.startThread().catch(() => {});
+  const selectThread = (projectTabId, threadId) => {
+    if (projectTabId !== threads.activeProjectTabId) {
+      threads.setActiveProjectTabId(projectTabId);
+    }
+    threadActions.viewThread(threadId, projectTabId);
+    if (ui.isMobileLayout) {
+      ui.setIsSidebarOpen(false);
+    }
+  };
+  const closeThread = (projectTabId, threadId) =>
+    threadActions.closeThreadTab(projectTabId, threadId);
+  const startThread = (projectTabId) => {
+    const projectTab = threads.projectTabs.find((tab) => tab.id === projectTabId);
+    const projectKey = typeof projectTab?.key === "string" ? projectTab.key : "";
+    if (projectTabId !== threads.activeProjectTabId) {
+      threads.setActiveProjectTabId(projectTabId);
+    }
+    threadActions.startThread({}, projectTabId, projectKey).catch(() => {});
+  };
+  const disableAddThread = !activeProjectKey || interactionBusy;
   const workspacePanel = (
     <AppWorkspacePanelSlot
       isCompactWorkspaceLayout={ui.isCompactWorkspaceLayout}
@@ -154,6 +183,10 @@ export default function useAppRuntimePresentation(args) {
         projectItems: threads.projectItems,
         activeProjectKey,
         threadItems: threads.threadItems,
+        projectTabs: threads.projectTabs,
+        activeProjectTabId: threads.activeProjectTabId,
+        projectTabStatusById,
+        threadTabsByProjectTabId: threads.threadTabsByProjectTabId,
         activeThread: threads.activeThread,
       },
     },
@@ -169,7 +202,11 @@ export default function useAppRuntimePresentation(args) {
       },
       thread: {
         selectProject: threadActions.selectProject,
-        viewThread: threadActions.viewThread,
+        selectProjectTab,
+        closeProjectTab: threadActions.closeProjectTab,
+        selectThread,
+        closeThread,
+        startThread,
       },
       projectPicker: {
         closeProjectModeModal: projectPicker.closeProjectModeModal,
@@ -183,7 +220,6 @@ export default function useAppRuntimePresentation(args) {
         theme,
         onToggleTheme,
         persistTurnNotificationEnabled,
-        SidebarChevronIcon,
       },
       sidebar: {
         isDesktopSidebarCollapsed,
@@ -205,20 +241,14 @@ export default function useAppRuntimePresentation(args) {
       projectTabs: threads.projectTabs,
       activeProjectTabId: threads.activeProjectTabId,
       projectTabStatusById,
-      onSelectProjectTab: (tabId) => {
-        threads.setActiveProjectTabId(tabId);
-        if (ui.isMobileLayout) {
-          ui.setIsSidebarOpen(false);
-        }
-      },
+      onSelectProjectTab: selectProjectTab,
       onCloseProjectTab: threadActions.closeProjectTab,
-      threadTabs: threads.threadTabsByProjectTabId[threads.activeProjectTabId] || [],
+      threadTabs: activeThreadTabs,
       activeThread: threads.activeThread,
       onSelectThread: threadActions.viewThread,
-      onCloseThread: (threadId) =>
-        threadActions.closeThreadTab(threads.activeProjectTabId, threadId),
-      onAddThread: () => threadActions.startThread().catch(() => {}),
-      disableAddThread: !activeProjectKey || interactionBusy,
+      onCloseThread: closeThreadTab,
+      onAddThread: addThread,
+      disableAddThread,
     },
     workspace: {
       workspacePreview: workspace.workspacePreview,

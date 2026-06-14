@@ -1,3 +1,11 @@
+import { useEffect, useId, useRef, useState } from "react";
+
+import { SettingsIcon, SidebarToggleIcon } from "../../common/components/Icons";
+import {
+  resolveSettingsButtonAction,
+  resolveSettingsPopoverPosition,
+} from "../state/settingsPopover.js";
+
 export default function AppSidebarFrame({
   children,
   isMobileLayout,
@@ -8,8 +16,98 @@ export default function AppSidebarFrame({
   onToggleSidebarOpen,
   onToggleSidebarCollapsed,
   onStartSidebarResize,
-  SidebarChevronIcon,
+  settingsContent,
+  defaultSettingsOpen = false,
 }) {
+  const [settingsOpen, setSettingsOpen] = useState(defaultSettingsOpen);
+  const panelId = useId();
+  const panelRef = useRef(null);
+  const settingsBtnRef = useRef(null);
+  const settingsAnchorRef = useRef(null);
+  const [settingsPosition, setSettingsPosition] = useState(null);
+  const handleSettingsButtonClick = () => {
+    const action = resolveSettingsButtonAction({
+      isMobileLayout,
+      settingsOpen,
+    });
+
+    if (action.settingsOpen) {
+      const rect = settingsBtnRef.current?.getBoundingClientRect();
+      if (rect) {
+        settingsAnchorRef.current = { left: rect.left, top: rect.top };
+        setSettingsPosition(
+          resolveSettingsPopoverPosition({
+            buttonRect: settingsAnchorRef.current,
+            viewportWidth: window.innerWidth,
+            viewportHeight: window.innerHeight,
+          }),
+        );
+      }
+    }
+    if (action.closeMobileSidebar) {
+      onToggleSidebarOpen(false);
+    }
+    setSettingsOpen(action.settingsOpen);
+  };
+
+  useEffect(() => {
+    if (!settingsOpen) {
+      settingsAnchorRef.current = null;
+      setSettingsPosition(null);
+      return;
+    }
+
+    if (!settingsAnchorRef.current) {
+      const rect = settingsBtnRef.current?.getBoundingClientRect();
+      if (rect) {
+        settingsAnchorRef.current = { left: rect.left, top: rect.top };
+      }
+    }
+
+    const updatePosition = () => {
+      if (!settingsAnchorRef.current) return;
+      setSettingsPosition(
+        resolveSettingsPopoverPosition({
+          buttonRect: settingsAnchorRef.current,
+          viewportWidth: window.innerWidth,
+          viewportHeight: window.innerHeight,
+        }),
+      );
+    };
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    return () => window.removeEventListener("resize", updatePosition);
+  }, [settingsOpen]);
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const handler = (e) => {
+      if (
+        !panelRef.current?.contains(e.target) &&
+        !settingsBtnRef.current?.contains(e.target)
+      ) {
+        setSettingsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [settingsOpen]);
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const handler = (e) => {
+      if (e.key === "Escape") {
+        setSettingsOpen(false);
+        if (!isMobileLayout || isSidebarOpen) {
+          settingsBtnRef.current?.focus();
+        }
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [isMobileLayout, isSidebarOpen, settingsOpen]);
+
   return (
     <>
       <aside
@@ -18,25 +116,51 @@ export default function AppSidebarFrame({
         style={sidebarStyle}
         aria-hidden={isMobileLayout ? !isSidebarOpen : undefined}
       >
-        {!isDesktopSidebarCollapsed ? <div className="sidebar-content">{children}</div> : null}
+        {isDesktopSidebarCollapsed ? (
+          <div className="sidebar-collapsed-header">
+            <button
+              type="button"
+              className="sidebar-toggle-btn"
+              onClick={onToggleSidebarCollapsed}
+              aria-label="Expand sidebar"
+              title="Expand sidebar"
+            >
+              <SidebarToggleIcon collapsed={true} />
+            </button>
+          </div>
+        ) : (
+          <div className="sidebar-content">{children}</div>
+        )}
         <div className="sidebar-footer">
           <button
-            className="sidebar-collapse-btn"
+            ref={settingsBtnRef}
             type="button"
-            onClick={() => {
-              if (isMobileLayout) {
-                onToggleSidebarOpen(false);
-                return;
-              }
-              onToggleSidebarCollapsed();
-            }}
-            aria-label={isMobileLayout ? "Collapse left panel" : isDesktopSidebarCollapsed ? "Expand left panel" : "Collapse left panel"}
-            title={isMobileLayout ? "Collapse left panel" : isDesktopSidebarCollapsed ? "Expand left panel" : "Collapse left panel"}
+            className={`sidebar-settings-btn${settingsOpen ? " active" : ""}`}
+            onClick={handleSettingsButtonClick}
+            aria-expanded={settingsOpen}
+            aria-controls={panelId}
+            aria-label="Agent Settings"
+            title="Agent Settings"
           >
-            <SidebarChevronIcon collapsed={isMobileLayout ? false : isDesktopSidebarCollapsed} />
+            <SettingsIcon />
+            {!isDesktopSidebarCollapsed ? (
+              <span className="sidebar-settings-label">Settings</span>
+            ) : null}
           </button>
         </div>
       </aside>
+      {settingsOpen ? (
+        <div
+          ref={panelRef}
+          id={panelId}
+          className="sidebar-settings-popover"
+          role="dialog"
+          aria-label="Agent Settings"
+          style={settingsPosition ?? undefined}
+        >
+          {settingsContent}
+        </div>
+      ) : null}
       {isMobileLayout ? (
         <button
           className={`sidebar-backdrop ${isSidebarOpen ? "open" : ""}`}

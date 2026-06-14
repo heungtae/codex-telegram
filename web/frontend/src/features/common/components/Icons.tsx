@@ -13,13 +13,17 @@ export function ThemeIcon({ theme }) {
   );
 }
 
-export function SidebarChevronIcon({ collapsed }) {
+export function SidebarToggleIcon({ collapsed = false }) {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        fillRule="evenodd"
+        d="M3 4a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h18a1 1 0 0 0 1-1V5a1 1 0 0 0-1-1H3zm0 1h7v13H3V5zm9 0v13h9V5h-9z"
+      />
       {collapsed ? (
-        <path d="M8.59 7.41 10 6l6 6-6 6-1.41-1.41L13.17 12 8.59 7.41Zm-4 0L6 6l6 6-6 6-1.41-1.41L9.17 12 4.59 7.41Z" />
+        <path d="M6 10l3.5 2L6 14V10z" />
       ) : (
-        <path d="m15.41 7.41-1.41-1.41-6 6 6 6 1.41-1.41L10.83 12l4.58-4.59Zm4 0L18 6l-6 6 6 6 1.41-1.41L14.83 12l4.58-4.59Z" />
+        <path d="M9.5 10L6 12l3.5 2V10z" />
       )}
     </svg>
   );

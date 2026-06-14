@@ -6,10 +6,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import AppRuntimeProvider from "../../context/AppRuntimeProvider";
 import AppSidebarContainer from "../AppSidebarContainer";
 
-function Icon() {
-  return React.createElement("span", null, "icon");
-}
-
 test("AppSidebarContainer consumes runtime slices and renders sidebar content", () => {
   const html = renderToStaticMarkup(
     React.createElement(
@@ -39,10 +35,17 @@ test("AppSidebarContainer consumes runtime slices and renders sidebar content", 
               agentConfigs: {},
             },
             threads: {
-              projectItems: [{ key: "project-a", name: "Project A" }],
+              projectItems: [{ key: "project-a", name: "Project A", path: "/workspace/project-a", default: false }],
               activeProjectKey: "project-a",
-              threadItems: [{ id: "thread-a", title: "Thread A" }],
-              activeThread: "thread-a",
+              projectTabs: [{ id: "project:project-a", key: "project-a", name: "Open Project A", path: "/workspace/project-a" }],
+              activeProjectTabId: "project:project-a",
+              projectTabStatusById: { "project:project-a": "running" },
+              threadItems: [{ id: "thread-open", title: "Open Thread" }],
+              threadTabsByProjectTabId: {
+                "project:project-a": [{ id: "thread-open", title: "Open Thread", status: "idle" }],
+                "project:project-b": [{ id: "thread-other", title: "Other Project Thread", status: "idle" }],
+              },
+              activeThread: "thread-open",
             },
           },
           runtime: {
@@ -57,7 +60,11 @@ test("AppSidebarContainer consumes runtime slices and renders sidebar content", 
             },
             thread: {
               selectProject: () => Promise.resolve(),
-              viewThread: () => Promise.resolve(),
+              selectProjectTab: () => {},
+              closeProjectTab: () => {},
+              selectThread: () => {},
+              closeThread: () => {},
+              startThread: () => {},
             },
           },
           presentation: {
@@ -65,7 +72,6 @@ test("AppSidebarContainer consumes runtime slices and renders sidebar content", 
               theme: "dark",
               onToggleTheme: () => {},
               persistTurnNotificationEnabled: () => {},
-              SidebarChevronIcon: Icon,
             },
             sidebar: {
               isDesktopSidebarCollapsed: false,
@@ -84,6 +90,7 @@ test("AppSidebarContainer consumes runtime slices and renders sidebar content", 
   );
 
   assert.match(html, /Project A/);
-  assert.match(html, /Thread A/);
+  assert.match(html, /Open Thread/);
   assert.match(html, /Codex Web/);
+  assert.doesNotMatch(html, /Other Project Thread/);
 });

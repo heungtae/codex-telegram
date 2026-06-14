@@ -671,6 +671,20 @@
   color: var(--muted);
 }
 
+/* specificity fix: caret/glyph는 2-class 셀렉터이므로 1-class override가 이기지 못함 */
+.workspace-tree-icon.caret,
+.workspace-tree-icon.glyph {
+  color: var(--muted);
+}
+
+.workspace-tree-badge {
+  background: var(--panel-soft);
+}
+
+.workspace-tree-group {
+  border-color: var(--border);
+}
+
 .workspace-refresh,
 .workspace-preview-action {
   background: transparent;

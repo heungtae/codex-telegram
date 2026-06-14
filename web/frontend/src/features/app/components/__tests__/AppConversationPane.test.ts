@@ -9,7 +9,7 @@ function Icon() {
   return React.createElement("span", null, "icon");
 }
 
-test("AppConversationPane renders tabs, chat feed, and composer controls", () => {
+test("AppConversationPane renders chat header, chat feed, and composer controls", () => {
   const html = renderToStaticMarkup(
     React.createElement(AppConversationPane, {
       tabs: {
@@ -85,8 +85,10 @@ test("AppConversationPane renders tabs, chat feed, and composer controls", () =>
     })
   );
 
-  assert.match(html, /Project A/);
   assert.match(html, /Thread One/);
+  assert.match(html, /class="chat-header"/);
+  assert.doesNotMatch(html, /Project A/);
+  assert.doesNotMatch(html, /class="top-tabs"/);
   assert.match(html, /Hello from assistant/);
   assert.match(html, /draft message/);
   assert.match(html, /class="ui-textarea composer-input"/);

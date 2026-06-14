@@ -55,10 +55,6 @@
     overflow: auto;
   }
 
-  .sidebar.collapsed .sidebar-collapse-btn {
-    padding: 10px 12px;
-  }
-
   .sidebar-footer {
     padding-bottom: 4px;
   }
@@ -99,16 +95,8 @@
     margin-bottom: 8px;
   }
 
-  .top-tabs {
-    margin: 0;
-  }
-
-  .project-tab-main {
-    max-width: 150px;
-  }
-
-  .turn-tab-main {
-    max-width: 170px;
+  .chat-header {
+    min-height: 42px;
   }
 
   .topbar-leading,

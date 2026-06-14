@@ -4,9 +4,25 @@ import {
   useAppPresentationContext,
   useAppRuntimeContext,
 } from "../context/AppRuntimeContext";
+import type {
+  ProjectTab,
+  ThreadTabsByProjectTabId,
+} from "../hooks/useProjectThreadTabs.types.js";
 
 type Callback = (...args: unknown[]) => void;
 type AsyncCallback = (...args: unknown[]) => Promise<unknown>;
+type ProjectItem = {
+  key: string;
+  name: string;
+  path: string;
+  default?: boolean;
+};
+type ThreadItem = {
+  id: string;
+  title: string;
+  status?: string;
+  hasUnreadCompletion?: boolean;
+};
 
 type SidebarDomains = {
   ui: {
@@ -28,10 +44,14 @@ type SidebarDomains = {
     floatingAgentSettings: unknown;
   };
   threads: {
-    projectItems: unknown;
-    activeProjectKey: unknown;
-    threadItems: unknown;
-    activeThread: unknown;
+    projectItems: ProjectItem[];
+    activeProjectKey: string;
+    projectTabs: ProjectTab[];
+    activeProjectTabId: string;
+    projectTabStatusById: Record<string, string>;
+    threadItems: ThreadItem[];
+    threadTabsByProjectTabId: ThreadTabsByProjectTabId;
+    activeThread: string;
   };
 };
 
@@ -47,7 +67,11 @@ type SidebarRuntime = {
   };
   thread: {
     selectProject: AsyncCallback;
-    viewThread: AsyncCallback;
+    selectProjectTab: Callback;
+    closeProjectTab: Callback;
+    selectThread: Callback;
+    closeThread: Callback;
+    startThread: Callback;
   };
 };
 
@@ -56,7 +80,6 @@ type SidebarPresentation = {
     theme: unknown;
     onToggleTheme: Callback;
     persistTurnNotificationEnabled: Callback;
-    SidebarChevronIcon: unknown;
   };
   sidebar: {
     isDesktopSidebarCollapsed: boolean;
@@ -85,7 +108,6 @@ export default function AppSidebarContainer() {
       onToggleSidebarOpen={ui.setIsSidebarOpen}
       onToggleSidebarCollapsed={() => ui.setIsSidebarCollapsed((current) => !current)}
       onStartSidebarResize={() => ui.setIsResizingSidebar(true)}
-      SidebarChevronIcon={shell.SidebarChevronIcon}
       turnNotificationEnabled={ui.turnNotificationEnabled}
       setTurnNotificationEnabled={ui.setTurnNotificationEnabled}
       persistTurnNotificationEnabled={shell.persistTurnNotificationEnabled}
@@ -111,11 +133,19 @@ export default function AppSidebarContainer() {
       saveAgentSettings={agent.saveAgentSettings}
       interactionBusy={sidebar.interactionBusy}
       projectItems={threads.projectItems}
-      activeProjectKey={threads.activeProjectKey}
       selectProject={thread.selectProject}
+      projectTabs={threads.projectTabs}
+      activeProjectTabId={threads.activeProjectTabId}
+      projectTabStatusById={threads.projectTabStatusById}
+      onSelectProjectTab={thread.selectProjectTab}
+      onCloseProjectTab={thread.closeProjectTab}
       threadItems={threads.threadItems}
+      threadTabsByProjectTabId={threads.threadTabsByProjectTabId}
       activeThread={threads.activeThread}
-      viewThread={thread.viewThread}
+      onSelectThread={thread.selectThread}
+      onCloseThread={thread.closeThread}
+      onAddThread={thread.startThread}
+      disableAddThread={!threads.activeProjectKey || sidebar.interactionBusy}
     />
   );
 }

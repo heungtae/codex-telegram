@@ -1,4 +1,4 @@
-import { NotificationIcon, ThemeIcon } from "../../common/components/Icons";
+import { NotificationIcon, SidebarToggleIcon, ThemeIcon } from "../../common/components/Icons";
 import { IconButton } from "../../common/components/ui";
 
 export default function SidebarHeaderActions({
@@ -7,6 +7,9 @@ export default function SidebarHeaderActions({
   persistTurnNotificationEnabled,
   onToggleTheme,
   theme,
+  onToggleSidebarOpen,
+  onToggleSidebarCollapsed,
+  isMobileLayout,
 }) {
   return (
     <div className="sidebar-header-row">
@@ -32,6 +35,16 @@ export default function SidebarHeaderActions({
           title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
         >
           <ThemeIcon theme={theme} />
+        </IconButton>
+        <IconButton
+          className="sidebar-toggle-btn icon-only"
+          onClick={() =>
+            isMobileLayout ? onToggleSidebarOpen(false) : onToggleSidebarCollapsed()
+          }
+          ariaLabel={isMobileLayout ? "Close sidebar" : "Collapse sidebar"}
+          title={isMobileLayout ? "Close sidebar" : "Collapse sidebar"}
+        >
+          <SidebarToggleIcon collapsed={false} />
         </IconButton>
       </div>
     </div>

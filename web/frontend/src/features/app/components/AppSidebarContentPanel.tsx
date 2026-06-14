@@ -1,4 +1,4 @@
-import SidebarAgentsPanel from "./SidebarAgentsPanel";
+import { buildProjectRows } from "../state/projectRows.js";
 import SidebarHeaderActions from "./SidebarHeaderActions";
 import SidebarProjectsPanel from "./SidebarProjectsPanel";
 import SidebarThreadsPanel from "./SidebarThreadsPanel";
@@ -9,32 +9,33 @@ export default function AppSidebarContentPanel({
   persistTurnNotificationEnabled,
   onToggleTheme,
   theme,
-  sessionSummary,
-  toggleAgent,
-  agentConfigLoading,
-  agentConfigSaving,
-  openAgentSettings,
-  activeSubagents,
-  agentConfigError,
-  activeAgentDef,
-  activeAgentConfig,
-  settingsBusy,
-  updateAgentDraft,
-  activeAgentSettings,
-  guardianRuleSummary,
-  floatingAgentSettings,
-  toggleFloatingAgentSettings,
-  loadAgentConfig,
-  setAgentConfigError,
-  saveAgentSettings,
+  onToggleSidebarOpen,
+  onToggleSidebarCollapsed,
+  isMobileLayout,
   interactionBusy,
   projectItems,
-  activeProjectKey,
   selectProject,
+  projectTabs,
+  activeProjectTabId,
+  projectTabStatusById,
+  onSelectProjectTab,
+  onCloseProjectTab,
   threadItems,
+  threadTabsByProjectTabId,
   activeThread,
-  viewThread,
+  onSelectThread,
+  onCloseThread,
+  onAddThread,
+  disableAddThread,
 }) {
+  const projectRows = buildProjectRows({
+    projectItems,
+    projectTabs,
+    threadTabsByProjectTabId,
+    projectTabStatusById,
+    activeProjectTabId: activeProjectTabId as string,
+  });
+
   return (
     <>
       <SidebarHeaderActions
@@ -43,38 +44,31 @@ export default function AppSidebarContentPanel({
         persistTurnNotificationEnabled={persistTurnNotificationEnabled}
         onToggleTheme={onToggleTheme}
         theme={theme}
-      />
-      <SidebarAgentsPanel
-        sessionSummary={sessionSummary}
-        toggleAgent={toggleAgent}
-        agentConfigLoading={agentConfigLoading}
-        agentConfigSaving={agentConfigSaving}
-        openAgentSettings={openAgentSettings}
-        activeSubagents={activeSubagents}
-        agentConfigError={agentConfigError}
-        activeAgentDef={activeAgentDef}
-        activeAgentConfig={activeAgentConfig}
-        settingsBusy={settingsBusy}
-        updateAgentDraft={updateAgentDraft}
-        activeAgentSettings={activeAgentSettings}
-        guardianRuleSummary={guardianRuleSummary}
-        floatingAgentSettings={floatingAgentSettings}
-        toggleFloatingAgentSettings={toggleFloatingAgentSettings}
-        loadAgentConfig={loadAgentConfig}
-        setAgentConfigError={setAgentConfigError}
-        saveAgentSettings={saveAgentSettings}
+        onToggleSidebarOpen={onToggleSidebarOpen}
+        onToggleSidebarCollapsed={onToggleSidebarCollapsed}
+        isMobileLayout={isMobileLayout}
       />
       <SidebarProjectsPanel
+        projectRows={projectRows}
+        activeThread={activeThread}
         interactionBusy={interactionBusy}
-        projectItems={projectItems}
-        activeProjectKey={activeProjectKey}
-        selectProject={selectProject}
+        disableAddThread={disableAddThread}
+        onSelectProject={(key) => (selectProject as (k: string) => Promise<unknown>)(key).catch(() => {})}
+        onSelectProjectTab={onSelectProjectTab}
+        onCloseProjectTab={onCloseProjectTab}
+        onSelectThread={onSelectThread}
+        onCloseThread={onCloseThread}
+        onAddThread={onAddThread}
       />
       <SidebarThreadsPanel
-        interactionBusy={interactionBusy}
+        activeProjectTabId={activeProjectTabId}
         threadItems={threadItems}
+        threadTabsByProjectTabId={threadTabsByProjectTabId}
         activeThread={activeThread}
-        viewThread={viewThread}
+        onSelectThread={onSelectThread}
+        onCloseThread={onCloseThread}
+        onAddThread={onAddThread}
+        disableAddThread={disableAddThread}
       />
     </>
   );

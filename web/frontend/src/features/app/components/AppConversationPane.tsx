@@ -1,24 +1,21 @@
 import ApprovalStack from "../../approvals/components/ApprovalStack";
 import ChatMessageFeed from "../../chat/components/ChatMessageFeed";
-import TopTabs from "../../tabs/components/TopTabs";
+import { normalizeThreadId } from "../../common/utils";
 import AppCenterPanePresenter from "./AppCenterPanePresenter";
 import AppComposerPresenter from "./AppComposerPresenter";
+import ChatHeader from "./ChatHeader";
 import WorkspacePreviewOverlay from "./WorkspacePreviewOverlay";
 
 export default function AppConversationPane({ tabs, workspace, conversation, composer, icons }) {
   const {
-    projectTabs,
-    activeProjectTabId,
-    projectTabStatusById,
-    onSelectProjectTab,
-    onCloseProjectTab,
     threadTabs,
     activeThread,
-    onSelectThread,
-    onCloseThread,
     onAddThread,
     disableAddThread,
   } = tabs;
+  const activeThreadTab = threadTabs.find(
+    (tab) => normalizeThreadId(tab.id) === normalizeThreadId(activeThread)
+  );
   const {
     workspacePreview,
     isResizingWorkspacePreview,
@@ -68,16 +65,8 @@ export default function AppConversationPane({ tabs, workspace, conversation, com
   return (
     <AppCenterPanePresenter
       topTabs={
-        <TopTabs
-          projectTabs={projectTabs}
-          activeProjectTabId={activeProjectTabId}
-          projectTabStatusById={projectTabStatusById}
-          onSelectProjectTab={onSelectProjectTab}
-          onCloseProjectTab={onCloseProjectTab}
-          threadTabs={threadTabs}
-          activeThread={activeThread}
-          onSelectThread={onSelectThread}
-          onCloseThread={onCloseThread}
+        <ChatHeader
+          activeThreadTitle={activeThreadTab?.title || activeThreadTab?.id || activeThread}
           onAddThread={onAddThread}
           disableAddThread={disableAddThread}
         />

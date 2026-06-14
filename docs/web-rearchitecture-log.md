@@ -20,6 +20,413 @@ Rule:
   - ...
 ```
 
+## 2026-06-13 15:36 (local)
+- Objective:
+  - Stage 8 정리 및 통합 회귀: redesign 잔여 코드 제거, sidebar 타입 계약 정리, 자동 검증과 Python 3.14 서버 확인.
+- Files changed:
+  - `web/frontend/src/features/common/components/Icons.tsx`
+  - `web/frontend/src/features/app/components/AppSidebarContentPanel.tsx`
+  - `web/frontend/src/features/app/components/AppSidebarPane.tsx`
+  - `web/frontend/src/features/app/components/SidebarProjectsPanel.tsx`
+  - `web/frontend/src/features/app/containers/AppSidebarContainer.tsx`
+  - `web/frontend/src/features/app/containers/__tests__/AppSidebarContainer.test.ts`
+  - `web/frontend/src/styles/_shell.scss`
+  - `web/frontend/src/styles/_themes.scss`
+  - `web/frontend/src/styles/_responsive.scss`
+  - `web/frontend/src/styles/__tests__/shellStyles.test.ts`
+  - `docs/plans/20260612-web-frontend-ui-redesign-execution-checklist.md`
+  - `docs/web-rearchitecture-log.md`
+- Changes:
+  - 폐기된 `SidebarChevronIcon`, `sidebar-collapse-btn` selector와 테스트 fixture를 제거하고 회귀 테스트를 추가.
+  - sidebar container의 project/thread 데이터 타입을 기존 `ProjectTab`, `ThreadTabsByProjectTabId` 계약으로 좁힘.
+  - 사용하지 않던 `activeProjectKey` 하위 prop 전달을 제거.
+  - Stage 8 체크리스트의 Settings 항목을 sidebar 독립 팝오버 동작으로 수정.
+- Validation:
+  - RED: 구형 sidebar collapse 잔여물 회귀 테스트 1건 실패 확인.
+  - GREEN: `npm test` 144/144 pass.
+  - `npx tsc -p . --noEmit`: 0 errors.
+  - 불필요한 `activeProjectKey` prop 제거 후 `AppSidebarPane.test.ts` 단독 재실행 1/1 pass.
+  - `npm run lint`: 0 errors, 기존 warnings 48개 유지.
+  - `npm run build`: success; `web/static/dist`에 290.19 kB JS, 56.82 kB CSS 생성.
+  - `git diff --check`: clean.
+  - production frontend에서 `SidebarChevronIcon`, `sidebar-collapse-btn`, legacy tab chip/TopTabs 참조 없음.
+  - backend/API/SSE 관련 파일 변경 없음.
+  - Python 3.14.3 runtime imports 성공. 실행 중인 `python.exe main.py` 프로세스와 `http://127.0.0.1:8080/`, 최신 JS/CSS asset의 HTTP 200 응답 확인.
+  - Python 3.14 전체 `pytest`는 실행 도구가 두 차례 `aborted`되어 사용자 요청에 따라 재시도하지 않음.
+- Next step:
+  - 실제 브라우저의 Projects/Threads/Settings/Workspace 전체 수동 시나리오와 스크린샷은 중단 위험을 피하기 위해 미완료로 유지.
+
+## 2026-06-13 12:30 (local)
+- Objective:
+  - Settings 팝오버 기본 폭을 400px에서 300px로 축소.
+- Files changed:
+  - `web/frontend/src/features/app/state/settingsPopover.ts`
+  - `web/frontend/src/features/app/components/__tests__/AppSidebarFrame.test.ts`
+  - `docs/plans/20260612-web-frontend-ui-redesign.md`
+  - `docs/plans/20260612-web-frontend-ui-redesign-execution-checklist.md`
+  - `docs/web-rearchitecture-log.md`
+- Changes:
+  - 버튼 기준 위치 계산의 기본 팝오버 폭을 300px로 변경.
+  - 우측 viewport clamp와 좁은 화면 기대값을 300px 기준으로 갱신.
+- Validation:
+  - RED: `npm test`에서 기존 400px 기본값으로 위치 계산 테스트 2건 실패 확인.
+  - GREEN: `npm test` 143/143 pass.
+  - `npm run build`: success (290.29 kB JS, 56.99 kB CSS).
+  - `git diff --check`: clean.
+  - 관련 구현·설계 문서에서 남은 400px 폭 표기 없음.
+- Next step:
+  - Stage 8 수동 시나리오에서 300px 팝오버의 설정 필드 overflow를 확인.
+
+## 2026-06-13 12:15 (local)
+- Objective:
+  - Settings 팝오버를 sidebar 상태와 분리해 접힌 desktop sidebar를 펼치지 않고 열며, mobile에서는 sidebar만 닫도록 변경.
+- Files changed:
+  - `web/frontend/src/features/app/components/AppSidebarFrame.tsx`
+  - `web/frontend/src/features/app/components/__tests__/AppSidebarFrame.test.ts`
+  - `web/frontend/src/features/app/state/settingsPopover.ts`
+  - `web/frontend/src/styles/_shell.scss`
+  - `web/frontend/src/styles/__tests__/shellStyles.test.ts`
+  - `docs/plans/20260612-web-frontend-ui-redesign.md`
+  - `docs/plans/20260612-web-frontend-ui-redesign-execution-checklist.md`
+  - `docs/web-rearchitecture-log.md`
+- Changes:
+  - Settings 클릭 시 desktop sidebar 펼침·접힘 상태를 변경하지 않고 팝오버만 토글하도록 변경.
+  - mobile Settings 열기에서는 sidebar를 닫되 팝오버는 sidebar 밖의 fixed 레이어로 유지.
+  - 클릭 시점의 Settings 버튼 좌표를 기준으로 400px 팝오버를 배치하고 좁은 viewport에서는 좌우 8px 안으로 제한.
+  - 접힌/닫힌 sidebar 독립 렌더, mobile sidebar 닫기 액션, 위치 계산과 fixed 스타일 회귀 테스트 추가.
+- Validation:
+  - RED: `npm test`에서 위치 helper export 누락과 기존 absolute 스타일로 2건 실패 확인.
+  - GREEN: `npm test` 143/143 pass.
+  - `npx tsc -p . --noEmit`: 0 errors.
+  - `npm run lint`: 0 errors, 기존 warnings 48개 유지.
+  - `npm run build`: success (290.29 kB JS, 56.99 kB CSS).
+  - `git diff --check`: clean.
+  - 병렬 검증 중 TSX 변환 간섭으로 `React is not defined` 실패가 발생했으나, build 완료 후 `npm test` 단독 재실행에서 143/143 pass 확인.
+- Next step:
+  - Stage 8 수동 시나리오에 desktop 접힘 유지, mobile sidebar만 닫힘과 팝오버 viewport 배치를 포함.
+
+## 2026-06-13 11:45 (local)
+- Objective:
+  - Stage 7 코드 리뷰 후속 수정: 접힌 sidebar의 Settings 클릭 동작과 Projects 세션 active/unread 시각 상태 보완.
+- Files changed:
+  - `web/frontend/src/features/app/components/AppSidebarFrame.tsx`
+  - `web/frontend/src/features/app/components/__tests__/AppSidebarFrame.test.ts`
+  - `web/frontend/src/features/app/components/__tests__/SidebarProjectsPanel.test.ts`
+  - `web/frontend/src/features/app/state/settingsPopover.ts`
+  - `web/frontend/src/styles/_shell.scss`
+  - `web/frontend/src/styles/__tests__/shellStyles.test.ts`
+- Changes:
+  - 접힌 sidebar에서 Settings 버튼을 누르면 sidebar를 펼치고 설정 팝오버를 열린 상태로 전환하도록 상태 결정을 별도 state 모듈로 분리.
+  - 펼친 sidebar에서는 기존 Settings 팝오버 열기·닫기 토글 동작을 유지.
+  - Projects 세션 행에 active 배경/accent와 unread 녹색 상태선·글꼴 강조를 추가.
+  - Settings 상태 결정, active/unread 렌더 클래스와 SCSS 선택자 회귀 테스트를 추가.
+- Validation:
+  - RED: `npm test`에서 미구현 helper export와 누락된 active/unread SCSS 선택자로 2건 실패 확인.
+  - GREEN: `npm test` 140/140 pass.
+  - `npx tsc -p . --noEmit`: 0 errors.
+  - `npm run lint`: 0 errors, 기존 warnings 48개 유지.
+  - `npm run build`: success (289.46 kB JS, 57.05 kB CSS).
+  - `git diff --check`: clean.
+  - `npm run dev -- --host 127.0.0.1`: Vite server 기동 확인. 인앱 브라우저 연결이 제공되지 않아 화면 클릭 검증은 미실행.
+- Next step:
+  - Stage 8 수동 시나리오에서 접힌 Settings 진입과 Projects active/unread 시각 상태를 확인.
+
+## 2026-06-13 11:30 (local)
+- Objective:
+  - Stage 7 — Workspace 패널 시각 체계 통일: `_workspace.scss`의 OpenCode treatment 섹션에 누락된 3가지 CSS 갭 보완 (icon 특이성 fix, badge background, group border).
+- Files changed:
+  - `web/frontend/src/styles/_workspace.scss`
+- Changes:
+  - `.workspace-tree-icon.caret`, `.workspace-tree-icon.glyph`: 2-class 셀렉터이므로 1-class override `.workspace-tree-icon { color: var(--muted) }`가 이기지 못했던 문제를 동일 특이성 규칙으로 수정.
+  - `.workspace-tree-badge`: background `rgba(32,45,63,.86)` → `var(--panel-soft)`.
+  - `.workspace-tree-group`: `border-bottom-color` rgba 하드코딩 → `border-color: var(--border)`.
+  - 기존 treatment 섹션(panel background/border, title color, tree hover/selected, refresh, resizer, preview body)은 이미 정상 동작 중.
+- Validation:
+  - `npm test`: 136/136 pass
+  - `npx tsc --noEmit`: 0 errors
+  - `npm run build`: 289.23 kB JS, 56.86 kB CSS ✓
+- Next step:
+  - Stage 8 — 정리 및 통합 회귀.
+
+## 2026-06-13 10:30 (local)
+- Objective:
+  - Stage 6 — 사이드바 프레임 및 평면 스타일: 접기 버튼을 footer에서 상단 header로 이동, SidebarToggleIcon 추가, thread-item/thread-tab-item flat 스타일 적용, SidebarChevronIcon prop 체인 제거.
+- Files changed:
+  - `web/frontend/src/features/common/components/Icons.tsx`
+  - `web/frontend/src/features/app/components/SidebarHeaderActions.tsx`
+  - `web/frontend/src/features/app/components/AppSidebarFrame.tsx`
+  - `web/frontend/src/features/app/components/AppSidebarContentPanel.tsx`
+  - `web/frontend/src/features/app/components/AppSidebarPane.tsx`
+  - `web/frontend/src/features/app/containers/AppSidebarContainer.tsx`
+  - `web/frontend/src/features/app/hooks/useAppRuntimePresentation.tsx`
+  - `web/frontend/src/features/app/components/__tests__/AppSidebarFrame.test.ts` (3개 테스트 추가)
+  - `web/frontend/src/features/app/components/__tests__/AppSidebarPane.test.ts`
+  - `web/frontend/src/features/app/components/__tests__/SidebarHeaderActions.test.ts` (2개 테스트 추가)
+  - `web/frontend/src/styles/_shell.scss`
+- Changes:
+  - `Icons.tsx`: `SidebarToggleIcon({ collapsed })` 추가 — 외곽 사각형 + 수직 분할선 SVG, 방향 화살표로 expanded/collapsed 구분.
+  - `SidebarHeaderActions.tsx`: `onToggleSidebarOpen`, `onToggleSidebarCollapsed`, `isMobileLayout` props 추가. `SidebarToggleIcon` + `IconButton`으로 toggle btn을 `.sidebar-top-actions` 끝에 추가.
+  - `AppSidebarFrame.tsx`: `SidebarChevronIcon` prop 제거. footer에서 `sidebar-collapse-btn` 제거. `isDesktopSidebarCollapsed` 분기 재구성 — collapsed: `.sidebar-collapsed-header` + `.sidebar-toggle-btn`; expanded: `sidebar-content` + popover.
+  - `AppSidebarContentPanel.tsx`, `AppSidebarPane.tsx`: toggle props 3개 pass-through.
+  - `AppSidebarContainer.tsx`, `useAppRuntimePresentation.tsx`: `SidebarChevronIcon` 제거.
+  - `_shell.scss`: `.sidebar-collapse-btn` 전체 제거. `.sidebar-collapsed-header`, `.sidebar-toggle-btn` 추가. `.thread-tab-item` flat (border/bg 제거, border-left state 통일). `.thread-item` flat (border/bg 제거, hover/active 낮은 대비).
+- Validation:
+  - `npm test`: 136/136 pass
+  - `npx tsc --noEmit`: 0 errors
+  - `npm run build`: 289.23 kB JS, 56.69 kB CSS ✓
+- Next step:
+  - Stage 7 — Workspace 패널 시각 체계 통일.
+
+## 2026-06-12 18:40 (local)
+- Objective:
+  - Stage 5 — 에이전트 설정 팝오버: SidebarAgentsPanel을 사이드바 본문에서 제거하고 footer의 Settings 버튼으로 열리는 팝오버로 이동.
+- Files changed:
+  - `web/frontend/src/features/app/components/AppSidebarFrame.tsx`
+  - `web/frontend/src/features/app/components/AppSidebarPane.tsx`
+  - `web/frontend/src/features/app/components/AppSidebarContentPanel.tsx`
+  - `web/frontend/src/features/app/components/__tests__/AppSidebarFrame.test.ts` (신규)
+  - `web/frontend/src/styles/_shell.scss`
+- Changes:
+  - `AppSidebarFrame` 재작성: `useState(defaultSettingsOpen)` + `useId()` + 2개 ref. 3개 useEffect(접힘/모바일 닫기, mousedown 외부 클릭, keydown Escape). `.sidebar-settings-btn`과 `.sidebar-settings-popover` DOM 추가. `SettingsIcon` import.
+  - `AppSidebarPane` 재작성: `SidebarAgentsPanel` import 추가 → `settingsContent={<SidebarAgentsPanel .../>}`로 Frame에 전달. `AppSidebarContentPanel` 호출에서 18개 agent props 제거.
+  - `AppSidebarContentPanel` 재작성: `SidebarAgentsPanel` import 및 렌더 제거. 18개 agent 파라미터 제거.
+  - `_shell.scss`: `.sidebar-footer`에 `display: flex; align-items: center; gap: 8px` 추가. `.sidebar-collapse-btn`의 `width: 100%` → `flex: 0 0 auto`. `.sidebar-settings-btn`, `.sidebar-settings-popover` CSS 추가. collapsed 상태 column 레이아웃.
+  - `AppSidebarFrame.test.ts` 신규 8개 테스트: 기본 렌더(aria-expanded false), defaultSettingsOpen=true 렌더, 접근성 속성, aria-controls 팝오버 연결, settingsContent 렌더, collapsed 팝오버 미렌더, collapsed 라벨 없음, expanded 라벨 있음.
+- Validation:
+  - `npm test`: 131/131 pass
+  - `npx tsc --noEmit`: 0 errors
+  - `npm run build`: 288.99 kB JS, 57.00 kB CSS ✓
+- Next step:
+  - Stage 6 — 사이드바 프레임 및 평면 스타일 (상단 헤더 접기 버튼 이동, 새 분할 패널 아이콘, collapsed 구조 개선).
+
+## 2026-06-12 18:30 (local)
+- Objective:
+  - Stage 4 — Threads 단일 접이식 목록: Recent/Projects 서브탭을 제거하고 Threads 제목을 disclosure button으로 교체, SidebarThreadSubtabs 전체 삭제.
+- Files changed:
+  - `web/frontend/src/features/app/components/SidebarThreadsPanel.tsx`
+  - `web/frontend/src/features/app/components/__tests__/SidebarThreadsPanel.test.ts`
+  - `web/frontend/src/features/app/components/AppSidebarContentPanel.tsx`
+  - `web/frontend/src/features/tabs/components/SidebarThreadSubtabs.tsx` (삭제)
+  - `web/frontend/src/features/tabs/components/__tests__/SidebarThreadSubtabs.test.ts` (삭제)
+  - `web/frontend/src/styles/_shell.scss`
+- Changes:
+  - `SidebarThreadsPanel` 완전 재작성: Panel + SidebarThreadSubtabs 제거 → `<section className="threads-section">` 구조.
+  - disclosure button 헤더: `useState(defaultOpen ?? true)` + `aria-expanded/controls` + `.threads-toggle-chevron` CSS 회전.
+  - ThreadSessionTabs 로직 인라인: `threadTabsByProjectTabId[activeProjectTabId]`로 열린 탭 병합, `tab.isOpen`일 때만 닫기 버튼 표시.
+  - `SidebarThreadSubtabs.tsx` 및 테스트 파일 삭제 (untracked).
+  - `AppSidebarContentPanel`에서 `SidebarThreadsPanel`에 전달하던 4개 props 제거 (`projectTabs`, `projectTabStatusById`, `onSelectProjectTab`, `onCloseProjectTab`).
+  - `_shell.scss`: `.thread-subtabs*`, `.session-tab-list`, `.project-session-tabs`, `.project-session-dropdown*`, 구(舊) `.project-session-header`, `.project-session-trigger`, `.project-session-chevron`, `.project-session-menu*` 삭제. `.threads-section`, `.threads-toggle`, `.threads-toggle-label`, `.threads-toggle-chevron`, `.threads-list` 추가.
+  - 테스트 7개로 재작성: 기본 펼침 렌더, 접힘 숨김, 순서 유지, 열린 탭 병합, 닫기 버튼 미표시, 빈 상태, 새 채팅 버튼.
+- Validation:
+  - `cd web/frontend && npm test`: 123/123 passed
+  - `cd web/frontend && npx tsc --noEmit`: 0 errors
+- Next step:
+  - Stage 4 완료 조건 확인 후 Stage 5 진입 조건 검토.
+  - Stage 5: 에이전트 설정 팝오버 — SidebarAgentsPanel을 사이드바 본문에서 제거하고 하단 설정 버튼으로 진입하는 팝오버로 이동.
+
+## 2026-06-12 18:15 (local)
+- Objective:
+  - Stage 3 — Projects 평면 목록 UI 구현: buildProjectRows view-model을 실제 렌더링에 연결하고, 열린 세션 행·펼침 상태·세션별 채팅 목록을 갖춘 평면 목록으로 SidebarProjectsPanel을 교체.
+- Files changed:
+  - `web/frontend/src/features/app/components/SidebarProjectsPanel.tsx`
+  - `web/frontend/src/features/app/components/AppSidebarContentPanel.tsx`
+  - `web/frontend/src/features/app/components/__tests__/SidebarProjectsPanel.test.ts`
+  - `web/frontend/src/styles/_shell.scss`
+- Changes:
+  - `SidebarProjectsPanel` 완전 재작성: Panel 카드 제거 → `<section className="projects-section">` 대체, `ProjectRow[]` view-model 소비.
+  - 기본 프로젝트 행: 이름·경로·default badge, `interactionBusy` disabled 처리.
+  - 열린 세션 행: 이름 버튼(선택)·화살표 버튼(펼침)·닫기 버튼 분리 flex 구조, `state-*` 클래스로 상태 표시, `aria-expanded/controls`.
+  - 펼침 상태: `useState<Set<string>>` 관리, 초기 활성 세션만 펼침, 신규 활성 세션 자동 펼침, 닫힌 세션 정리.
+  - 채팅 목록: 기존 `.thread-tab-item` 패턴 재사용, 닫기 stopPropagation, 빈 상태 메시지, 세션별 새 채팅 버튼.
+  - `AppSidebarContentPanel`에 `buildProjectRows` 호출 추가, `SidebarProjectsPanel` props 교체.
+  - `_shell.scss`에 `.projects-section`, `.project-session-row`, `.project-session-header`, `.project-session-name`, `.project-session-toggle`, `.project-thread-list`, `.projects-busy-note` CSS 추가.
+  - 테스트 12개로 재작성 (기존 2개 대체): 기본행 렌더, 세션 행 렌더, 복수 세션, 활성 펼침, 비활성 접힘, 버튼 분리, 닫기 aria-label, 채팅 격리, 채팅 닫기 aria-label, 빈 채팅 상태, 새 채팅 버튼, busy 상태.
+- Validation:
+  - `cd web/frontend && npm test`: 121/121 passed (신규 12개 테스트 포함)
+  - `cd web/frontend && npx tsc --noEmit`: 0 errors
+  - `cd web/frontend && npm run lint`: 0 errors (기존 경고 48개, 신규 없음)
+  - `cd web/frontend && npm run build`: success (291.83 kB JS, 57.03 kB CSS)
+  - `git diff --check`: clean
+- Next step:
+  - Stage 3 완료 조건 확인 후 Stage 4 진입 조건 검토.
+  - Stage 4: Threads 단일 접이식 목록 — Recent/Projects 서브탭 제거, Threads 제목을 disclosure button으로 변경.
+
+## 2026-06-12 17:11 (local)
+- Objective:
+  - Stage 2 코드 리뷰 후속 수정 — 불필요한 런타임 타입 가드 제거 및 누락 테스트 추가.
+- Files changed:
+  - `web/frontend/src/features/app/state/projectRows.ts`
+  - `web/frontend/src/features/app/state/__tests__/projectRows.test.ts`
+- Changes:
+  - `typeof item.key === "string"` 런타임 가드 제거, 타입 직접 참조로 변경.
+  - `typeof item.path === "string"` 런타임 가드 제거, 타입 직접 참조로 변경.
+  - `projectTabStatusById[tab.id]` status fallback을 `typeof ... === "string" ? ... : "idle"` → `?? "idle"` 로 교체 (2곳).
+  - 빈 채팅 제목 thread ID fallback 테스트 추가 (`resolveThreadTabs` 내 `tab.title || tab.id` 경로 검증).
+  - `projectTabStatusById` 키 없음 `"idle"` fallback 테스트 추가.
+- Validation:
+  - `cd web/frontend && npm test`: 110/110 passed (신규 테스트 2개 포함)
+  - `cd web/frontend && npx tsc --noEmit`: 0 errors
+  - `cd web/frontend && npm run lint`: 0 errors (기존 경고 48개, 신규 없음)
+  - `cd web/frontend && npm run build`: success (287.76 kB JS, 55.67 kB CSS)
+  - `git diff --check`: 기존 파일 LF→CRLF 경고만, 신규 변경 무관
+- Next step:
+  - Stage 2 완료 조건 충족 확인 후 Stage 3 진입 조건 검토.
+  - Stage 3: Projects 평면 목록 UI 구현 시작 (`SidebarProjectsPanel` 갱신 또는 교체).
+
+## 2026-06-12 16:30 (local)
+- Objective:
+  - Stage 1 코드 리뷰에서 발견된 미완료 항목(stale closure, projectItems 계약, 테스트 검증 부족)을 보완.
+- Files changed:
+  - `web/frontend/src/features/app/hooks/useThreadSession.ts`
+  - `web/frontend/src/features/app/hooks/useAppRuntimePresentation.tsx`
+  - `web/frontend/src/features/app/containers/AppSidebarContainer.tsx`
+  - `web/frontend/src/features/app/hooks/__tests__/useAppRuntimePresentation.test.ts`
+  - `web/frontend/src/features/app/containers/__tests__/AppSidebarContainer.test.ts`
+  - `docs/plans/20260612-web-frontend-ui-redesign-execution-checklist.md`
+- Changes:
+  - `viewThread(threadId, overrideProjectTabId?)` 시그니처 확장: 내부 `activeProjectTabId` 참조 3개를 `resolvedProjectTabId`로 교체해 stale closure 문제 해결.
+  - `startThread(options?, overrideProjectTabId?, overrideProjectKey?)` 시그니처 확장: 내부 `activeProjectKey`·`activeProjectTabId` 참조 8개를 각각 `resolvedProjectKey`·`resolvedProjectTabId`로 교체.
+  - `selectThread` wrapper: `threadActions.viewThread(threadId, projectTabId)` 로 projectTabId를 명시 전달.
+  - `startThread` wrapper: `threads.projectTabs.find()`로 projectKey 파생 후 `threadActions.startThread({}, projectTabId, projectKey)` 호출.
+  - `AppSidebarContainer` `projectItems` 타입을 `Array<{ key, name, path, default? }>` 로 구체화.
+  - `buildAppRuntimeContextValue preserves full threadTabsByProjectTabId map` 테스트 추가.
+  - `AppSidebarContainer` 테스트 fixture에 `path`/`default`/`key` 필드 추가 및 비활성 프로젝트 스레드 미노출 assertion 추가.
+  - 체크리스트 Stage 1 미완료 항목 8개 완료 처리.
+- Validation:
+  - `cd web/frontend && npx tsc --noEmit` 통과.
+  - `cd web/frontend && npm test` 통과 (99/99).
+  - `cd web/frontend && npm run build` 통과.
+- Next step:
+  - Stage 2: Projects view-model 구성.
+
+## 2026-06-12 16:12 (local)
+- Objective:
+  - UI redesign 실행 체크리스트 Stage 1 구현을 실제 데이터/액션 전달 로직과 검증 결과로 재검토.
+- Files changed:
+  - `docs/plans/20260612-web-frontend-ui-redesign-execution-checklist.md`
+  - `docs/web-rearchitecture-log.md`
+- Changes:
+  - context에서 전체 `threadTabsByProjectTabId`가 sidebar 전달 경로 끝까지 유지되는 항목을 확인 처리.
+  - 프로젝트/채팅 선택·닫기·생성 callback의 인자 계약과 기존 props 제거 여부를 확인 처리.
+  - 비활성 프로젝트 선택 후 `viewThread`/`startThread`가 이전 렌더의 활성 프로젝트를 사용하는 stale-state 문제를 Stage 1 blocker로 기록.
+  - 직접 검증이 없는 context/container fixture 항목과 전체 완료 조건은 미체크 유지.
+- Validation:
+  - `cd web/frontend && npm test` 통과 (98/98).
+  - `cd web/frontend && npx tsc --noEmit` 통과.
+  - `cd web/frontend && npm run lint` 통과 (0 errors, 기존 warning 48개).
+  - `cd web/frontend && npm run build` 통과.
+  - `git diff --check` 통과.
+  - `python -m pytest -q` 실패: 실행 Python 3.10에서 `tomllib`을 찾지 못해 17개 모듈 collection 실패.
+- Next step:
+  - 프로젝트별 채팅 선택/생성 domain action이 명시적 `projectTabId`와 `projectKey`를 받도록 수정하고 wrapper 순서 회귀 테스트를 추가.
+
+## 2026-06-12 15:21 (local)
+- Objective:
+  - `Projects`를 프로젝트 선택 `<select>`가 아닌 프로젝트명 제목과 열린 채팅 목록을 가진 커스텀 드롭다운으로 정정.
+- Files changed:
+  - `web/frontend/src/features/tabs/components/SidebarThreadSubtabs.tsx`
+  - `web/frontend/src/features/tabs/components/__tests__/SidebarThreadSubtabs.test.ts`
+  - `web/frontend/src/styles/_shell.scss`
+  - `docs/plans/20260612-web-frontend-ui-redesign.md`
+- Changes:
+  - 활성 프로젝트명을 접기/펼치기 버튼으로 표시하고 열린 채팅 목록을 패널 내부로 이동.
+  - 프로젝트 닫기와 각 채팅의 선택, 상태, 닫기, 추가 동작을 기존 callback에 유지.
+  - 열린 채팅 행을 참고 이미지와 유사한 평면 flex 목록 스타일로 조정.
+- Validation:
+  - 커스텀 드롭다운 회귀 테스트 red/green 확인.
+  - `cd web/frontend && npm test` 통과 (98/98).
+  - `cd web/frontend && npx tsc -p . --noEmit` 통과.
+  - `cd web/frontend && npm run lint` 통과 (0 errors, 기존 경고 48건).
+  - `cd web/frontend && npm run build` 통과.
+- Next step:
+  - 실제 인증 세션에서 프로젝트명 접기/펼치기와 채팅 선택·닫기를 확인.
+
+## 2026-06-12 15:16 (local)
+- Objective:
+  - `Projects` 서브탭을 프로젝트 드롭다운과 선택 프로젝트의 열린 채팅 목록 구조로 정정.
+- Files changed:
+  - `web/frontend/src/features/tabs/components/SidebarThreadSubtabs.tsx`
+  - `web/frontend/src/features/tabs/components/__tests__/SidebarThreadSubtabs.test.ts`
+  - `web/frontend/src/styles/_shell.scss`
+  - `web/frontend/src/styles/_themes.scss`
+  - `docs/plans/20260612-web-frontend-ui-redesign.md`
+- Changes:
+  - 열려 있는 프로젝트 탭을 세로 목록 대신 프로젝트명 드롭다운 옵션으로 표시.
+  - 드롭다운에서 선택한 활성 프로젝트의 열린 채팅 탭을 바로 아래에 표시.
+  - 활성 프로젝트 닫기와 프로젝트 상태 표시를 드롭다운 옆 컨트롤에 유지.
+- Validation:
+  - 프로젝트 드롭다운 회귀 테스트 red/green 확인.
+  - `cd web/frontend && npm test` 통과 (98/98).
+  - `cd web/frontend && npx tsc -p . --noEmit` 통과.
+  - `cd web/frontend && npm run lint` 통과 (0 errors, 기존 경고 48건).
+  - `cd web/frontend && npm run build` 통과.
+- Next step:
+  - 실제 인증 세션에서 드롭다운 프로젝트 전환과 열린 채팅 목록 갱신을 확인.
+
+## 2026-06-12 15:15 (local)
+- Objective:
+  - `Projects` 서브탭에서 활성 프로젝트의 열린 채팅 탭이 누락된 TopTabs 동작 회귀 수정.
+- Files changed:
+  - `web/frontend/src/features/tabs/components/SidebarThreadSubtabs.tsx`
+  - `web/frontend/src/features/tabs/components/__tests__/SidebarThreadSubtabs.test.ts`
+  - `web/frontend/src/styles/_shell.scss`
+  - `docs/plans/20260612-web-frontend-ui-redesign.md`
+- Changes:
+  - `Projects` 화면에 프로젝트 탭 목록과 활성 프로젝트의 열린 채팅 탭 목록을 함께 렌더.
+  - 열린 채팅의 선택, 닫기, 추가, running/unread 상태 표시를 기존 TopTabs와 동일하게 연결.
+  - 프로젝트 탭과 열린 채팅이 함께 렌더되는 회귀 테스트 추가.
+- Validation:
+  - `cd web/frontend && npm test` 통과 (98/98).
+  - `cd web/frontend && npx tsc -p . --noEmit` 통과.
+  - `cd web/frontend && npm run lint` 통과 (0 errors, 기존 경고 48건).
+  - `cd web/frontend && npm run build` 통과.
+- Next step:
+  - 실제 세션에서 프로젝트 선택 후 해당 프로젝트의 열린 채팅 전환을 확인.
+
+## 2026-06-12 15:00 (local)
+- Objective:
+  - `Recent` 서브탭에서 기존 프로젝트 스레드 목록이 사라진 회귀 수정.
+- Files changed:
+  - `web/frontend/src/features/tabs/components/SidebarThreadSubtabs.tsx`
+  - 사이드바 context/props 전달 컴포넌트 및 관련 테스트
+  - `docs/plans/20260612-web-frontend-ui-redesign.md`
+- Changes:
+  - `Recent` 데이터 원본을 열린 `threadTabs`에서 기존 `threadItems`로 복원.
+  - 열린 탭이 일치하는 경우에만 status/unread 및 닫기 동작을 목록 행에 병합.
+  - 열린 탭이 없는 초기 로드에서도 현재 프로젝트 스레드가 표시되는 회귀 테스트 추가.
+- Validation:
+  - `cd web/frontend && npm test` 통과 (98/98).
+  - `cd web/frontend && npx tsc -p . --noEmit` 통과.
+  - `cd web/frontend && npm run lint` 통과 (0 errors, 기존 경고 48건).
+  - `cd web/frontend && npm run build` 통과.
+- Next step:
+  - 실제 인증 세션에서 초기 로드 및 프로젝트 전환 후 `Recent` 목록 표시를 확인.
+
+## 2026-06-12 14:48 (local)
+- Objective:
+  - 중앙 `TopTabs`의 기존 세션 탭 기능을 사이드바 `Recent / Projects` 서브탭으로 이동하고 중앙을 단일 채팅 헤더로 축소.
+- Files changed:
+  - `web/frontend/src/features/app/components/*`
+  - `web/frontend/src/features/app/containers/AppSidebarContainer.tsx`
+  - `web/frontend/src/features/app/hooks/useAppRuntimePresentation.tsx`
+  - `web/frontend/src/features/tabs/components/*`
+  - `web/frontend/src/styles/_shell.scss`
+  - `web/frontend/src/styles/_responsive.scss`
+  - `docs/plans/20260612-web-frontend-ui-redesign.md`
+- Changes:
+  - 활성 스레드 제목과 새 스레드 버튼만 표시하는 `ChatHeader` 추가.
+  - 기존 프로젝트/스레드 탭 상태와 액션을 재사용하는 `SidebarThreadSubtabs` 추가.
+  - 사이드바 context 전달 경로에 열린 프로젝트 탭, 활성 프로젝트의 열린 스레드 탭, 상태 맵과 기존 액션을 연결.
+  - 기존 `TopTabs`와 관련 스타일/테스트 제거 후 새 컴포넌트 테스트로 교체.
+  - 시간순 목록 및 프로젝트 아코디언 요구를 제거하고 실제 구현 범위에 맞게 설계 문서 정정.
+- Validation:
+  - `cd web/frontend && npm test` 통과 (97/97).
+  - `cd web/frontend && npx tsc -p . --noEmit` 통과.
+  - `cd web/frontend && npm run lint` 통과 (0 errors, 기존 경고 48건).
+  - `cd web/frontend && npm run build` 통과.
+- Next step:
+  - 실제 인증 세션이 연결된 브라우저에서 서브탭 클릭과 900px 이하 레이아웃을 수동 확인.
+
 ## 2026-06-12 10:26 (local)
 - Objective:
   - 단일 `styles.css`를 기능별 SCSS 구조로 전환하고 OpenCode 기반 제품형 UI 디자인을 적용.
