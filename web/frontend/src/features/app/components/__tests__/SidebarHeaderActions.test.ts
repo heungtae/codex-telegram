@@ -21,7 +21,7 @@ test("SidebarHeaderActions renders brand and action controls", () => {
     React.createElement(SidebarHeaderActions, BASE_PROPS)
   );
 
-  assert.match(html, /Codex Web/);
+  assert.match(html, /Codex Bridge/);
   assert.match(html, /ui-icon-button is-active notify-toggle icon-only on/);
   assert.match(html, /ui-icon-button theme-toggle icon-only/);
   assert.match(html, /Toggle turn completion notification/);

@@ -59,7 +59,7 @@ test("AppSidebarPane renders sidebar chrome and content panel", () => {
     })
   );
 
-  assert.match(html, /Codex Web/);
+  assert.match(html, /Codex Bridge/);
   assert.match(html, /Codex Telegram/);
   assert.match(html, /Thread One/);
 });

@@ -62,14 +62,17 @@
     color: var(--text);
   }
 
-  .ui-input:focus,
   .ui-textarea:focus,
   .ui-select:focus,
-  .project-picker-input:focus,
-  .login-card input:focus,
   .composer-input-shell:focus-within {
     background: var(--panel);
     border-color: var(--text);
+  }
+
+  .ui-input:focus,
+  .project-picker-input:focus,
+  .login-card input:focus {
+    background: var(--panel);
   }
 
   .primary,
@@ -99,6 +102,14 @@
     background: #0f0000;
     border-color: var(--border-strong);
     color: var(--text);
+  }
+
+  .login-form-panel {
+    background: #201d1d;
+  }
+
+  .login-visual-panel {
+    background: #27221e;
   }
 }
 

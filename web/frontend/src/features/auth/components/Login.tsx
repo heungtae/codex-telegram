@@ -7,6 +7,10 @@ export default function Login({ onLoggedIn, theme, onToggleTheme }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const logoSrc =
+    theme === "dark"
+      ? "/assets/assets/codex-telegram-icon-ivory.svg"
+      : "/assets/assets/codex-telegram-icon-black.svg";
 
   const submit = async (e) => {
     e.preventDefault();
@@ -24,39 +28,58 @@ export default function Login({ onLoggedIn, theme, onToggleTheme }) {
 
   return (
     <div className="login">
-      <form className="login-card" onSubmit={submit}>
-        <div className="login-card-head">
-          <div className="login-copy">
-            <h2>Codex Web</h2>
-            <p>Sign in with your allowlisted account.</p>
+      <div className="login-form-panel">
+        <form className="login-card" onSubmit={submit}>
+          <div className="login-card-head">
+            <div className="login-copy">
+              <h2>
+                <img
+                  className="login-brand-icon"
+                  src={logoSrc}
+                  alt=""
+                  aria-hidden="true"
+                />
+                <span>Codex Bridge</span>
+              </h2>
+              <p className="login-tagline">Control Codex from Telegram and Web.</p>
+              <p>Sign in with your allowlisted account.</p>
+            </div>
+            <button
+              className="theme-toggle"
+              type="button"
+              onClick={onToggleTheme}
+              aria-label="Toggle theme"
+              title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+            >
+              <ThemeIcon theme={theme} />
+              <span>{theme === "dark" ? "Dark" : "Light"}</span>
+            </button>
           </div>
-          <button
-            className="theme-toggle"
-            type="button"
-            onClick={onToggleTheme}
-            aria-label="Toggle theme"
-            title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
-          >
-            <ThemeIcon theme={theme} />
-            <span>{theme === "dark" ? "Dark" : "Light"}</span>
-          </button>
-        </div>
-        <input
-          placeholder="Username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
+          <input
+            placeholder="Username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+          />
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          <div className="login-actions">
+            <button className="primary" type="submit">Sign in</button>
+          </div>
+          {error ? <p className="login-error">{error}</p> : null}
+        </form>
+      </div>
+      <div className="login-visual-panel">
+        <img
+          className="login-visual-image"
+          src="/assets/assets/codex-telegram-login-image.png"
+          alt=""
+          aria-hidden="true"
         />
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-        <div className="login-actions">
-          <button className="primary" type="submit">Sign in</button>
-        </div>
-        {error ? <p className="login-error">{error}</p> : null}
-      </form>
+      </div>
     </div>
   );
 }

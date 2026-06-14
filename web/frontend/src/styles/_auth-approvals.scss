@@ -1,12 +1,37 @@
 .login {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   min-height: 100vh;
+}
+
+.login-form-panel,
+.login-visual-panel {
+  display: flex;
   align-items: center;
   justify-content: center;
 }
 
+.login-form-panel {
+  min-width: 0;
+  padding: 24px;
+  background: #fbfaf9;
+}
+
+.login-visual-panel {
+  min-width: 0;
+  overflow: hidden;
+  background: #faf8f4;
+}
+
+.login-visual-image {
+  width: 80%;
+  height: 80%;
+  object-fit: contain;
+  object-position: center;
+}
+
 .login-card {
-  width: min(420px, 92vw);
+  width: min(480px, 92vw);
   background: linear-gradient(180deg, rgba(18, 28, 42, 0.96) 0%, rgba(10, 18, 30, 0.96) 100%);
   border: 1px solid var(--border);
   border-radius: 0;
@@ -22,10 +47,6 @@
   margin-bottom: 16px;
 }
 
-.login-card-head .theme-toggle {
-  align-self: flex-start;
-}
-
 .login-copy h2 {
   margin: 0 0 8px;
 }
@@ -33,6 +54,17 @@
 .login-copy p {
   margin: 0;
   color: var(--muted);
+}
+
+.login-copy p:not(.login-tagline) {
+  font-size: 12px;
+}
+
+.login-tagline {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px !important;
 }
 
 .login-card input {
@@ -82,24 +114,28 @@
 /* OpenCode authentication and approval treatment */
 .login {
   background: var(--bg);
-  padding: 24px;
 }
 
 .login-card {
   background: var(--panel);
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
+  border-radius: 8px;
   box-shadow: none;
 }
 
 .login-copy h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 20px;
   letter-spacing: 0;
 }
 
-.login-copy h2::before {
-  content: "[+] ";
-  color: var(--muted);
+.login-brand-icon {
+  width: 48px;
+  height: 48px;
+  flex: 0 0 auto;
+  object-fit: contain;
 }
 
 .login-card input {
@@ -111,7 +147,6 @@
 
 .login-card input:focus {
   background: var(--panel);
-  border-color: var(--text);
 }
 
 .primary {

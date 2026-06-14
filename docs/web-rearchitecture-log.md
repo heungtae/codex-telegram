@@ -20,6 +20,221 @@ Rule:
   - ...
 ```
 
+## 2026-06-14 12:11 (local)
+- Objective:
+  - 앱 전체 HTML input의 포커스 테두리와 outline을 제거하고 배경 변화는 유지.
+- Files changed:
+  - `web/frontend/src/styles/_foundation.scss`
+  - `web/frontend/src/styles/_auth-approvals.scss`
+  - `web/frontend/src/styles/_overlays.scss`
+  - `web/frontend/src/styles/_themes.scss`
+  - `web/frontend/src/styles/__tests__/shellStyles.test.ts`
+  - `docs/web-rearchitecture-log.md`
+- Changes:
+  - 공통 `focus-visible` outline 대상에서 input을 분리하고 input에 `outline: none` 적용.
+  - 로그인, UI Kit input, 프로젝트 검색 input의 포커스 테두리 변경 제거.
+  - input 포커스 배경 변경은 유지하고 textarea/select/Composer의 기존 포커스 강조는 유지.
+- Validation:
+  - RED: 기존 input outline과 포커스 border-color 규칙을 감지해 회귀 테스트 실패.
+  - GREEN: `shellStyles.test.ts` 8/8 pass.
+  - `cd web/frontend && npm test` pass (152/152).
+  - `cd web/frontend && npx tsc -p . --noEmit` pass.
+  - `cd web/frontend && npm run lint` pass (0 errors, 기존 warnings 48).
+  - `cd web/frontend && npm run build` pass.
+- Next step:
+  - 실제 화면에서 input 포커스 시 배경만 변경되고 테두리/outline이 유지되지 않는지 확인.
+
+## 2026-06-14 13:05 (local)
+- Objective:
+  - 로그인 카드 테마 토글 버튼을 항상 카드 우측 상단에 고정하고, 900px 이하에서는 아이콘만 표시.
+- Files changed:
+  - `web/frontend/src/features/auth/components/Login.tsx`
+  - `web/frontend/src/styles/_auth-approvals.scss`
+  - `web/frontend/src/styles/_responsive.scss`
+- Changes:
+  - 테마 토글 버튼을 `.login-card-head`의 직접 자식으로 유지해 `justify-content: space-between`에 의해 카드 우측 상단에 고정.
+  - `_responsive.scss` 900px 미디어 쿼리에서 `.login-card-head { flex-direction: column }` 제거 → 좁은 화면에서도 토글이 우측 상단을 유지.
+  - 같은 미디어 쿼리에 `.theme-toggle span { display: none }` 추가 → 900px 이하에서 "Light"/"Dark" 텍스트를 숨기고 아이콘만 표시.
+- Validation:
+  - `cd web/frontend && npm run build` pass.
+- Next step:
+  - 브라우저에서 900px 이상/이하 전환 시 토글 버튼 위치와 텍스트 숨김 동작을 수동 확인.
+
+## 2026-06-14 12:57 (local)
+- Objective:
+  - 로그인 화면 오른쪽 패널 배경색 미세 조정 및 다크 테마 패널 배경색 추가.
+- Files changed:
+  - `web/frontend/src/styles/_auth-approvals.scss`
+  - `web/frontend/src/styles/_themes.scss`
+- Changes:
+  - 오른쪽 패널(`.login-visual-panel`) 배경색을 단계적으로 밝혀 최종 `#faf8f4`로 확정 (왼쪽 `#fbfaf9`보다 살짝 어둡고 따뜻한 톤).
+  - 다크 테마에서 왼쪽 패널 `#201d1d`(= `--bg`), 오른쪽 패널 `#27221e`(amber warm dark)로 각각 오버라이드.
+- Validation:
+  - `cd web/frontend && npm run build` pass.
+- Next step:
+  - 브라우저에서 라이트/다크 테마 전환 시 양쪽 패널 배경색 차이를 수동 확인.
+
+## 2026-06-14 12:04 (local)
+- Objective:
+  - 로그인 화면 스타일 및 브랜딩 조정: 양쪽 패널 배경색 통일, 로그인 카드 border-radius 확대, 브랜드명 변경, 태그라인 문구 추가.
+- Files changed:
+  - `web/frontend/src/styles/_auth-approvals.scss`
+  - `web/frontend/src/features/auth/components/Login.tsx`
+  - `web/frontend/src/features/auth/components/__tests__/Login.test.ts`
+  - `web/frontend/src/features/app/components/SidebarHeaderActions.tsx`
+  - `web/frontend/src/features/app/components/__tests__/SidebarHeaderActions.test.ts`
+  - `web/frontend/src/features/app/containers/__tests__/AppSidebarContainer.test.ts`
+  - `web/frontend/src/features/app/components/__tests__/AppSidebarPane.test.ts`
+  - `web/frontend/index.html`
+  - `web/server.py`
+  - `tests/test_web_server_local_command.py`
+- Changes:
+  - `.login-form-panel`, `.login-visual-panel` 배경색을 `#fbfaf9`로 통일.
+  - `.login-card` border-radius를 `var(--radius-sm)`(4px)에서 `8px`로 확대.
+  - `.login-card` 너비를 `min(420px, 92vw)`에서 `min(480px, 92vw)`로 확대.
+  - 브랜드명을 `Codex Web` → `Codex Bridge`(사이드바/타이틀)로 전체 변경 후, 로그인 화면만 `Codex Bridge`로 별도 적용.
+  - 로그인 카드에 태그라인 `Control Codex from Telegram and Web.`을 브랜드명(h2)과 sign-in 문구 사이에 추가.
+  - `.login-tagline`: `font-size: 14px; font-weight: 600; color: var(--text)`.
+  - `.login-copy p:not(.login-tagline)`: `font-size: 12px`로 sign-in 문구만 작게 처리.
+  - 전체 테스트 어설션과 페이지 타이틀 참조를 새 브랜드명으로 갱신.
+- Validation:
+  - `cd web/frontend && npm run build` pass.
+- Next step:
+  - 브라우저에서 로그인 화면의 배경색, 카드 border-radius, 태그라인 표시를 수동 확인.
+
+## 2026-06-14 11:36 (local)
+- Objective:
+  - 로그인 오른쪽 장식 이미지의 표시 크기를 패널 대비 80%로 축소.
+- Files changed:
+  - `web/frontend/src/styles/_auth-approvals.scss`
+  - `web/frontend/src/styles/__tests__/shellStyles.test.ts`
+  - `docs/web-rearchitecture-log.md`
+- Changes:
+  - `.login-visual-image` width와 height를 `100%`에서 `80%`로 변경.
+  - 중앙 정렬과 `object-fit: contain` 동작은 유지.
+- Validation:
+  - RED: 기존 `100% × 100%` 크기를 감지해 스타일 테스트 실패.
+  - GREEN: `shellStyles.test.ts` 7/7 pass.
+  - `cd web/frontend && npm test` pass (151/151).
+  - `cd web/frontend && npm run build` pass.
+- Next step:
+  - 로그인 화면에서 축소된 이미지 여백을 수동 확인.
+
+## 2026-06-14 11:31 (local)
+- Objective:
+  - 로그인 화면을 데스크톱 좌우 50:50 폼/이미지 레이아웃으로 변경.
+- Files changed:
+  - `web/frontend/src/features/auth/components/Login.tsx`
+  - `web/frontend/src/features/auth/components/__tests__/Login.test.ts`
+  - `web/frontend/src/styles/_auth-approvals.scss`
+  - `web/frontend/src/styles/_responsive.scss`
+  - `web/frontend/src/styles/__tests__/shellStyles.test.ts`
+  - `docs/web-rearchitecture-log.md`
+- Changes:
+  - 기존 로그인 카드를 왼쪽 중앙 패널에 배치하고 오른쪽 장식 이미지 패널 추가.
+  - `codex-telegram-login-image.png`를 오른쪽 중앙에 `object-fit: contain`으로 표시.
+  - 오른쪽 패널의 남는 공간을 `#FCFBF9`로 고정.
+  - 900px 이하에서는 이미지 패널을 숨기고 로그인 폼 패널을 전체 너비로 확장.
+- Validation:
+  - RED: 패널 마크업, 50:50 레이아웃, 모바일 이미지 숨김 테스트 실패 확인.
+  - GREEN: `Login.test.ts` 3/3, `shellStyles.test.ts` 7/7 pass.
+  - `cd web/frontend && npm test` pass (151/151).
+  - `cd web/frontend && npx tsc -p . --noEmit` pass.
+  - `cd web/frontend && npm run lint` pass (0 errors, 기존 warnings 48).
+  - `cd web/frontend && npm run build` pass.
+  - 빌드 산출물에 `codex-telegram-login-image.png` 복사 확인.
+  - 인앱 브라우저를 연결할 수 없어 수동 시각 검증은 미실행.
+- Next step:
+  - 실행 환경에서 데스크톱 50:50 배치와 모바일 이미지 숨김을 수동 확인.
+
+## 2026-06-14 11:10 (local)
+- Objective:
+  - Light 테마 로그인 로고 색상을 `Codex Web` 제목과 동일하게 정렬.
+- Files changed:
+  - `web/frontend/static/assets/codex-telegram-icon-black.svg`
+  - `web/frontend/src/styles/__tests__/shellStyles.test.ts`
+  - `docs/web-rearchitecture-log.md`
+- Changes:
+  - 로그인 제목이 상속하는 Light 테마 `--text` 값 `#201D1D`를 확인.
+  - 기존 black SVG fill을 `#232B2B`에서 `#201D1D`로 직접 변경.
+  - SVG fill이 로그인 제목 색상과 일치하는지 검증하도록 회귀 테스트 갱신.
+- Validation:
+  - RED: 기존 `#232B2B` fill을 감지해 색상 계약 테스트 실패.
+  - GREEN: `shellStyles.test.ts` 5/5 pass.
+  - `cd web/frontend && npm test` pass (148/148).
+  - `cd web/frontend && npm run build` pass.
+- Next step:
+  - 로그인 화면에서 제목과 로고 색상 일치를 수동 확인.
+
+## 2026-06-14 11:06 (local)
+- Objective:
+  - 로그인 브랜드 로고를 48px로 확대하고 Light 테마 SVG 색상을 `#232B2B`로 변경.
+- Files changed:
+  - `web/frontend/src/styles/_auth-approvals.scss`
+  - `web/frontend/src/styles/__tests__/shellStyles.test.ts`
+  - `web/frontend/static/assets/codex-telegram-icon-black.svg`
+  - `docs/web-rearchitecture-log.md`
+- Changes:
+  - `.login-brand-icon`을 `48px × 48px`로 확대.
+  - 기존 black SVG 복사본을 만들지 않고 fill을 `#000000`에서 `#232B2B`로 직접 변경.
+  - 로고 크기와 SVG fill을 검증하는 회귀 테스트 갱신.
+- Validation:
+  - RED: 기존 32px 크기와 `#000000` fill을 감지해 테스트 2건 실패.
+  - GREEN: `shellStyles.test.ts` 5/5 pass.
+  - `cd web/frontend && npm test` pass (148/148).
+  - `cd web/frontend && npx tsc -p . --noEmit` pass.
+  - `cd web/frontend && npm run build` pass.
+- Next step:
+  - 로그인 화면에서 48px 로고의 시각적 균형을 수동 확인.
+
+## 2026-06-14 11:03 (local)
+- Objective:
+  - 로그인 화면의 테마별 브랜드 로고 크기를 24px에서 32px로 확대.
+- Files changed:
+  - `web/frontend/src/styles/_auth-approvals.scss`
+  - `web/frontend/src/styles/__tests__/shellStyles.test.ts`
+  - `docs/web-rearchitecture-log.md`
+- Changes:
+  - `.login-brand-icon`의 width와 height를 각각 `32px`로 변경.
+  - 로그인 로고 크기를 검증하는 SCSS 회귀 테스트 추가.
+- Validation:
+  - RED: 32px 크기 테스트가 기존 24px 스타일을 감지해 실패.
+  - GREEN: `shellStyles.test.ts` 4/4 pass.
+  - `cd web/frontend && npm test` pass (147/147).
+  - `cd web/frontend && npx tsc -p . --noEmit` pass.
+  - `cd web/frontend && npm run build` pass.
+  - 테스트와 TypeScript 검사를 병렬 실행하면 `tsx` 변환 간섭으로 `React is not defined`가 발생했으며, 단독 실행에서는 전체 통과.
+- Next step:
+  - 로그인 화면에서 확대된 로고 비율을 수동 확인.
+
+## 2026-06-14 10:57 (local)
+- Objective:
+  - 로그인 화면의 `[+]` 장식을 테마별 Codex Telegram SVG 로고로 교체.
+- Files changed:
+  - `web/frontend/static/assets/codex-telegram-icon-black.svg`
+  - `web/frontend/static/assets/codex-telegram-icon-ivory.svg`
+  - `web/frontend/vite.config.js`
+  - `web/frontend/src/features/auth/components/Login.tsx`
+  - `web/frontend/src/features/auth/components/__tests__/Login.test.ts`
+  - `web/frontend/src/styles/_auth-approvals.scss`
+  - `docs/web-rearchitecture-log.md`
+- Changes:
+  - Light 테마에서는 black SVG, Dark 테마에서는 `#FBFAF5` ivory SVG를 로그인 제목 앞에 표시.
+  - 기존 `[+]` pseudo-element를 제거하고 24px 로고 정렬 스타일 추가.
+  - Vite `publicDir`를 `static`으로 지정해 SVG를 production build 정적 자산으로 복사.
+  - 서버의 `/assets` 마운트와 Vite 공개 디렉터리 구조를 반영해 로고 URL을 `/assets/assets/...`로 지정.
+- Validation:
+  - RED: 로그인 테마별 SVG 경로 테스트 2건 실패 확인.
+  - GREEN: `Login.test.ts` 2/2 pass.
+  - `cd web/frontend && npm test` pass (146/146).
+  - `cd web/frontend && npx tsc -p . --noEmit` pass.
+  - `cd web/frontend && npm run lint` pass (0 errors, 기존 warnings 48).
+  - `cd web/frontend && npm run build` pass.
+  - `web/static/dist/assets/`에 black/ivory SVG 복사 및 production bundle의 `/assets/assets/...` 참조 확인.
+  - `git diff --check` pass (line-ending conversion warnings only).
+- Next step:
+  - 로그인 화면에서 Light/Dark 테마 전환 시 로고 표시를 수동 확인.
+
 ## 2026-06-13 15:36 (local)
 - Objective:
   - Stage 8 정리 및 통합 회귀: redesign 잔여 코드 제거, sidebar 타입 계약 정리, 자동 검증과 Python 3.14 서버 확인.

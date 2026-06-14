@@ -105,7 +105,7 @@ class WebServerLocalCommandTests(unittest.TestCase):
         body = response.body.decode("utf-8")
 
         self.assertIn("<!doctype html>", body)
-        self.assertIn("<title>Codex Web</title>", body)
+        self.assertIn("<title>Codex Bridge</title>", body)
         self.assertIn("/assets/", body)
 
     def test_chat_messages_propagates_turn_start_failures(self):

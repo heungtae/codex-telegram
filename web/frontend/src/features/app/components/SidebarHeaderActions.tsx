@@ -13,7 +13,7 @@ export default function SidebarHeaderActions({
 }) {
   return (
     <div className="sidebar-header-row">
-      <div className="brand">Codex Web</div>
+      <div className="brand">Codex Bridge</div>
       <div className="sidebar-top-actions">
         <IconButton
           active={turnNotificationEnabled}

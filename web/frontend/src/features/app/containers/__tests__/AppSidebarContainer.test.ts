@@ -91,6 +91,6 @@ test("AppSidebarContainer consumes runtime slices and renders sidebar content", 
 
   assert.match(html, /Project A/);
   assert.match(html, /Open Thread/);
-  assert.match(html, /Codex Web/);
+  assert.match(html, /Codex Bridge/);
   assert.doesNotMatch(html, /Other Project Thread/);
 });

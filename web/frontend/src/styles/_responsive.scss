@@ -138,8 +138,20 @@
     justify-content: flex-start;
   }
 
-  .login-card-head {
-    flex-direction: column;
+  .login {
+    grid-template-columns: 1fr;
+  }
+
+  .login-form-panel {
+    min-height: 100vh;
+  }
+
+  .login-visual-panel {
+    display: none;
+  }
+
+  .theme-toggle span {
+    display: none;
   }
 
   .msg {

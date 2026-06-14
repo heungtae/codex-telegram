@@ -95,7 +95,6 @@
   resize: vertical;
 }
 
-.ui-input:focus,
 .ui-textarea:focus,
 .ui-select:focus {
   border-color: var(--accent);
@@ -181,10 +180,6 @@
 
 .project-picker-input {
   width: 100%;
-}
-
-.project-picker-input:focus {
-  border-color: var(--accent);
 }
 
 .project-picker-list {
@@ -405,12 +400,16 @@ kbd {
   box-shadow: none;
 }
 
-.ui-input:focus,
 .ui-textarea:focus,
-.ui-select:focus,
-.project-picker-input:focus {
+.ui-select:focus {
   background: var(--panel);
   border-color: var(--text);
+  box-shadow: none;
+}
+
+.ui-input:focus,
+.project-picker-input:focus {
+  background: var(--panel);
   box-shadow: none;
 }
 
