@@ -471,35 +471,37 @@
   min-height: 280px;
   max-height: calc(100vh - 120px);
   border: 1px solid var(--border);
-  border-radius: 0;
-  background: linear-gradient(180deg, rgba(17, 27, 41, 0.96) 0%, rgba(22, 33, 50, 0.96) 100%);
+  border-radius: 10px;
+  background: var(--bg-soft);
+  color: var(--text);
   box-shadow: var(--shadow-md);
   padding: 14px;
-  backdrop-filter: blur(12px);
   overflow: auto;
   resize: both;
 }
 
 .agent-floating-settings .agent-field-textarea {
   min-height: 360px;
+  background: var(--panel-soft);
+  color: var(--text);
 }
 
 .agent-floating-settings-close {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--border);
-  background: rgba(18, 32, 48, 0.92);
-  color: var(--text);
+  border: none;
+  background: transparent;
+  color: var(--muted);
   border-radius: 0;
-  padding: 6px 12px;
+  padding: 4px 6px;
   cursor: pointer;
-  font-size: 12px;
 }
 
-.agent-floating-settings-close:hover:not(:disabled) {
-  background: rgba(24, 44, 67, 0.96);
-  border-color: #3f556f;
+.agent-floating-settings-close svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
 }
 
 .agent-floating-settings-close:disabled {
@@ -510,9 +512,10 @@
 .agent-floating-settings-note {
   font-size: 11px;
   color: var(--muted);
-  border-top: 1px solid rgba(36, 53, 72, 0.9);
+  border-top: 1px solid var(--border);
   padding-top: 10px;
 }
+
 
 .topbar-leading {
   display: flex;

@@ -1,4 +1,4 @@
-import { RefreshIcon, SaveIcon } from "../../common/components/Icons";
+import { CloseIcon, RefreshIcon, SaveIcon } from "../../common/components/Icons";
 import { FormField, Textarea } from "../../common/components/ui";
 
 export default function FloatingGuardianSettingsPanel({
@@ -18,7 +18,7 @@ export default function FloatingGuardianSettingsPanel({
   }
 
   return (
-    <div className="agent-floating-settings">
+    <div className="agent-floating-settings" onMouseDown={(e) => e.stopPropagation()}>
       <div className="agent-floating-settings-card">
         <div className="agent-settings-head">
           <strong>Guardian Rules TOML</strong>
@@ -28,7 +28,7 @@ export default function FloatingGuardianSettingsPanel({
             onClick={() => setFloatingAgentSettings("")}
             disabled={settingsBusy}
           >
-            Close
+            <CloseIcon />
           </button>
         </div>
         {floatingAgentConfig ? (

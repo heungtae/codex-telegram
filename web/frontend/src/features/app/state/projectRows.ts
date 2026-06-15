@@ -21,6 +21,7 @@ export type ProjectSessionRow = {
   key: string;
   name: string;
   path: string;
+  isDefault: boolean;
   status: string;
   isActive: boolean;
   threadTabs: ThreadTabViewModel[];
@@ -77,6 +78,7 @@ export function buildProjectRows({
           key: tab.key,
           name: tab.name || tab.key,
           path: tab.path,
+          isDefault: !!item.default,
           status: projectTabStatusById[tab.id] ?? "idle",
           isActive: tab.id === activeProjectTabId,
           threadTabs: resolveThreadTabs(threadTabsByProjectTabId[tab.id]),
@@ -93,6 +95,7 @@ export function buildProjectRows({
         key: tab.key,
         name: tab.name || tab.key,
         path: tab.path,
+        isDefault: false,
         status: projectTabStatusById[tab.id] ?? "idle",
         isActive: tab.id === activeProjectTabId,
         threadTabs: resolveThreadTabs(threadTabsByProjectTabId[tab.id]),

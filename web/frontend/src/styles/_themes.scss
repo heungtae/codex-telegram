@@ -69,6 +69,13 @@
     border-color: var(--text);
   }
 
+  .agent-floating-settings .ui-textarea:focus {
+    outline: none;
+    border-color: var(--border);
+    background: var(--panel-soft);
+    box-shadow: none;
+  }
+
   .ui-input:focus,
   .project-picker-input:focus,
   .login-card input:focus {
@@ -146,5 +153,12 @@
     background: #fff0f0;
     border-color: var(--border-strong);
     color: var(--text);
+  }
+
+  .agent-floating-settings .ui-textarea:focus {
+    outline: none;
+    border-color: var(--border);
+    background: var(--panel-soft);
+    box-shadow: none;
   }
 }

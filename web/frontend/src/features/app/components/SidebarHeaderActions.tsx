@@ -11,9 +11,17 @@ export default function SidebarHeaderActions({
   onToggleSidebarCollapsed,
   isMobileLayout,
 }) {
+  const logoSrc =
+    theme === "dark"
+      ? "/assets/assets/codex-telegram-icon-ivory.svg"
+      : "/assets/assets/codex-telegram-icon-black.svg";
+
   return (
     <div className="sidebar-header-row">
-      <div className="brand">Codex Bridge</div>
+      <div className="brand">
+        <img className="sidebar-brand-logo" src={logoSrc} alt="" aria-hidden="true" />
+        <span>Codex Bridge</span>
+      </div>
       <div className="sidebar-top-actions">
         <IconButton
           active={turnNotificationEnabled}

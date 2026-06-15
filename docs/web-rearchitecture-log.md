@@ -20,6 +20,210 @@ Rule:
   - ...
 ```
 
+## 2026-06-15 16:23 (local)
+- Objective:
+  - 프로젝트 세션과 스레드 탭의 상태별 표시를 기존 `state-running` 스타일과 동일한 범위로 통일하고, 상태마다 색상만 다르게 적용.
+- Files changed:
+  - `web/frontend/src/styles/_shell.scss`
+  - `web/frontend/src/styles/__tests__/shellStyles.test.ts`
+  - `docs/web-rearchitecture-log.md`
+- Changes:
+  - 프로젝트 세션의 `running`, `unread`, `failed`, `cancelled` 상태 색상이 행 전체나 왼쪽 테두리가 아니라 폴더 SVG와 프로젝트 제목에만 적용되도록 변경.
+  - 스레드 탭의 `running`, `completed`, `failed`, `cancelled` 상태 색상이 탭 전체나 왼쪽 테두리가 아니라 스레드 제목에만 적용되도록 변경.
+  - 기존 unread `font-weight: 600`과 active 스타일, unread 상태 점은 유지.
+  - 상태별 선택자 범위와 색상, 테두리 상태 제거, unread 굵기 유지를 검증하는 스타일 회귀 테스트 추가.
+- Validation:
+  - RED: 신규 상태 스타일 테스트에서 unread/failed/cancelled 프로젝트 선택자와 스레드 제목 전용 선택자가 없어 실패 확인.
+  - 대상 상태 스타일 테스트: 2/2 pass.
+  - `npx eslint src/styles/__tests__/shellStyles.test.ts`: pass.
+  - `cd web/frontend && npm run build`: pass (141 modules).
+- Next step:
+  - 실행 중 Web UI에서 프로젝트 세션과 스레드 탭의 각 상태가 지정된 아이콘/제목 범위에만 표시되는지 시각 확인.
+
+## 2026-06-15 14:15 (local)
+- Objective:
+  - 현재 작업 트리의 Settings 개편을 통합 정리하고, Guardian 세부 설정 드롭다운과 독립 Rules 영역을 새 UI로 구현.
+- Files changed:
+  - `web/frontend/src/features/app/components/AppSidebarFrame.tsx`
+  - `web/frontend/src/features/app/components/AppSidebarPane.tsx`
+  - `web/frontend/src/features/app/components/EnabledAgentsList.tsx`
+  - `web/frontend/src/features/app/components/RunningSubagentsList.tsx`
+  - `web/frontend/src/features/app/components/SidebarAgentsPanel.tsx`
+  - `web/frontend/src/features/app/components/SidebarGuardianSection.tsx`
+  - `web/frontend/src/features/app/components/GuardianSettingDropdown.tsx`
+  - `web/frontend/src/features/app/components/GuardianRulesSummary.tsx`
+  - `web/frontend/src/features/app/state/guardianSettingOptions.ts`
+  - `web/frontend/src/features/app/components/__tests__/AgentSettingsCard.test.ts`
+  - `web/frontend/src/features/app/components/__tests__/EnabledAgentsList.test.ts`
+  - `web/frontend/src/features/app/components/__tests__/GuardianSettingDropdown.test.ts`
+  - `web/frontend/src/features/app/components/__tests__/GuardianRulesSummary.test.ts`
+  - `web/frontend/src/features/app/components/__tests__/SidebarAgentsPanel.test.ts`
+  - `web/frontend/src/styles/_shell.scss`
+  - `docs/web-rearchitecture-log.md`
+- Changes:
+  - Settings를 사이드바 하단 버튼 기준의 고정 팝오버로 표시하고, 기본 폭 300px과 뷰포트 경계/최대 높이를 고려해 위치를 계산하는 현재 구조를 유지.
+  - `Enabled Agents` 제목과 개별 토글/설정 버튼을 제거하고 현재 활성 상태를 보여주는 읽기 전용 행으로 단순화.
+  - Guardian이 존재하면 설정을 자동 로드하고, 신규 `SidebarGuardianSection`에서 활성 스위치와 접기/펼치기 가능한 세부 설정을 표시.
+  - `Timeout`, `Failure policy`, `Explainability`의 native select를 둥근 트리거, 플로팅 메뉴, 선택 체크를 사용하는 커스텀 드롭다운으로 교체.
+  - 드롭다운 디자인 변경 과정에서 추가했던 사용자용 라벨 변환은 후속 확인에서 제거하고, `8`, `manual_fallback`, `session`, `decision_only` 등 기존 표시 값을 그대로 유지.
+  - 드롭다운에 외부 클릭 닫기, Escape 닫기/포커스 복귀, 방향키/Home/End 이동, Enter/Space 선택 동작을 추가.
+  - Rules를 Guardian 세부 폼과 분리해 항상 보이는 독립 영역으로 이동하고, `0 enabled` 또는 `3 of 5 enabled` 형식의 상태를 표시.
+  - Rules action count는 0보다 큰 항목만 사용자용 이름으로 표시하고, 기존 상위 3개 rule 목록은 제거.
+  - rule이 없을 때 `No rules configured yet.`를 표시하고, 전체 너비 `Configure rules ›` 버튼으로 기존 Guardian Rules TOML 패널을 열도록 연결.
+  - `Running Subagents`는 실행 중 항목이 있을 때만 표시하도록 빈 상태 상시 표시 실험을 원복.
+  - 실행 중인 `Running Subagents`를 `N active` 요약과 접기 기능이 있는 평면 섹션으로 변경.
+  - 서브에이전트 행의 녹색 박스/테두리를 제거하고 작은 상태 점에만 활성 색상을 적용했으며, 이름과 다른 역할만 보조 텍스트로 표시.
+  - thread 및 parent thread 식별자는 기존처럼 행 툴팁에만 유지.
+  - `EnabledAgentsList` 아래에 전용 구분선을 추가하고 Settings 팝오버에 `border-radius: 10px`를 적용.
+- Validation:
+  - RED: 신규 드롭다운 모듈 부재와 기존 Rules/패널 출력 불일치로 신규 테스트 실패 확인.
+  - Settings 타깃 테스트: 6/6 pass.
+  - 표시 값 복원 RED: `8 seconds`가 출력되어 기존 값 `8` 기대 테스트가 실패하는 것을 확인.
+  - 구분선/radius RED: 전용 목록 클래스와 `border-radius: 20%`가 없어 신규 기대 테스트가 실패하는 것을 확인.
+  - Running Subagents RED: 실행 개수, 접기 헤더, 평면 행, 상태 점 클래스가 없어 신규 테스트가 실패하는 것을 확인.
+  - `RunningSubagentsList` + `SidebarAgentsPanel` 테스트: 3/3 pass.
+  - Running Subagents 스타일 계약 테스트: pass.
+  - 첫 빌드에서 1바이트로 비어 있던 `GuardianSettingDropdown.tsx`를 앞서 검증한 구현으로 복구.
+  - `AgentSettingsCard` + `RunningSubagentsList` 회귀 테스트: 4/4 pass.
+  - 수정 Settings 파일 ESLint: pass (0 errors/warnings).
+  - `cd web/frontend && npm run build`: pass (142 modules).
+  - `git diff --check`: whitespace error 없음.
+  - `npx tsc -p . --noEmit`: fail. 기존 `SidebarProjectsPanel.test.ts` fixture에 필수 `isDefault`가 누락된 타입 오류만 발생.
+  - 인앱 브라우저가 현재 세션에 연결되어 있지 않아 실제 Settings 팝오버의 시각 검증은 수행하지 못함.
+- Next step:
+  - 실행 중인 Web UI에서 Settings를 열어 세 드롭다운의 겹침/키보드 동작과 Rules TOML 패널 연결을 수동 확인.
+  - 별도 작업으로 `SidebarProjectsPanel.test.ts` fixture의 `isDefault` 누락을 정리해 전체 TypeScript 검사를 복구.
+
+## 2026-06-15 13:40 (local)
+- Objective:
+  - Settings 팝오버의 `Running Subagents` 빈 상태 UI를 확인할 수 있도록 영역을 임시 상시 표시.
+- Files changed:
+  - `web/frontend/src/features/app/components/RunningSubagentsList.tsx`
+  - `web/frontend/src/features/app/components/__tests__/RunningSubagentsList.test.ts`
+  - `docs/web-rearchitecture-log.md`
+- Changes:
+  - `activeSubagents.length === 0`일 때 `null`을 반환하던 조기 반환을 임시 주석 처리.
+  - 실행 중인 서브에이전트가 없어도 `Running Subagents` 제목과 빈 목록 컨테이너가 표시되도록 변경.
+  - 빈 배열 테스트 기대값을 영역 표시 기준으로 임시 변경.
+- Validation:
+  - 수정 파일 ESLint: pass (0 errors/warnings).
+  - `cd web/frontend && npm run build`: pass (137 modules).
+  - `RunningSubagentsList.test.ts`: fail. 저장소의 기존 JSX 테스트 런타임 문제인 `React is not defined`로 두 테스트 모두 렌더 전 실패.
+- Next step:
+  - Web UI를 새로고침하고 Settings 팝오버에서 빈 `Running Subagents` 영역의 레이아웃을 확인.
+  - 확인 완료 후 조기 반환 및 테스트 기대값을 원복하거나 명시적인 빈 상태 문구를 설계.
+
+## 2026-06-15 12:09 (local)
+- Objective:
+  - `Open in Explorer` 클릭 시 대상 프로젝트가 아니라 Windows Documents 창이 새로 열리는 문제 수정.
+- Files changed:
+  - `web/routes.py`
+  - `tests/test_web_server_local_command.py`
+  - `docs/web-rearchitecture-log.md`
+- Changes:
+  - API 호출 전후 Explorer HWND/LocationURL을 비교해 기존 `work` 창은 그대로이고 새 Documents 창이 생성되는 현상을 재현.
+  - `os.startfile(path)`는 기존 대상 창을 재사용해 Documents 창이 전면에 남을 수 있고, Python `subprocess` 리스트 인자로 전달한 Explorer 옵션은 Documents를 여는 것을 확인.
+  - Windows 분기를 정규화된 경로와 함께 `explorer.exe /n,/e,"<path>"` 전체 명령줄 문자열로 실행하도록 변경.
+  - `/n` 옵션으로 대상 프로젝트의 새 Explorer 창을 강제하고 `/e`로 폴더 트리를 표시.
+  - 회귀 테스트를 정확한 Windows Explorer 명령줄 계약으로 갱신.
+- Validation:
+  - 공백이 포함된 고유 임시 폴더에서 명령줄 문자열 방식이 정확한 새 Explorer 창을 생성하는 것을 확인.
+  - Python 3.14: Explorer 테스트 2/2 pass.
+  - Python 3.10 + tomli shim: Explorer 테스트 2/2 pass.
+  - 서버 재시작 후 실제 `work` API 호출: HTTP 200.
+  - 호출 전후 HWND 비교에서 새 창 `file:///C:/Work/TCK/source/kosmos-application`, `LocationName=kosmos-application` 확인.
+  - `git diff --check`: whitespace error 없음.
+- Next step:
+  - Web UI에서 `work` 프로젝트의 `More options` → `Open in Explorer`를 다시 클릭해 최종 사용자 흐름 확인.
+
+## 2026-06-15 12:04 (local)
+- Objective:
+  - `Open in Explorer` API가 200을 반환하지만 Windows에서 폴더 창이 열리지 않는 문제 수정.
+- Files changed:
+  - `web/routes.py`
+  - `tests/test_web_server_local_command.py`
+  - `docs/web-rearchitecture-log.md`
+- Changes:
+  - 실제 인증 API 호출로 TOML 프로젝트 조회와 `/api/projects/open-explorer` 응답이 모두 정상임을 확인해 실패 지점을 Windows shell 실행 단계로 한정.
+  - Windows 분기의 `subprocess.Popen(["explorer", path])`를 폴더 연결 프로그램을 직접 실행하는 `os.startfile(path)`로 교체.
+  - Windows Explorer 실행 회귀 테스트를 `os.startfile` 호출 계약으로 변경.
+  - 실행 중인 Python 3.14 서버를 재시작해 변경된 라우트를 반영.
+- Validation:
+  - RED: `web.routes.os.startfile`이 없는 상태에서 새 회귀 테스트 실패 확인.
+  - Python 3.10 + tomli shim: Explorer 테스트 2/2 pass.
+  - 실제 서버 런타임 Python 3.14: Explorer 테스트 2/2 pass.
+  - 재시작 후 실제 로그인 및 `POST /api/projects/open-explorer {"project_key":"work"}`: HTTP 200, `{"ok": true}`.
+  - Windows Shell COM 창 목록에서 `file:///C:/Work/TCK/source/kosmos-application` / `kosmos-application` Explorer 창 확인.
+  - `git diff --check`: whitespace error 없음.
+- Next step:
+  - Web UI에서 `work` 프로젝트의 `More options` → `Open in Explorer`를 다시 클릭해 동일 동작을 확인.
+  - API 실패 시 현재 프런트가 오류를 무시하므로 후속 작업에서 사용자 오류 알림을 연결.
+
+## 2026-06-15 11:43 (local)
+- Objective:
+  - Projects 더보기 메뉴의 `Open in Explorer`가 클라이언트 전달 경로 대신 전역 TOML 프로젝트 프로필 경로를 사용하도록 변경.
+- Files changed:
+  - `web/routes.py`
+  - `tests/test_web_server_local_command.py`
+  - `web/frontend/src/features/app/components/SidebarProjectsPanel.tsx`
+  - `web/frontend/src/features/app/state/projectExplorer.ts`
+  - `web/frontend/src/features/app/state/__tests__/projectExplorer.test.ts`
+  - `docs/web-rearchitecture-log.md`
+- Changes:
+  - 프런트 Explorer 요청 payload를 `{ path }`에서 `{ project_key }`로 변경하고 직렬화 함수를 별도 상태 모듈로 분리.
+  - 프로젝트 기본 행과 열린 프로젝트 세션 행 모두 TOML 프로젝트 키를 메뉴 대상에 연결하되, 복수 세션의 메뉴 열림 식별자는 기존 `projectTabId`로 유지.
+  - `/api/projects/open-explorer`가 `_project_profile_by_key(project_key)`로 현재 설정 프로필을 조회하고 해당 `path`를 Windows Explorer/macOS open/Linux xdg-open에 전달하도록 변경.
+  - 존재하지 않는 프로젝트 키는 `404 project_key was not found`로 응답하도록 처리.
+  - 프로필 경로 해석 및 알 수 없는 키 거부에 대한 백엔드 회귀 테스트와 프런트 payload 계약 테스트 추가.
+- Validation:
+  - RED: 프런트 payload 테스트가 누락된 `projectExplorer` 모듈로 실패하는 것을 확인.
+  - `node --import tsx --test src/features/app/state/__tests__/projectExplorer.test.ts`: pass (1/1).
+  - Python 3.10에서 `tomli`를 `tomllib`로 주입 후 `pytest -k open_explorer`: pass (2/2).
+  - `tests/test_web_server_local_command.py` 전체: 33 pass / 3 fail. 실패는 Windows 경로 정규화와 CRLF 차이의 기존 환경 의존 테스트.
+  - 수정 프런트 파일 ESLint: 0 errors / 기존 미사용 `onCloseProjectTab` warning 1건.
+  - `cd web/frontend && npm run build`: pass (140 modules).
+  - `cd web/frontend && npx tsc -p . --noEmit`: fail. 기존 `SidebarProjectsPanel.test.ts` session fixture에 `isDefault` 필드가 누락된 상태.
+- Next step:
+  - 실행 중인 Web 서버를 재시작한 뒤 `default`, `work` 프로젝트 각각에서 `More options` → `Open in Explorer`가 해당 TOML 경로를 여는지 수동 확인.
+  - 별도 정리 작업으로 Sidebar Projects 테스트 fixture와 Windows 경로/줄바꿈 기대값을 현재 계약에 맞게 갱신.
+
+## 2026-06-15 11:24 (local)
+- Objective:
+  - 마지막 기록 이후 작업 트리에 남아 있는 Windows 실행 호환성 및 왼쪽 사이드바 UI 개편 변경을 통합 요약.
+- Files changed:
+  - `utils/single_instance.py`
+  - `web/frontend/src/features/app/components/AppSidebarFrame.tsx`
+  - `web/frontend/src/features/app/components/SidebarHeaderActions.tsx`
+  - `web/frontend/src/features/app/components/SidebarProjectsPanel.tsx`
+  - `web/frontend/src/features/app/components/SidebarThreadsPanel.tsx`
+  - `web/frontend/src/features/app/state/projectRows.ts`
+  - `web/frontend/src/features/common/components/Icons.tsx`
+  - `web/frontend/src/styles/_foundation.scss`
+  - `web/frontend/src/styles/_shell.scss`
+  - `docs/web-rearchitecture-log.md`
+- Changes:
+  - `SingleInstanceLock`이 `tempfile.gettempdir()`를 기본 잠금 경로로 사용하고, `fcntl`이 없는 Windows에서는 배타적 lock 파일 생성과 stale PID 정리 방식으로 동작하도록 변경.
+  - `/proc` 및 동일 사용자 검사에 Windows guard를 추가해 비-POSIX 환경에서 프로세스 충돌 탐색이 안전하게 종료되도록 조정.
+  - 사이드바 헤더에 Light/Dark 테마별 Codex Bridge 로고를 추가하고, 축소 상태에서는 중앙 로고가 hover 시 펼치기 아이콘으로 전환되도록 변경.
+  - 사이드바 토글 아이콘을 단순 패널 형태로 교체하고 `MoreIcon`, `ComposeIcon`을 공통 아이콘에 추가.
+  - Projects 섹션 전체 접기/펼치기 기능을 추가하고 프로젝트/세션 행을 폴더 아이콘, hover 액션, 말줄임 처리 중심의 평면 행 UI로 재구성.
+  - 기본 프로젝트 표시는 `default` 텍스트 pill에서 `D` 배지로 축약하고, 열린 프로젝트 세션에도 `isDefault` 정보를 전달해 동일 배지를 표시.
+  - 프로젝트 경로 보조 텍스트와 열린 프로젝트 세션 닫기 버튼을 제거하고, 각 프로젝트/세션 행에 `More options` 및 `New chat` 아이콘을 배치. 현재 `More options` 버튼에는 동작 핸들러가 연결되어 있지 않음.
+  - 프로젝트 내부와 Threads 목록 하단의 기존 추가 버튼을 제거하고, 새 채팅/스레드 생성 버튼을 각 섹션 헤더 또는 프로젝트 행 우측으로 이동.
+  - 전역 얇은 스크롤바 스타일과 사이드바 로고, 축소/hover, 프로젝트 행, 상태, 액션 버튼, 반응형 배치를 위한 스타일을 추가·정리.
+- Validation:
+  - `cd web/frontend && npm run build`: pass (139 modules, CSS 62.82 kB, JS 292.15 kB).
+  - `cd web/frontend && npm run lint`: pass with 0 errors / 50 warnings. 신규 경고로 미사용 `onCloseProjectTab`, `SidebarToggleIcon.collapsed`가 포함됨.
+  - `cd web/frontend && npx tsc -p . --noEmit`: fail. `SidebarProjectsPanel.test.ts`의 session fixture에 새 필수 필드 `isDefault`가 반영되지 않음.
+  - `cd web/frontend && npm test`: fail (71/152 pass, 81 fail). 다수 컴포넌트 테스트의 `React is not defined`와 로그인 패널 배경색 기대값 불일치가 확인됨.
+  - `python -m pytest tests/test_single_instance.py -q`: collection fail. 현재 기본 Python 3.10 환경에 `tomllib`이 없어 프로젝트 요구 버전인 Python 3.11+ 검증이 필요.
+  - `git diff --check`: whitespace error 없음. LF → CRLF 변환 경고만 출력.
+- Next step:
+  - `ProjectSessionRow` 테스트 fixture에 `isDefault`를 추가하고 사이드바 마크업 변경에 맞춰 Projects/Threads 테스트 기대값 갱신.
+  - 프런트 테스트 실행기의 JSX runtime 설정 또는 React import 문제와 로그인 배경색 테스트 기대값을 정리.
+  - `More options` 동작을 구현하거나 비활성 버튼을 제거하고, 프로젝트 세션 닫기 기능 제거가 의도된 UX인지 확인.
+  - Python 3.11+ 환경에서 `tests/test_single_instance.py`를 재실행하고 Windows lock 획득/중복/stale lock 경로를 검증.
+
 ## 2026-06-14 12:11 (local)
 - Objective:
   - 앱 전체 HTML input의 포커스 테두리와 outline을 제거하고 배경 변화는 유지.

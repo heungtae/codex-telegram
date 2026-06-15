@@ -1,6 +1,7 @@
 import { useId, useState } from "react";
 
 import { IconButton } from "../../common/components/ui";
+import { ComposeIcon } from "../../common/components/Icons";
 import { normalizeThreadId } from "../../common/utils";
 
 export default function SidebarThreadsPanel({
@@ -42,6 +43,15 @@ export default function SidebarThreadsPanel({
           <span className="threads-toggle-label">Threads</span>
           <span className="threads-toggle-chevron" aria-hidden="true" />
         </button>
+        <IconButton
+          className="threads-compose-btn"
+          onClick={handleAddThread}
+          ariaLabel="Add thread"
+          title="New thread"
+          disabled={disableAddThread}
+        >
+          <ComposeIcon />
+        </IconButton>
       </div>
       {isOpen ? (
         <div id={listId} className="threads-list">
@@ -85,20 +95,6 @@ export default function SidebarThreadsPanel({
           {rows.length === 0 ? (
             <div className="panel-note">No threads in this project.</div>
           ) : null}
-          <IconButton
-            className="session-tab-add"
-            onClick={handleAddThread}
-            ariaLabel="Add thread tab"
-            title="Add thread tab"
-            disabled={disableAddThread}
-          >
-            <img
-              className="tab-action-icon"
-              src="/assets/icons-tab-add.svg"
-              alt=""
-              aria-hidden="true"
-            />
-          </IconButton>
         </div>
       ) : null}
     </section>

@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import SidebarAgentsPanel from "../SidebarAgentsPanel";
 
-test("SidebarAgentsPanel renders enabled agents, subagents, and guardian settings", () => {
+test("SidebarAgentsPanel renders agents, active subagents, guardian settings, then rules", () => {
   const html = renderToStaticMarkup(
     React.createElement(SidebarAgentsPanel, {
       sessionSummary: { agents: [{ name: "guardian", enabled: true }] },
@@ -17,9 +17,9 @@ test("SidebarAgentsPanel renders enabled agents, subagents, and guardian setting
       agentConfigError: "",
       activeAgentDef: {
         title: "Guardian",
-        fields: [{ key: "timeout", label: "Timeout", options: [10, 20] }],
+        fields: [{ key: "timeout_seconds", label: "Timeout", options: [3, 20] }],
       },
-      activeAgentConfig: { enabled: true, timeout: 10 },
+      activeAgentConfig: { enabled: true, timeout_seconds: 20 },
       settingsBusy: false,
       updateAgentDraft: () => {},
       activeAgentSettings: "guardian",
@@ -37,10 +37,14 @@ test("SidebarAgentsPanel renders enabled agents, subagents, and guardian setting
     })
   );
 
-  assert.match(html, /Enabled Agents/);
   assert.match(html, /guardian/);
   assert.match(html, /Running Subagents/);
   assert.match(html, /reviewer/);
-  assert.match(html, /Rules: 1\/2 enabled/);
-  assert.match(html, /class="ui-panel panel"/);
+  assert.match(html, />20</);
+  assert.match(html, /1 of 2 enabled/);
+
+  const guardianIndex = html.indexOf("Guardian");
+  const rulesIndex = html.indexOf(">Rules<");
+  assert.ok(guardianIndex >= 0);
+  assert.ok(rulesIndex > guardianIndex);
 });

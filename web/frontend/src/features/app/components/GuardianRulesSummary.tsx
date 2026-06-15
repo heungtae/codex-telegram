@@ -1,5 +1,11 @@
-import { SettingsIcon } from "../../common/components/Icons";
-import { EmptyState } from "../../common/components/ui";
+import React from "react";
+
+const ACTION_LABELS = {
+  approve: "Approve",
+  session: "Approve for session",
+  deny: "Deny",
+  manual_fallback: "Ask for approval",
+};
 
 export default function GuardianRulesSummary({
   guardianRuleSummary,
@@ -7,47 +13,45 @@ export default function GuardianRulesSummary({
   toggleFloatingAgentSettings,
   settingsBusy,
 }) {
+  const enabled = guardianRuleSummary?.enabled || 0;
+  const total = guardianRuleSummary?.total || 0;
+  const actionCounts = guardianRuleSummary?.action_counts || {};
+  const visibleActions = Object.entries(ACTION_LABELS).filter(
+    ([action]) => (actionCounts[action] || 0) > 0
+  );
+
   return (
-    <div className="agent-settings-summary">
-      <div className="agent-settings-summary-title">
-        Rules: {guardianRuleSummary.enabled || 0}/{guardianRuleSummary.total || 0} enabled
+    <section className="guardian-rules-section">
+      <div className="guardian-rules-head">
+        <h3>Rules</h3>
+        <span className="guardian-rules-status">
+          {total > 0 ? `${enabled} of ${total} enabled` : `${enabled} enabled`}
+        </span>
       </div>
-      {guardianRuleSummary.action_counts ? (
-        <div className="agent-settings-summary-actions">
-          {["approve", "session", "deny", "manual_fallback"].map((action) => (
+      {visibleActions.length ? (
+        <div className="guardian-rules-actions">
+          {visibleActions.map(([action, label]) => (
             <span key={action}>
-              {action}: {guardianRuleSummary.action_counts[action] || 0}
+              <strong>{actionCounts[action]}</strong>
+              {label}
             </span>
           ))}
         </div>
       ) : null}
-      {Array.isArray(guardianRuleSummary.top) && guardianRuleSummary.top.length ? (
-        <div className="agent-settings-summary-list">
-          {guardianRuleSummary.top.slice(0, 3).map((rule, index) => (
-            <div key={`${rule.name || "rule"}:${index}`} className="agent-settings-summary-item">
-              <span>{rule.name || "unnamed-rule"}</span>
-              <span>{`${rule.action || "deny"} · p${rule.priority || 0}`}</span>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <EmptyState className="agent-settings-empty">
-          No guardian policy rules configured.
-        </EmptyState>
-      )}
-      <div className="agent-settings-summary-footer">
+      {total === 0 ? <p className="guardian-rules-empty">No rules configured yet.</p> : null}
+      <div className="guardian-rules-footer">
         <button
-          className={`agent-settings-inline-btn ${floatingAgentSettings === "guardian" ? "active" : ""}`}
+          className={`guardian-rules-configure${floatingAgentSettings === "guardian" ? " active" : ""}`}
           type="button"
           onClick={() => toggleFloatingAgentSettings("guardian")}
           disabled={settingsBusy}
           aria-label="Rules TOML"
           title="Rules TOML"
         >
-          <SettingsIcon />
-          <span>Settings</span>
+          <span>Configure rules</span>
+          <span aria-hidden="true">›</span>
         </button>
       </div>
-    </div>
+    </section>
   );
 }

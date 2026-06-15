@@ -34,7 +34,7 @@ test("AgentSettingsCard renders fields, enabled state, and actions", () => {
   assert.match(html, /class="agent-status-chip on"/);
   assert.match(html, /Timeout/);
   assert.match(html, /value="10" selected/);
-  assert.match(html, /Rules: 1\/2 enabled/);
+  assert.match(html, /1 of 2 enabled/);
   assert.match(html, /aria-label="Refresh"/);
   assert.match(html, /aria-label="Save"/);
 });

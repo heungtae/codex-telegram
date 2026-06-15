@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import GuardianRulesSummary from "../GuardianRulesSummary";
 
-test("GuardianRulesSummary renders counts, top rules, and active settings action", () => {
+test("GuardianRulesSummary renders enabled status, non-zero actions, and configure action", () => {
   const html = renderToStaticMarkup(
     React.createElement(GuardianRulesSummary, {
       guardianRuleSummary: {
@@ -20,14 +20,17 @@ test("GuardianRulesSummary renders counts, top rules, and active settings action
     })
   );
 
-  assert.match(html, /Rules: 1\/2 enabled/);
-  assert.match(html, /approve: 1/);
-  assert.match(html, /deny: 1/);
-  assert.match(html, /allow-safe/);
-  assert.match(html, /class="agent-settings-inline-btn active"/);
+  assert.match(html, />Rules</);
+  assert.match(html, /1 of 2 enabled/);
+  assert.match(html, /Approve/);
+  assert.match(html, /Deny/);
+  assert.doesNotMatch(html, /Session/);
+  assert.doesNotMatch(html, /allow-safe/);
+  assert.match(html, /Configure rules/);
+  assert.match(html, /class="guardian-rules-configure active"/);
 });
 
-test("GuardianRulesSummary renders empty state without top rules", () => {
+test("GuardianRulesSummary renders an always-visible empty rules section", () => {
   const html = renderToStaticMarkup(
     React.createElement(GuardianRulesSummary, {
       guardianRuleSummary: { enabled: 0, total: 0, action_counts: null, top: [] },
@@ -37,5 +40,7 @@ test("GuardianRulesSummary renders empty state without top rules", () => {
     })
   );
 
-  assert.match(html, /No guardian policy rules configured/);
+  assert.match(html, /0 enabled/);
+  assert.match(html, /No rules configured yet/);
+  assert.match(html, /Configure rules/);
 });

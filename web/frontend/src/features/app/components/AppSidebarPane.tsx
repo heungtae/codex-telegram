@@ -63,10 +63,10 @@ export default function AppSidebarPane({
       settingsContent={
         <SidebarAgentsPanel
           sessionSummary={sessionSummary}
+          openAgentSettings={openAgentSettings}
           toggleAgent={toggleAgent}
           agentConfigLoading={agentConfigLoading}
           agentConfigSaving={agentConfigSaving}
-          openAgentSettings={openAgentSettings}
           activeSubagents={activeSubagents}
           agentConfigError={agentConfigError}
           activeAgentDef={activeAgentDef}

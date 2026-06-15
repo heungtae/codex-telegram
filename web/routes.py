@@ -1,7 +1,10 @@
 import asyncio
 import json
 import logging
+import os
+import platform
 import shlex
+import subprocess
 from importlib import import_module
 from typing import Any
 
@@ -596,6 +599,26 @@ def register_project_routes(app: FastAPI) -> None:
         if state_user.active_turn_id:
             raise HTTPException(status_code=409, detail="Cannot switch project while a turn is running.")
         return await route_command("/project", [target], session.user_id)
+
+    @app.post("/api/projects/open-explorer")
+    async def open_project_in_explorer(payload: dict[str, Any], request: Request) -> dict[str, Any]:
+        await session_from_request(request)
+        project_key = _required_str(payload, "project_key")
+        project = _project_profile_by_key(project_key)
+        if project is None:
+            raise HTTPException(status_code=404, detail="project_key was not found")
+        path = project["path"]
+        try:
+            if platform.system() == "Windows":
+                windows_path = os.path.normpath(path)
+                subprocess.Popen(f'explorer.exe /n,/e,"{windows_path}"')
+            elif platform.system() == "Darwin":
+                subprocess.Popen(["open", path])
+            else:
+                subprocess.Popen(["xdg-open", path])
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+        return {"ok": True}
 
     @app.post("/api/projects/open-thread")
     async def open_project_thread(payload: dict[str, Any], request: Request) -> dict[str, Any]:

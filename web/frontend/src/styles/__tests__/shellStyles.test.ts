@@ -42,9 +42,52 @@ const sidebarContainerTest = readFileSync(
   "utf8",
 );
 
-test("project session active and unread states have visual styles", () => {
+test("project session states color only the folder and title", () => {
   assert.match(shellStyles, /\.project-session-row\.active\s*\{/);
-  assert.match(shellStyles, /\.project-session-row\.state-unread\s*\{/);
+  for (const [state, color] of [
+    ["running", "var\\(--accent\\)"],
+    ["unread", "#48b46f"],
+    ["failed", "#e05c5c"],
+    ["cancelled", "var\\(--muted\\)"],
+  ]) {
+    assert.match(
+      shellStyles,
+      new RegExp(`\\.project-session-row\\.state-${state} \\.project-session-name svg\\s*\\{[\\s\\S]*?color:\\s*${color}`),
+    );
+    assert.match(
+      shellStyles,
+      new RegExp(`\\.project-session-row\\.state-${state} \\.project-session-title\\s*\\{[\\s\\S]*?color:\\s*${color}`),
+    );
+  }
+
+  assert.doesNotMatch(
+    shellStyles,
+    /\.project-session-row\.state-(?:unread|failed|cancelled)\s*\{[\s\S]*?border-left-color:/,
+  );
+  assert.match(
+    shellStyles,
+    /\.project-session-row\.state-unread\s*\{[\s\S]*?font-weight:\s*600/,
+  );
+});
+
+test("thread states color only the thread title", () => {
+  for (const [state, color] of [
+    ["running", "var\\(--accent\\)"],
+    ["completed", "#48b46f"],
+    ["failed", "#dd5d67"],
+    ["cancelled", "#e39e4f"],
+  ]) {
+    assert.match(
+      shellStyles,
+      new RegExp(`\\.thread-tab-item\\.state-${state} \\.session-tab-title\\s*\\{[\\s\\S]*?color:\\s*${color}`),
+    );
+  }
+
+  assert.doesNotMatch(
+    shellStyles,
+    /\.thread-tab-item\.state-(?:completed|failed|cancelled)\s*\{[\s\S]*?border-left-color:/,
+  );
+  assert.match(shellStyles, /\.thread-tab-item\.unread\s*\{[\s\S]*?font-weight:\s*600/);
 });
 
 test("settings popover is a fixed layer independent of the sidebar", () => {
@@ -54,7 +97,37 @@ test("settings popover is a fixed layer independent of the sidebar", () => {
 
   assert.ok(popoverRule, "settings popover styles must exist");
   assert.match(popoverRule[1], /position:\s*fixed/);
+  assert.match(popoverRule[1], /border-radius:\s*10px/);
   assert.doesNotMatch(popoverRule[1], /right:\s*0/);
+});
+
+test("enabled agents list has a bottom divider", () => {
+  const enabledAgentsRule = shellStyles.match(
+    /\.enabled-agents-list\s*\{([\s\S]*?)\n\}/,
+  );
+
+  assert.ok(enabledAgentsRule, "enabled agents divider styles must exist");
+  assert.match(enabledAgentsRule[1], /border-bottom:\s*1px solid var\(--border\)/);
+});
+
+test("running subagents use a flat list with a status-only accent", () => {
+  const sectionRule = shellStyles.match(
+    /\.running-subagents-section\s*\{([\s\S]*?)\n\}/,
+  );
+  const itemRule = shellStyles.match(
+    /\.running-subagent-item\s*\{([\s\S]*?)\n\}/,
+  );
+  const statusDotRule = shellStyles.match(
+    /\.running-subagent-status-dot\s*\{([\s\S]*?)\n\}/,
+  );
+
+  assert.ok(sectionRule, "running subagents section styles must exist");
+  assert.match(sectionRule[1], /border-bottom:\s*1px solid var\(--border\)/);
+  assert.ok(itemRule, "running subagent item styles must exist");
+  assert.match(itemRule[1], /background:\s*transparent/);
+  assert.doesNotMatch(itemRule[1], /border:/);
+  assert.ok(statusDotRule, "running subagent status dot styles must exist");
+  assert.match(statusDotRule[1], /background:\s*var\(--success\)/);
 });
 
 test("login brand icon is 48px square", () => {
@@ -95,7 +168,7 @@ test("login layout splits the form and illustration evenly", () => {
   assert.ok(formPanelRule, "login form panel styles must exist");
   assert.match(formPanelRule[1], /padding:\s*24px/);
   assert.ok(visualPanelRule, "login visual panel styles must exist");
-  assert.match(visualPanelRule[1], /background:\s*#fbfaf9/i);
+  assert.match(visualPanelRule[1], /background:\s*#faf8f4/i);
   assert.ok(visualImageRule, "login visual image styles must exist");
   assert.match(visualImageRule[1], /width:\s*80%/);
   assert.match(visualImageRule[1], /height:\s*80%/);

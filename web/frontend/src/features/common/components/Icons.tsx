@@ -17,14 +17,10 @@ export function SidebarToggleIcon({ collapsed = false }) {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path
+        fill="currentColor"
         fillRule="evenodd"
-        d="M3 4a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h18a1 1 0 0 0 1-1V5a1 1 0 0 0-1-1H3zm0 1h7v13H3V5zm9 0v13h9V5h-9z"
+        d="M2 3h20v18H2V3zm1 1h5v16H3V4zm7 0h11v16H10V4z"
       />
-      {collapsed ? (
-        <path d="M6 10l3.5 2L6 14V10z" />
-      ) : (
-        <path d="M9.5 10L6 12l3.5 2V10z" />
-      )}
     </svg>
   );
 }
@@ -142,6 +138,24 @@ export function ResetSizeIcon() {
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M6 6h5V4H4v7h2Zm13 0v5h2V4h-7v2Zm-5 12h5v-5h2v7h-7Zm-8-5H4v7h7v-2H6Z" />
       <path d="M8 9h8v6H8z" />
+    </svg>
+  );
+}
+
+export function MoreIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="5" cy="12" r="1.5" fill="currentColor" />
+      <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+      <circle cx="19" cy="12" r="1.5" fill="currentColor" />
+    </svg>
+  );
+}
+
+export function ComposeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
     </svg>
   );
 }
