@@ -35,6 +35,45 @@ export function getWorkspaceTreeChildren(item, workspaceTree) {
   return Array.isArray(item.children) ? item.children : [];
 }
 
+function workspaceItemMatches(item, query) {
+  const needle = query.toLowerCase();
+  const name = typeof item?.name === "string" ? item.name : "";
+  const path = normalizeWorkspacePath(item?.path);
+  return name.toLowerCase().includes(needle) || path.toLowerCase().includes(needle);
+}
+
+function filterWorkspaceTreePath(path, workspaceTree, query, nextTree, visiting = new Set()) {
+  const normalizedPath = normalizeWorkspacePath(path);
+  if (visiting.has(normalizedPath)) {
+    return [];
+  }
+  visiting.add(normalizedPath);
+  const items = Array.isArray(workspaceTree[normalizedPath]) ? workspaceTree[normalizedPath] : [];
+  const filteredItems = [];
+  for (const item of items) {
+    const itemPath = normalizeWorkspacePath(item?.path);
+    const children = item?.type === "directory"
+      ? filterWorkspaceTreePath(itemPath, workspaceTree, query, nextTree, visiting)
+      : [];
+    if (workspaceItemMatches(item, query) || children.length > 0) {
+      filteredItems.push(item);
+    }
+  }
+  visiting.delete(normalizedPath);
+  nextTree[normalizedPath] = filteredItems;
+  return filteredItems;
+}
+
+export function filterWorkspaceTree(workspaceTree, query) {
+  const normalizedQuery = typeof query === "string" ? query.trim() : "";
+  if (!normalizedQuery) {
+    return workspaceTree;
+  }
+  const nextTree = {};
+  filterWorkspaceTreePath("", workspaceTree || {}, normalizedQuery, nextTree);
+  return nextTree;
+}
+
 export function collectCompactWorkspaceEntry({
   item,
   workspaceTree,

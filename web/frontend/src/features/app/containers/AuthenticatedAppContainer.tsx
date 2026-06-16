@@ -16,6 +16,18 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
     domains,
   });
 
+  const {
+    workspacePanel,
+    isWorkspaceExpanded,
+    isResizingWorkspacePanel,
+    onStartWorkspacePanelResize,
+  } = conversation.workspace;
+  const {
+    isWorkspacePanelOpen,
+    isCompactWorkspaceLayout,
+    onToggleWorkspacePanel,
+  } = conversation.composer;
+
   return (
     <AppRuntimeProvider value={contextValue}>
       <AuthenticatedAppLayout
@@ -31,6 +43,13 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
         isSidebarOpen={layout.isSidebarOpen}
         onToggleSidebarOpen={layout.onToggleSidebarOpen}
         MenuIcon={layout.MenuIcon}
+        rightPanel={workspacePanel}
+        isWorkspacePanelOpen={isWorkspacePanelOpen}
+        isCompactWorkspaceLayout={isCompactWorkspaceLayout}
+        isWorkspaceExpanded={isWorkspaceExpanded}
+        isResizingWorkspacePanel={isResizingWorkspacePanel}
+        onStartWorkspacePanelResize={onStartWorkspacePanelResize}
+        onToggleWorkspacePanel={onToggleWorkspacePanel}
       />
     </AppRuntimeProvider>
   );

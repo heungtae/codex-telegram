@@ -13,7 +13,7 @@ export default function useWorkspaceDomain({
   readWorkspacePreviewHeight,
   workspacePreviewDefaults,
 }) {
-  const [workspacePanelWidth, setWorkspacePanelWidth] = useState(320);
+  const [workspacePanelWidth, setWorkspacePanelWidth] = useState(520);
   const [isResizingWorkspacePanel, setIsResizingWorkspacePanel] = useState(false);
   const [workspacePreviewWidth, setWorkspacePreviewWidth] = useState(() =>
     readWorkspacePreviewWidth(

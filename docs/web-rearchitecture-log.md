@@ -20,6 +20,199 @@ Rule:
   - ...
 ```
 
+## 2026-06-16 (local)
+- Objective:
+  - Workspace panel을 `.main` 내부 `.workspace-layout`에서 `.app` flex 레벨의 오른쪽 사이드바로 분리. 왼쪽 사이드바와 동일한 구조로 독립된 `workspace-right-sidebar` 생성.
+  - 오른쪽 사이드바 최소 너비를 왼쪽 사이드바 기본 너비(340px)와 동일하게 설정.
+  - Preview 배경색을 TOML 편집 textarea와 동일한 `var(--bg-soft)` (dark: `#292525`, light: `#f8f7f7`)로 변경.
+- Files changed:
+  - `web/frontend/src/features/app/containers/AuthenticatedAppContainer.tsx`
+  - `web/frontend/src/features/app/components/AuthenticatedAppLayout.tsx`
+  - `web/frontend/src/features/app/components/AppCenterPanePresenter.tsx`
+  - `web/frontend/src/features/app/components/AppConversationPane.tsx`
+  - `web/frontend/src/features/app/hooks/useAppRuntimeEffects.ts`
+  - `web/frontend/src/styles/_shell.scss`
+  - `web/frontend/src/styles/_themes.scss`
+- Changes:
+  - `AuthenticatedAppContainer.tsx`: `conversation.workspace`에서 `workspacePanel`, `isWorkspaceExpanded`, `isResizingWorkspacePanel`, `onStartWorkspacePanelResize` 추출; `conversation.composer`에서 `isWorkspacePanelOpen`, `isCompactWorkspaceLayout`, `onToggleWorkspacePanel` 추출; 모두 `AuthenticatedAppLayout`에 신규 props로 전달.
+  - `AuthenticatedAppLayout.tsx`: 신규 right sidebar 관련 props 수용; `.main` 뒤에 `workspace-right-resizer`(6px 드래그 핸들) + `workspace-right-sidebar` 렌더 추가; open 상태에서 `rightPanel` JSX 표시, closed 상태에서 40px 토글 버튼 표시; `isWorkspaceExpanded` 상태를 `.app` 클래스(`workspace-expanded`)로 적용.
+  - `AppCenterPanePresenter.tsx`: 데스크탑 workspace panel shell/resizer/rail 제거, compact 모드(`isCompactWorkspaceLayout && isWorkspacePanelOpen`) overlay만 유지; 불필요 props(`onToggleWorkspacePanel`, `isResizingWorkspacePanel`, `onStartWorkspacePanelResize`, `isWorkspaceExpanded`) 제거.
+  - `AppConversationPane.tsx`: workspace 객체 구조분해에서 `isWorkspaceExpanded`, `isResizingWorkspacePanel`, `onStartWorkspacePanelResize` 제거; `AppCenterPanePresenter`에 전달하는 props 정리.
+  - `useAppRuntimeEffects.ts`: `WORKSPACE_PANEL_MIN` 360 → 340.
+  - `_shell.scss`: `.workspace-panel { min-width: 360px }` → `340px`; 기존 `.workspace-layout.workspace-expanded` 블록 전체 제거; 신규 `.workspace-right-sidebar`, `.workspace-right-resizer` CSS 추가; `.workspace-right-sidebar .workspace-panel { border: none; box-shadow: none }`으로 이중 border 방지; `.workspace-right-sidebar .workspace-panel.desktop { margin-top: 0; height: 100% }`로 상단 여백 제거; `.app.workspace-expanded` 기반 expand CSS 추가(`.main { display: none }`, 오른쪽 사이드바 `flex: 1 1 auto`).
+  - `_themes.scss`: dark·light 양쪽 블록에서 `.workspace-preview-panel`을 공통 패널 그룹에서 분리, `background: var(--bg-soft)` 별도 규칙으로 지정.
+- Validation:
+  - `cd web/frontend && npm run build`: pass (140 modules, CSS 75.92 kB, JS 300.17 kB)
+- Next step:
+  - 브라우저에서 오른쪽 사이드바 구조 확인: workspace panel이 `.main` 밖의 독립 사이드바로 표시되는지, 리사이저 드래그, expand/collapse, 닫힌 상태 40px 버튼, preview 배경색 변경.
+
+## 2026-06-16 (local)
+- Objective:
+  - A. Composer 카드 배경색을 내부 textarea/bottom-bar 와 동일하게 통일 (dark 테마)
+  - B. `+` 버튼 hover 시 배경색 표시 — light: 살짝 어둡게, dark: 살짝 밝게
+  - C. Workspace panel 상단에 통합 헤드 추가 — 좌측 preview path + 우측 액션 버튼 3개 (폴더, 확장, 새로고침)
+  - D. Workspace panel 닫힌 상태(rail) 버튼을 40×40 정사각형으로 수정하여 상단에만 위치
+- Files changed:
+  - `web/frontend/src/styles/_themes.scss`
+  - `web/frontend/src/styles/_composer.scss`
+  - `web/frontend/src/styles/_workspace.scss`
+  - `web/frontend/src/styles/_shell.scss`
+  - `web/frontend/src/features/common/components/Icons.tsx`
+  - `web/frontend/src/features/workspace/components/WorkspacePanel.tsx`
+  - `web/frontend/src/features/workspace/components/WorkspacePreviewPanel.tsx`
+  - `web/frontend/src/features/app/components/AppCenterPanePresenter.tsx`
+  - `web/frontend/src/features/app/components/AppConversationPane.tsx`
+  - `web/frontend/src/features/app/components/AppWorkspacePanelSlot.tsx`
+  - `web/frontend/src/features/app/hooks/useAppRuntimePresentation.tsx`
+  - `web/frontend/src/features/app/hooks/useUiDomain.ts`
+- Changes:
+  - `_themes.scss`: dark 블록에서 `.composer`를 공통 패널 그룹에서 분리 → `background: #292525` 단독 지정
+  - `_themes.scss`: dark 블록에 `.composer-new-chat:hover:not(:disabled) { background: #3a3636 }` 추가
+  - `_composer.scss`: `.composer-new-chat:hover:not(:disabled)` hover 배경을 `var(--bg-soft)` 추가 (light theme)
+  - `Icons.tsx`: `ExpandIcon({ expanded })` 추가 — collapsed 상태: 바깥쪽 모서리 브래킷 `⌈⌋`, expanded 상태: 안쪽으로 모인 브래킷
+  - `WorkspacePanel.tsx`: `.workspace-sidebar-topbar` 유지, 그 아래 `.workspace-unified-head` 신규 삽입 — 좌측 preview path, 우측 폴더/확장/새로고침 버튼; `isStructurePanelVisible` 로컬 state; `isWorkspaceExpanded`/`onToggleWorkspaceExpand` props 추가; `.workspace-structure-head` 제거
+  - `WorkspacePreviewPanel.tsx`: `inline` prop일 때 `.workspace-preview-head` 렌더 안 함 (modal overlay는 유지)
+  - `_workspace.scss`: `.workspace-unified-head`, `.workspace-unified-head-path`, `.workspace-unified-head-actions`, `.workspace-unified-action` 스타일 추가; `.workspace-unified-expand svg` 스트로크 오버라이드 추가
+  - `_shell.scss`: `.workspace-layout.workspace-expanded` expand CSS 추가; `.workspace-panel-rail` → `height: 40px; align-self: flex-start`; `.workspace-panel-rail-toggle` → `width: 40px; height: 40px`
+  - `useUiDomain.ts`, `useAppRuntimePresentation.tsx`, `AppWorkspacePanelSlot.tsx`, `AppConversationPane.tsx`, `AppCenterPanePresenter.tsx`: `isWorkspaceExpanded` 상태 생성 및 prop 전달 체인 완성
+- Validation:
+  - `cd web/frontend && npm run build`: pass, 140 modules, no errors
+- Next step:
+  - 브라우저에서 시각 확인: composer dark 배경 통일, + 버튼 hover 효과, 통합 헤드 표시, expand 기능, rail 정사각형 버튼
+
+## 2026-06-16 12:02 (local)
+- Objective:
+  - 오른쪽 sidebar를 workspace 본문과 분리하고, preview를 왼쪽 / 디렉토리 구조를 오른쪽으로 재배치.
+- Files changed:
+  - `web/frontend/src/features/app/components/AppCenterPanePresenter.tsx`
+  - `web/frontend/src/features/app/components/AppConversationPane.tsx`
+  - `web/frontend/src/features/app/components/AppWorkspacePanelSlot.tsx`
+  - `web/frontend/src/features/app/hooks/useAppRuntimePresentation.tsx`
+  - `web/frontend/src/features/workspace/components/WorkspacePanel.tsx`
+  - `web/frontend/src/styles/_shell.scss`
+  - `web/frontend/src/styles/_workspace.scss`
+  - `web/frontend/src/features/app/components/__tests__/AppConversationPane.test.ts`
+  - `web/frontend/src/features/app/components/__tests__/AppWorkspacePanelSlot.test.ts`
+- Changes:
+  - desktop right sidebar를 outer shell로 분리하고 collapse/expand 레일을 추가.
+  - WorkspacePanel 내부를 preview-left / tree-right 수평 분할로 재구성.
+  - sidebar body가 남은 높이를 모두 채우도록 shell/body flex 규칙을 재정리.
+  - preview overlay는 compact/mobile에서만 유지하도록 desktop 경로를 명확히 분리.
+- Validation:
+  - RED: desktop collapsed rail / preview-left tree-right 기대값이 기존 렌더와 불일치함을 확인.
+  - `node --import tsx --test src/features/app/components/__tests__/AppWorkspacePanelSlot.test.ts src/features/app/components/__tests__/AppConversationPane.test.ts src/features/workspace/workspaceTreeModel.test.ts src/features/workspace/components/__tests__/WorkspacePanelHeader.test.ts`: 9/9 pass.
+  - `npx eslint ...`: pass, no warnings.
+  - `cd web/frontend && npm run build`: pass (140 modules).
+- Next step:
+  - 실행 중 UI에서 desktop sidebar collapse/expand와 preview/tree 좌우 배치를 시각 확인.
+
+## 2026-06-16 11:42 (local)
+- Objective:
+  - Workspace 오른쪽 패널을 Codex Desktop 스타일의 고정 사이드바 구조로 변경하고 `Open` 버튼을 제거.
+- Files changed:
+  - `web/frontend/src/features/workspace/components/WorkspacePanel.tsx`
+  - `web/frontend/src/features/workspace/components/WorkspacePreviewPanel.tsx`
+  - `web/frontend/src/features/app/components/AppConversationPane.tsx`
+  - `web/frontend/src/features/app/components/AppWorkspacePanelSlot.tsx`
+  - `web/frontend/src/features/app/hooks/useWorkspaceDomain.ts`
+  - `web/frontend/src/features/app/hooks/useAppRuntimeEffects.ts`
+  - `web/frontend/src/features/common/components/Icons.tsx`
+  - `web/frontend/src/styles/_workspace.scss`
+  - `web/frontend/src/styles/_shell.scss`
+  - `web/frontend/src/features/app/components/__tests__/AppConversationPane.test.ts`
+  - `web/frontend/src/features/app/components/__tests__/AppWorkspacePanelSlot.test.ts`
+- Changes:
+  - Workspace 패널 상단을 현재 파일 탭 + 프로젝트 구조 토글 버튼으로 재구성하고 `Open` 버튼/breadcrumb UI를 제거.
+  - 프로젝트 구조를 오른쪽 패널 내부 왼쪽 컬럼으로 배치하고, 토글 버튼으로 구조 컬럼을 접고 펼칠 수 있게 변경.
+  - 데스크톱에서는 파일 preview를 overlay 대신 오른쪽 패널 내부 inline viewer로 표시하고, compact/mobile에서는 기존 overlay 동작을 유지.
+  - 파일 트리와 preview를 함께 볼 수 있도록 오른쪽 패널 기본 폭 및 resize 한계를 확대.
+  - SSR 테스트에서 새로 직접 렌더링되는 공통 아이콘을 위해 `Icons.tsx`에 React import를 명시.
+- Validation:
+  - RED: Workspace 패널 테스트에서 파일 탭/inline preview/구조 토글/Open 제거 기대값 실패 확인.
+  - RED: 데스크톱 preview overlay 억제 테스트 실패 확인.
+  - GREEN: `node --import tsx --test src/features/app/components/__tests__/AppWorkspacePanelSlot.test.ts`: 2/2 pass.
+  - GREEN: `node --import tsx --test src/features/app/components/__tests__/AppConversationPane.test.ts`: 4/4 pass.
+  - Final targeted tests: `node --import tsx --test src/features/app/components/__tests__/AppWorkspacePanelSlot.test.ts src/features/app/components/__tests__/AppConversationPane.test.ts src/features/workspace/workspaceTreeModel.test.ts src/features/workspace/components/__tests__/WorkspacePanelHeader.test.ts`: 9/9 pass.
+  - Modified file ESLint: pass, no warnings.
+  - `cd web/frontend && npm run build`: pass (140 modules).
+- Next step:
+  - 실행 중 UI에서 오른쪽 패널 폭/토글/inline preview를 시각 확인.
+
+## 2026-06-16 11:24 (local)
+- Objective:
+  - Workspace 패널의 `Open` 버튼이 placeholder로 남아 있어 클릭해도 동작하지 않는 문제 수정.
+- Files changed:
+  - `web/frontend/src/features/app/components/AppWorkspacePanelSlot.tsx`
+  - `web/frontend/src/features/app/hooks/useAppRuntimePresentation.tsx`
+  - `web/frontend/src/features/app/state/projectExplorer.ts`
+  - `web/frontend/src/features/app/state/__tests__/projectExplorer.test.ts`
+  - `web/frontend/src/features/workspace/components/WorkspacePanel.tsx`
+  - `docs/web-rearchitecture-log.md`
+- Changes:
+  - `Open` 버튼은 폴더 구조를 접는 버튼이 아니라 현재 프로젝트 폴더를 외부 Explorer로 여는 버튼으로 정의.
+  - 기존 `/api/projects/open-explorer` API를 재사용하도록 `openProjectInExplorer` helper를 추가.
+  - Workspace 패널에 현재 `activeProjectKey`를 전달하고, 프로젝트 키가 없을 때는 `Open` 버튼을 비활성화.
+  - 실패 시 toast로 `Failed to open workspace.`를 표시하도록 연결.
+- Validation:
+  - RED: `openProjectInExplorer` export 부재로 신규 helper 테스트 실패 확인.
+  - `projectExplorer` + Workspace targeted tests: 9/9 pass.
+  - 수정 파일 ESLint: pass.
+  - `cd web/frontend && npm run build`: pass (141 modules).
+  - `git diff --check` 대상 파일: whitespace error 없음.
+- Next step:
+  - 실행 중 Web UI에서 Workspace `Open` 클릭 시 현재 프로젝트 경로가 Explorer로 열리는지 확인.
+
+## 2026-06-16 11:18 (local)
+- Objective:
+  - Workspace 디렉토리 구조를 Codex Desktop 스타일의 오른쪽 사이드바로 유지/개선하고, 데스크톱 기본 열림 및 닫힘 상태 저장을 적용.
+- Files changed:
+  - `web/frontend/src/features/app/components/AppCenterPanePresenter.tsx`
+  - `web/frontend/src/features/app/components/AppConversationPane.tsx`
+  - `web/frontend/src/features/app/components/AppWorkspacePanelSlot.tsx`
+  - `web/frontend/src/features/app/hooks/useUiDomain.ts`
+  - `web/frontend/src/features/app/hooks/useViewportLayout.ts`
+  - `web/frontend/src/features/workspace/components/WorkspacePanel.tsx`
+  - `web/frontend/src/features/workspace/components/WorkspacePanelHeader.tsx`
+  - `web/frontend/src/features/workspace/workspaceTreeModel.ts`
+  - `web/frontend/src/features/workspace/workspaceTreeModel.test.ts`
+  - `web/frontend/src/styles/_workspace.scss`
+- Changes:
+  - 데스크톱 Workspace 패널을 기본 열림으로 변경하고, 사용자가 토글한 열림/닫힘 상태를 `localStorage`에 저장하도록 추가.
+  - 데스크톱 닫힘 상태에서는 `workspace-panel-shell` 전체를 렌더링하지 않아 대화 영역이 확장되도록 변경.
+  - Workspace 패널에 breadcrumb, `Open` 버튼, `Filter files...` 입력을 추가해 오른쪽 파일 탐색 사이드바 UI로 정리.
+  - Workspace tree 필터 helper를 추가해 매칭 파일과 ancestor 디렉토리만 표시하도록 연결.
+  - 패널 헤더/toolbar/filter 스타일을 추가하고 기존 파일 preview/diff overlay 동작은 유지.
+- Validation:
+  - RED: 신규 Workspace 테스트에서 패널 shell 닫힘 조건, breadcrumb/filter/Open UI, 상태 저장 helper, tree filter helper 부재로 실패 확인.
+  - Workspace 관련 targeted tests: 13/13 pass.
+  - Composer 관련 targeted tests: 3/3 pass.
+  - 수정 파일 ESLint: pass.
+  - `cd web/frontend && npm run build`: pass (141 modules).
+  - `cd web/frontend && npm run test`: fail, 160/164 pass. 기존 sidebar 리디자인 후 남은 `SidebarProjectsPanel`/`SidebarThreadsPanel` 기대값 불일치 4건이며 이번 Workspace 변경 테스트는 통과.
+- Next step:
+  - 실행 중 Web UI에서 오른쪽 Workspace 패널의 기본 열림, 닫힘 후 대화 영역 확장, 필터 입력, 파일 preview 연결을 시각 확인.
+
+## 2026-06-15 18:00 (local)
+- Objective:
+  - Workspace 레이아웃 UI 재설계: Composer 영역을 수직 카드 구조로 재구성하고 Chat 메시지 배경색·폰트 색상을 dark/light 테마에 맞게 정비.
+- Files changed:
+  - `web/frontend/src/features/common/components/Icons.tsx`
+  - `web/frontend/src/features/app/components/AppComposerPresenter.tsx`
+  - `web/frontend/src/styles/_composer.scss`
+  - `web/frontend/src/styles/_chat.scss`
+  - `web/frontend/src/styles/_themes.scss`
+- Changes:
+  - `SendIcon`: paper-plane → 위쪽 화살표(↑) stroke 기반 SVG로 교체.
+  - `NewChatIcon`: 말풍선 → 단순 `+` stroke 기반 SVG로 교체.
+  - `AppComposerPresenter`: 수평 배치를 수직 카드 구조로 재구성. 상단 textarea, 하단 `.composer-bottom-bar`(좌측: + 버튼·PLAN 칩·workspace 토글, 우측: Send/Stop).
+  - `_composer.scss`: `.composer` border-radius 12px, padding 0. `.composer-inner` flex-direction column. `.composer-input-shell` border/background 제거. `.composer-plan-chip` border/background 없음, color muted. `.composer-new-chat` 테두리 없이 hover 시 아이콘 색상만 변경. `.composer-action.composer-send` 원형(border-radius 50%), SVG fill none/stroke currentColor 강제. 이중 클래스 선택자로 `.composer-action:hover` 특이도 충돌 해결.
+  - `_chat.scss`: `.msg` border 제거, border-radius 8px. `.msg.user` light 배경 `#e4e1e1`, `color: var(--text)` 명시(기존 bright cyan 상속 버그 수정). `.msg.system` border 제거, border-radius 10px, `var(--bg-soft)` 배경.
+  - `_themes.scss`: `.msg.assistant`를 공통 패널 그룹에서 분리해 light `#f4f1f1` / dark `#4f4b4b`로 명시(기존에 `_chat.scss`보다 높은 특이도로 덮어씌워지던 문제 수정). dark 테마에서 `.composer-action`이 `.composer-send`를 덮어쓰던 구조 수정 → `.composer-action.composer-send` 규칙을 그룹 이후에 추가. Send 버튼 dark hover `var(--muted)` = `#b7b3b3`. dark textarea/input-shell/bottom-bar 배경 `#292525` 통일, 포커스 시 색상 변경 방지(`focus-within` 고정).
+- Validation:
+  - `cd web/frontend && npm run build`: pass (141 modules, CSS 70.35 kB).
+- Next step:
+  - 브라우저에서 light/dark 테마 전환 시 Composer 카드 구조, Send 버튼 hover, 메시지 배경색 시각 확인.
+
 ## 2026-06-15 16:23 (local)
 - Objective:
   - 프로젝트 세션과 스레드 탭의 상태별 표시를 기존 `state-running` 스타일과 동일한 범위로 통일하고, 상태마다 색상만 다르게 적용.

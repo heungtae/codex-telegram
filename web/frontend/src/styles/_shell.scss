@@ -1129,6 +1129,7 @@
   min-height: 0;
   display: flex;
   gap: 14px;
+  align-items: stretch;
 }
 
 .center-pane {
@@ -1140,9 +1141,9 @@
 }
 
 .workspace-panel {
-  width: 320px;
-  min-width: 280px;
-  max-width: 720px;
+  width: 520px;
+  min-width: 340px;
+  max-width: 900px;
   min-height: 0;
   border: 1px solid var(--border);
   border-radius: 0;
@@ -1157,9 +1158,35 @@
 .workspace-panel-shell {
   position: relative;
   flex: 0 0 auto;
+  height: 100%;
   min-height: 0;
   display: flex;
   align-self: stretch;
+}
+
+
+.workspace-panel-rail {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--panel);
+  box-shadow: var(--shadow-sm);
+}
+
+.workspace-panel-rail-toggle {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 18px;
 }
 
 .chat-header {
@@ -1916,6 +1943,69 @@
   margin: 10px 0 0;
   color: var(--muted);
   font-size: 12px;
+}
+
+.workspace-right-sidebar {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border-left: 1px solid var(--border);
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.workspace-right-sidebar.closed {
+  width: 40px;
+  align-items: center;
+  padding-top: 8px;
+}
+
+.workspace-right-sidebar .workspace-panel {
+  border: none;
+  box-shadow: none;
+}
+
+.workspace-right-sidebar .workspace-panel.desktop {
+  margin-top: 0;
+  height: 100%;
+}
+
+.workspace-right-resizer {
+  width: 6px;
+  flex-shrink: 0;
+  cursor: col-resize;
+  background: transparent;
+  border-left: 1px solid transparent;
+}
+
+.workspace-right-resizer:hover,
+.workspace-right-resizer.active {
+  background: var(--panel-soft);
+  border-left-color: var(--border-strong);
+}
+
+.app.workspace-expanded .main {
+  display: none;
+}
+
+.app.workspace-expanded .workspace-right-resizer {
+  display: none;
+}
+
+.app.workspace-expanded .workspace-right-sidebar {
+  flex: 1 1 auto;
+}
+
+.app.workspace-expanded .workspace-right-sidebar .workspace-panel {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+  max-width: none;
+}
+
+.app.workspace-expanded .workspace-right-sidebar .workspace-panel.desktop {
+  height: 100%;
 }
 
 .guardian-rules-footer {

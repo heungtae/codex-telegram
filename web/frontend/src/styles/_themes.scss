@@ -11,18 +11,34 @@
   .sidebar,
   .panel,
   .chat-header,
-  .composer,
   .login-card,
   .modal-card,
   .ui-modal-card,
   .workspace-panel,
-  .workspace-preview-panel,
   .workspace-preview-modal,
   .approval,
   .file-change-panel,
-  .file-change-entry,
-  .msg.assistant {
+  .file-change-entry {
     background: var(--panel);
+    border-color: var(--border);
+    color: var(--text);
+  }
+
+  .workspace-preview-panel {
+    background: var(--bg-soft);
+    border-color: var(--border);
+    color: var(--text);
+  }
+
+  .composer {
+    background: #292525;
+    border-color: var(--border);
+    color: var(--text);
+  }
+
+  .msg.user,
+  .msg.assistant {
+    background: #4f4b4b;
     border-color: var(--border);
     color: var(--text);
   }
@@ -54,19 +70,29 @@
   .ui-select,
   .project-picker-input,
   .login-card input,
-  .composer-inner,
-  .composer-input-shell,
   .slash-panel {
     background: var(--bg-soft);
     border-color: var(--border);
     color: var(--text);
   }
 
+  .composer-inner {
+    background: transparent;
+    border-color: transparent;
+  }
+
+  .composer-input-shell,
+  .composer-bottom-bar,
+  .composer .ui-textarea,
+  .composer textarea {
+    background: #292525;
+  }
+
   .ui-textarea:focus,
   .ui-select:focus,
   .composer-input-shell:focus-within {
-    background: var(--panel);
-    border-color: var(--text);
+    background: #292525;
+    border-color: transparent;
   }
 
   .agent-floating-settings .ui-textarea:focus {
@@ -83,8 +109,7 @@
   }
 
   .primary,
-  .ui-button-primary,
-  .composer-send {
+  .ui-button-primary {
     background: var(--text);
     border-color: var(--text);
     color: var(--bg);
@@ -103,6 +128,22 @@
     background: transparent;
     border-color: var(--border);
     color: var(--text);
+  }
+
+  .composer-action.composer-send {
+    background: var(--text);
+    border-color: transparent;
+    color: var(--bg);
+  }
+
+  .composer-action.composer-send:hover {
+    background: var(--muted);
+    border-color: transparent;
+    color: var(--bg);
+  }
+
+  .composer-new-chat:hover:not(:disabled) {
+    background: #3a3636;
   }
 
   .file-change-code {
@@ -138,13 +179,23 @@
   .modal-card,
   .ui-modal-card,
   .workspace-panel,
-  .workspace-preview-panel,
   .workspace-preview-modal,
   .approval,
   .file-change-panel,
-  .file-change-entry,
-  .msg.assistant {
+  .file-change-entry {
     background: var(--panel);
+    border-color: var(--border);
+    color: var(--text);
+  }
+
+  .workspace-preview-panel {
+    background: var(--bg-soft);
+    border-color: var(--border);
+    color: var(--text);
+  }
+
+  .msg.assistant {
+    background: #f4f1f1;
     border-color: var(--border);
     color: var(--text);
   }

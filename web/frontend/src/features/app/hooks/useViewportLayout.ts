@@ -27,7 +27,7 @@ export default function useViewportLayout(args: UseViewportLayoutArgs) {
     syncViewport();
     window.addEventListener("resize", syncViewport);
     return () => window.removeEventListener("resize", syncViewport);
-  }, []);
+  }, [mobileBreakpoint, workspacePanelBreakpoint, setIsMobileLayout, setIsCompactWorkspaceLayout]);
 
   useEffect(() => {
     if (!isMobileLayout) {
@@ -35,15 +35,14 @@ export default function useViewportLayout(args: UseViewportLayoutArgs) {
       return;
     }
     setIsResizingSidebar(false);
-  }, [isMobileLayout]);
+  }, [isMobileLayout, setIsResizingSidebar, setIsSidebarOpen]);
 
   useEffect(() => {
-    if (!isCompactWorkspaceLayout) {
+    if (isCompactWorkspaceLayout) {
       setIsWorkspacePanelOpen(false);
-      return;
     }
     setIsResizingWorkspacePanel(false);
-  }, [isCompactWorkspaceLayout]);
+  }, [isCompactWorkspaceLayout, setIsResizingWorkspacePanel, setIsWorkspacePanelOpen]);
 
   useEffect(() => {
     if (!isMobileLayout || typeof document === "undefined") {
@@ -73,5 +72,5 @@ export default function useViewportLayout(args: UseViewportLayoutArgs) {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isMobileLayout, isSidebarOpen]);
+  }, [isMobileLayout, isSidebarOpen, setIsSidebarOpen]);
 }

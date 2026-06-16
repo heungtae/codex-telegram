@@ -119,11 +119,14 @@ export default function useAppRuntimePresentation(args) {
     threadActions.startThread({}, projectTabId, projectKey).catch(() => {});
   };
   const disableAddThread = !activeProjectKey || interactionBusy;
+  const onToggleWorkspaceExpand = () => ui.setIsWorkspaceExpanded((current) => !current);
   const workspacePanel = (
     <AppWorkspacePanelSlot
       isCompactWorkspaceLayout={ui.isCompactWorkspaceLayout}
       isWorkspacePanelOpen={ui.isWorkspacePanelOpen}
+      onToggleWorkspacePanel={composerViewModel.onToggleWorkspacePanel}
       workspacePanelWidth={workspace.workspacePanelWidth}
+      activeProjectKey={domainRuntime.activeProjectKey}
       activeWorkspacePath={activeProjectTab?.path || session.sessionSummary?.workspace || ""}
       workspaceError={workspace.workspaceError}
       workspaceStatus={workspace.workspaceStatus}
@@ -135,6 +138,8 @@ export default function useAppRuntimePresentation(args) {
       refreshWorkspaceBrowser={workspace.refreshWorkspaceBrowser}
       setWorkspaceError={workspace.setWorkspaceError}
       showToast={showToast}
+      isWorkspaceExpanded={ui.isWorkspaceExpanded}
+      onToggleWorkspaceExpand={onToggleWorkspaceExpand}
     />
   );
 
@@ -261,6 +266,7 @@ export default function useAppRuntimePresentation(args) {
       setWorkspacePreview: workspace.setWorkspacePreview,
       resetWorkspacePreviewSize,
       workspacePanel,
+      isWorkspaceExpanded: ui.isWorkspaceExpanded,
       isResizingWorkspacePanel: workspace.isResizingWorkspacePanel,
       onStartWorkspacePanelResize: (event) => {
         refs.workspaceResizeRef.current = {

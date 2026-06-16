@@ -1,11 +1,11 @@
+import React from "react";
+
 export default function AppCenterPanePresenter({
   topTabs,
   centerPane,
   isCompactWorkspaceLayout,
   isWorkspacePanelOpen,
   workspacePanel,
-  isResizingWorkspacePanel,
-  onStartWorkspacePanelResize,
 }) {
   return (
     <>
@@ -15,18 +15,6 @@ export default function AppCenterPanePresenter({
           {centerPane}
           {isCompactWorkspaceLayout && isWorkspacePanelOpen ? workspacePanel : null}
         </div>
-        {!isCompactWorkspaceLayout ? (
-          <div className="workspace-panel-shell">
-            <div
-              className={`workspace-panel-resizer ${isResizingWorkspacePanel ? "active" : ""}`}
-              onMouseDown={onStartWorkspacePanelResize}
-              role="separator"
-              aria-orientation="vertical"
-              aria-label="Resize workspace files panel"
-            />
-            {workspacePanel}
-          </div>
-        ) : null}
       </div>
     </>
   );

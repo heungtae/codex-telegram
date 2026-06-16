@@ -29,8 +29,8 @@ import {
 
 const SIDEBAR_MIN = 260;
 const SIDEBAR_MAX = 620;
-const WORKSPACE_PANEL_MIN = 280;
-const WORKSPACE_PANEL_MAX = 720;
+const WORKSPACE_PANEL_MIN = 340;
+const WORKSPACE_PANEL_MAX = 900;
 const MOBILE_BREAKPOINT = 900;
 const WORKSPACE_PANEL_BREAKPOINT = 1200;
 
@@ -40,7 +40,9 @@ function persistWorkspacePreviewHeight(height) {
   }
   try {
     window.localStorage.setItem(WORKSPACE_PREVIEW_HEIGHT_STORAGE_KEY, String(height));
-  } catch (_err) {}
+  } catch {
+    // Ignore storage failures; preview sizing should not block runtime behavior.
+  }
 }
 
 function persistWorkspacePreviewWidth(width) {
@@ -49,7 +51,9 @@ function persistWorkspacePreviewWidth(width) {
   }
   try {
     window.localStorage.setItem(WORKSPACE_PREVIEW_WIDTH_STORAGE_KEY, String(width));
-  } catch (_err) {}
+  } catch {
+    // Ignore storage failures; preview sizing should not block runtime behavior.
+  }
 }
 
 function clearWorkspacePreviewSize() {
@@ -59,7 +63,9 @@ function clearWorkspacePreviewSize() {
   try {
     window.localStorage.removeItem(WORKSPACE_PREVIEW_HEIGHT_STORAGE_KEY);
     window.localStorage.removeItem(WORKSPACE_PREVIEW_WIDTH_STORAGE_KEY);
-  } catch (_err) {}
+  } catch {
+    // Ignore storage failures; preview sizing should not block runtime behavior.
+  }
 }
 
 export default function useAppRuntimeEffects({

@@ -1,3 +1,4 @@
+import React from "react";
 import ApprovalStack from "../../approvals/components/ApprovalStack";
 import ChatMessageFeed from "../../chat/components/ChatMessageFeed";
 import { normalizeThreadId } from "../../common/utils";
@@ -27,8 +28,6 @@ export default function AppConversationPane({ tabs, workspace, conversation, com
     setWorkspacePreview,
     resetWorkspacePreviewSize,
     workspacePanel,
-    isResizingWorkspacePanel,
-    onStartWorkspacePanelResize,
   } = workspace;
   const { chatRef, approvalItems, approvalBusyId, onSubmitApproval, onCloseApprovals, renderItems } = conversation;
   const {
@@ -73,17 +72,19 @@ export default function AppConversationPane({ tabs, workspace, conversation, com
       }
       centerPane={
         <>
-          <WorkspacePreviewOverlay
-            workspacePreview={workspacePreview}
-            isResizingWorkspacePreview={isResizingWorkspacePreview}
-            isMobileLayout={isMobileLayout}
-            workspacePreviewWidth={workspacePreviewWidth}
-            workspacePreviewHeight={workspacePreviewHeight}
-            workspacePreviewResizeRef={workspacePreviewResizeRef}
-            setIsResizingWorkspacePreview={setIsResizingWorkspacePreview}
-            setWorkspacePreview={setWorkspacePreview}
-            resetWorkspacePreviewSize={resetWorkspacePreviewSize}
-          />
+          {isCompactWorkspaceLayout ? (
+            <WorkspacePreviewOverlay
+              workspacePreview={workspacePreview}
+              isResizingWorkspacePreview={isResizingWorkspacePreview}
+              isMobileLayout={isMobileLayout}
+              workspacePreviewWidth={workspacePreviewWidth}
+              workspacePreviewHeight={workspacePreviewHeight}
+              workspacePreviewResizeRef={workspacePreviewResizeRef}
+              setIsResizingWorkspacePreview={setIsResizingWorkspacePreview}
+              setWorkspacePreview={setWorkspacePreview}
+              resetWorkspacePreviewSize={resetWorkspacePreviewSize}
+            />
+          ) : null}
           <div className="chat" ref={chatRef}>
             <ApprovalStack
               approvalItems={approvalItems}
@@ -131,8 +132,6 @@ export default function AppConversationPane({ tabs, workspace, conversation, com
       isCompactWorkspaceLayout={isCompactWorkspaceLayout}
       isWorkspacePanelOpen={isWorkspacePanelOpen}
       workspacePanel={workspacePanel}
-      isResizingWorkspacePanel={isResizingWorkspacePanel}
-      onStartWorkspacePanelResize={onStartWorkspacePanelResize}
     />
   );
 }

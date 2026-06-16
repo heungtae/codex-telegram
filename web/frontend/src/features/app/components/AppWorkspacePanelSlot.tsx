@@ -1,3 +1,4 @@
+import React from "react";
 import WorkspacePanel from "../../workspace/components/WorkspacePanel";
 import { basename } from "../../common/utils";
 import { getWorkspacePanelStyle } from "../state/layoutSelectors";
@@ -5,6 +6,7 @@ import { getWorkspacePanelStyle } from "../state/layoutSelectors";
 export default function AppWorkspacePanelSlot({
   isCompactWorkspaceLayout,
   isWorkspacePanelOpen,
+  onToggleWorkspacePanel,
   workspacePanelWidth,
   activeWorkspacePath,
   workspaceError,
@@ -17,6 +19,8 @@ export default function AppWorkspacePanelSlot({
   refreshWorkspaceBrowser,
   setWorkspaceError,
   showToast,
+  isWorkspaceExpanded,
+  onToggleWorkspaceExpand,
 }) {
   const workspaceRootLabel = basename(activeWorkspacePath || "") || "Workspace";
   const workspacePanelStyle = getWorkspacePanelStyle(isCompactWorkspaceLayout, workspacePanelWidth);
@@ -27,6 +31,7 @@ export default function AppWorkspacePanelSlot({
     <WorkspacePanel
       isCompactWorkspaceLayout={isCompactWorkspaceLayout}
       isWorkspacePanelOpen={isWorkspacePanelOpen}
+      onToggleWorkspacePanel={onToggleWorkspacePanel}
       workspacePanelStyle={workspacePanelStyle}
       workspaceRootLabel={workspaceRootLabel}
       workspaceError={workspaceError}
@@ -40,6 +45,8 @@ export default function AppWorkspacePanelSlot({
       refreshWorkspaceBrowser={refreshWorkspaceBrowser}
       setWorkspaceError={setWorkspaceError}
       showToast={showToast}
+      isWorkspaceExpanded={isWorkspaceExpanded}
+      onToggleWorkspaceExpand={onToggleWorkspaceExpand}
     />
   );
 }

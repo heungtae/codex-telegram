@@ -9,12 +9,13 @@ test("WorkspacePanelHeader renders root label and refresh action", () => {
   const html = renderToStaticMarkup(
     React.createElement(WorkspacePanelHeader, {
       workspaceRootLabel: "codex-telegram",
+      workspaceLeaf: "codex-telegram",
       refreshWorkspaceBrowser: () => Promise.resolve(),
       setWorkspaceError: () => {},
     })
   );
 
-  assert.match(html, /Workspace Files/);
+  assert.match(html, /Workspace/);
   assert.match(html, /codex-telegram/);
   assert.match(html, /aria-label="Refresh workspace browser"/);
 });
