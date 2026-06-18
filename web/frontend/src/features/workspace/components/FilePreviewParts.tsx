@@ -1,4 +1,5 @@
 import { renderDiffRows } from "../../common/utils";
+import { EmptyState } from "../../common/components/ui";
 
 export function FileChangeDiff({ diff }) {
   const rows = renderDiffRows(diff);
@@ -21,7 +22,9 @@ export function FileChangeDiff({ diff }) {
 export function FileCodePreview({ content }) {
   const rows = typeof content === "string" ? content.split("\n") : [];
   if (!rows.length) {
-    return <div className="workspace-preview-empty">File is empty.</div>;
+    return (
+      <EmptyState className="workspace-preview-empty">File is empty.</EmptyState>
+    );
   }
   return (
     <div className="file-change-code workspace-file-code" role="table" aria-label="File preview">

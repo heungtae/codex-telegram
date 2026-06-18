@@ -1,0 +1,171 @@
+@media (max-width: 1200px) {
+  .workspace-layout {
+    flex-direction: column;
+  }
+
+  .workspace-panel {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    max-height: 280px;
+  }
+
+  .workspace-panel-resizer {
+    display: none;
+  }
+
+  .workspace-panel-shell {
+    width: 100%;
+  }
+
+  .workspace-panel.desktop {
+    display: none;
+  }
+
+  .workspace-panel.compact {
+    margin-top: 12px;
+  }
+}
+
+@media (max-width: 900px) {
+  .app {
+    position: relative;
+  }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: min(84vw, 360px);
+    height: 100vh;
+    max-width: 100%;
+    border-right: 1px solid var(--border);
+    border-bottom: 0;
+    transform: translateX(-100%);
+    transition: transform 0.22s ease;
+    box-shadow: none;
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  .sidebar.collapsed {
+    padding: 16px;
+    overflow: auto;
+  }
+
+  .sidebar-footer {
+    padding-bottom: 4px;
+  }
+
+  .sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 3;
+    display: block;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    pointer-events: none;
+    transition: background 0.22s ease;
+  }
+
+  .sidebar-backdrop.open {
+    background: color-mix(in srgb, var(--text) 36%, transparent);
+    pointer-events: auto;
+  }
+
+  .sidebar-resizer {
+    display: none;
+  }
+
+  .chat {
+    padding: 20px 10px 14px;
+  }
+
+  .topbar {
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .mobile-main-actions {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+
+  .chat-header {
+    min-height: 42px;
+  }
+
+  .topbar-leading,
+  .topbar-actions {
+    width: 100%;
+  }
+
+  .topbar-leading {
+    justify-content: flex-start;
+  }
+
+  .main {
+    padding: 10px;
+  }
+
+  .workspace-layout {
+    gap: 10px;
+  }
+
+  .workspace-panel {
+    max-height: 240px;
+  }
+
+  .agent-floating-settings {
+    position: static;
+    width: 100%;
+    margin-top: 12px;
+  }
+
+  .agent-floating-settings-card {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    max-height: none;
+    resize: vertical;
+  }
+
+  .topbar-actions {
+    justify-content: flex-start;
+  }
+
+  .login {
+    grid-template-columns: 1fr;
+  }
+
+  .login-form-panel {
+    min-height: 100vh;
+  }
+
+  .login-visual-panel {
+    display: none;
+  }
+
+  .theme-toggle span {
+    display: none;
+  }
+
+  .msg {
+    width: 92%;
+    max-width: 92%;
+  }
+
+  .msg.system {
+    width: 94%;
+    max-width: 94%;
+  }
+
+  .composer-mode {
+    min-width: 74px;
+    padding: 7px 8px;
+  }
+}

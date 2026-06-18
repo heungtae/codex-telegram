@@ -1,3 +1,5 @@
+import React from "react";
+
 export function ThemeIcon({ theme }) {
   if (theme === "light") {
     return (
@@ -13,22 +15,22 @@ export function ThemeIcon({ theme }) {
   );
 }
 
-export function SidebarChevronIcon({ collapsed }) {
+export function SidebarToggleIcon({ collapsed: _collapsed = false }) {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      {collapsed ? (
-        <path d="M8.59 7.41 10 6l6 6-6 6-1.41-1.41L13.17 12 8.59 7.41Zm-4 0L6 6l6 6-6 6-1.41-1.41L9.17 12 4.59 7.41Z" />
-      ) : (
-        <path d="m15.41 7.41-1.41-1.41-6 6 6 6 1.41-1.41L10.83 12l4.58-4.59Zm4 0L18 6l-6 6 6 6 1.41-1.41L14.83 12l4.58-4.59Z" />
-      )}
+      <path
+        fill="currentColor"
+        fillRule="evenodd"
+        d="M2 3h20v18H2V3zm1 1h5v16H3V4zm7 0h11v16H10V4z"
+      />
     </svg>
   );
 }
 
 export function SendIcon() {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M3.4 20.4 21 12 3.4 3.6l.02 6.53 12.58 1.87-12.58 1.87-.02 6.53Z" />
+    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 19V5M5 12l7-7 7 7" />
     </svg>
   );
 }
@@ -59,8 +61,8 @@ export function NotificationIcon({ enabled }) {
 
 export function NewChatIcon() {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M12 5c-4.42 0-8 2.91-8 6.5 0 2.02 1.13 3.82 2.9 5.01L6 20l3.63-1.98c.76.17 1.55.26 2.37.26 4.42 0 8-2.91 8-6.5S16.42 5 12 5Zm1 6h3v2h-3v3h-2v-3H8v-2h3V8h2v3Z" />
+    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+      <path d="M12 5v14M5 12h14" />
     </svg>
   );
 }
@@ -117,6 +119,18 @@ export function FolderIcon({ open = false }) {
   );
 }
 
+export function ExpandIcon({ expanded = false }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      {expanded ? (
+        <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3" />
+      ) : (
+        <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+      )}
+    </svg>
+  );
+}
+
 export function FileIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -138,6 +152,24 @@ export function ResetSizeIcon() {
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M6 6h5V4H4v7h2Zm13 0v5h2V4h-7v2Zm-5 12h5v-5h2v7h-7Zm-8-5H4v7h7v-2H6Z" />
       <path d="M8 9h8v6H8z" />
+    </svg>
+  );
+}
+
+export function MoreIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="5" cy="12" r="1.5" fill="currentColor" />
+      <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+      <circle cx="19" cy="12" r="1.5" fill="currentColor" />
+    </svg>
+  );
+}
+
+export function ComposeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
     </svg>
   );
 }

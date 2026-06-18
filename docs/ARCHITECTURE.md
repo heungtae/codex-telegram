@@ -1,4 +1,4 @@
-# Codex-Telegram Bridge Design
+# Codex-Telegram Bridge Architecture
 
 ## Overview
 `codex-telegram` is a Telegram interface for Codex App Server. It provides command routing, per-user runtime state, event forwarding, and interactive approval handling.

@@ -1,4 +1,5 @@
-import { RefreshIcon, SaveIcon } from "../../common/components/Icons";
+import { CloseIcon, RefreshIcon, SaveIcon } from "../../common/components/Icons";
+import { FormField, Textarea } from "../../common/components/ui";
 
 export default function FloatingGuardianSettingsPanel({
   visible,
@@ -17,7 +18,7 @@ export default function FloatingGuardianSettingsPanel({
   }
 
   return (
-    <div className="agent-floating-settings">
+    <div className="agent-floating-settings" onMouseDown={(e) => e.stopPropagation()}>
       <div className="agent-floating-settings-card">
         <div className="agent-settings-head">
           <strong>Guardian Rules TOML</strong>
@@ -27,14 +28,18 @@ export default function FloatingGuardianSettingsPanel({
             onClick={() => setFloatingAgentSettings("")}
             disabled={settingsBusy}
           >
-            Close
+            <CloseIcon />
           </button>
         </div>
         {floatingAgentConfig ? (
           <div className="agent-settings-form">
-            <label className="agent-field">
-              <span>Rules TOML</span>
-              <textarea
+            <FormField
+              className="agent-field"
+              label="Rules TOML"
+              help="Only rules that already exist in `conf.toml` are active. If none are configured, commented examples from `conf.toml.example` are shown here."
+              helpClassName="agent-field-help"
+            >
+              <Textarea
                 className="agent-field-textarea"
                 value={guardianRulesEditor}
                 onChange={(e) => {
@@ -47,10 +52,7 @@ export default function FloatingGuardianSettingsPanel({
                 disabled={settingsBusy}
                 spellCheck={false}
               />
-              <span className="agent-field-help">
-                Only rules that already exist in `conf.toml` are active. If none are configured, commented examples from `conf.toml.example` are shown here.
-              </span>
-            </label>
+            </FormField>
             <div className="agent-floating-settings-note">
               Timeout, failure policy, and explainability stay in the left settings card.
             </div>

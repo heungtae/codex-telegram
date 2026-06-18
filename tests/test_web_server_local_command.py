@@ -105,7 +105,7 @@ class WebServerLocalCommandTests(unittest.TestCase):
         body = response.body.decode("utf-8")
 
         self.assertIn("<!doctype html>", body)
-        self.assertIn("<title>Codex Web</title>", body)
+        self.assertIn("<title>Codex Bridge</title>", body)
         self.assertIn("/assets/", body)
 
     def test_chat_messages_propagates_turn_start_failures(self):
@@ -364,6 +364,56 @@ class WebServerLocalCommandTests(unittest.TestCase):
 
         self.assertEqual(409, ctx.exception.status_code)
         self.assertEqual("Cannot switch project while a turn is running.", ctx.exception.detail)
+
+    def test_projects_open_explorer_resolves_path_from_project_profile(self):
+        app = create_web_app()
+        endpoint = next(
+            route.endpoint
+            for route in app.routes
+            if getattr(route, "path", None) == "/api/projects/open-explorer"
+        )
+        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+        state.command_router.projects = SimpleNamespace(
+            load_project_profiles=lambda: (
+                [
+                    {
+                        "key": "work",
+                        "name": "Work",
+                        "path": "C:/Work/TCK/source/kosmos-application",
+                    }
+                ],
+                "default",
+            ),
+        )
+
+        with (
+            patch("web.routes.platform.system", return_value="Windows"),
+            patch("web.routes.subprocess.Popen") as mock_popen,
+        ):
+            body = asyncio.run(endpoint({"project_key": "work"}, request))
+
+        self.assertEqual({"ok": True}, body)
+        mock_popen.assert_called_once_with(
+            'explorer.exe /n,/e,"C:\\Work\\TCK\\source\\kosmos-application"'
+        )
+
+    def test_projects_open_explorer_rejects_unknown_project_key(self):
+        app = create_web_app()
+        endpoint = next(
+            route.endpoint
+            for route in app.routes
+            if getattr(route, "path", None) == "/api/projects/open-explorer"
+        )
+        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+        state.command_router.projects = SimpleNamespace(
+            load_project_profiles=lambda: ([], "default"),
+        )
+
+        with self.assertRaises(HTTPException) as ctx:
+            asyncio.run(endpoint({"project_key": "missing"}, request))
+
+        self.assertEqual(404, ctx.exception.status_code)
+        self.assertEqual("project_key was not found", ctx.exception.detail)
 
     def test_projects_open_thread_creates_thread_without_switching_selected_project(self):
         app = create_web_app()

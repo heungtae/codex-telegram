@@ -11,12 +11,14 @@
   filteredProjects: Array<Record<string, unknown>>;
   selectedProjectIndex: number;
   activeProjectKey: string;
-  focusComposerRef: { current: ((cursor?: number | null) => void) | null };
-  startThreadRef: { current: ((options?: Record<string, unknown>) => Promise<void>) | null };
-  closeThreadTabRef: { current: ((projectTabId: string, threadId: string) => void) | null };
-  viewThreadRef: { current: ((threadId: string) => Promise<void>) | null };
-  sendMessageRef: { current: (() => Promise<void>) | null };
-  selectProjectRef: { current: ((key: string) => Promise<void>) | null };
+  commandRefs: {
+    focusComposer: { current: ((cursor?: number | null) => void) | null };
+    startThread: { current: ((options?: Record<string, unknown>) => Promise<void>) | null };
+    closeThreadTab: { current: ((projectTabId: string, threadId: string) => void) | null };
+    viewThread: { current: ((threadId: string) => Promise<void>) | null };
+    sendMessage: { current: (() => Promise<void>) | null };
+    selectProject: { current: ((key: string) => Promise<void>) | null };
+  };
   setShortcutModalPage: (page: string) => void;
   setProjectSearchQuery: (query: string) => void;
   setSelectedProjectIndex: (next: number | ((prev: number) => number)) => void;

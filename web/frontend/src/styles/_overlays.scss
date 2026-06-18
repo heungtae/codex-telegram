@@ -1,0 +1,452 @@
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 14, 26, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1200;
+  padding: 16px;
+}
+
+.modal-card {
+  width: min(520px, calc(100vw - 32px));
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--panel);
+  box-shadow: var(--shadow-md);
+  padding: 16px;
+}
+
+.ui-modal-backdrop {
+  z-index: var(--layer-modal);
+}
+
+.ui-modal-card {
+  border-color: var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.ui-button {
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.16s ease, background 0.16s ease, border-color 0.16s ease;
+}
+
+.ui-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+  transform: none;
+  box-shadow: none;
+}
+
+.ui-button-primary {
+  border: none;
+  background: var(--brand);
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(11, 140, 130, 0.24);
+}
+
+.ui-button-primary:hover:not(:disabled) {
+  background: var(--brand-strong);
+  transform: translateY(-1px);
+  box-shadow: 0 12px 22px rgba(6, 110, 103, 0.28);
+}
+
+.ui-button-secondary {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+}
+
+.ui-button-secondary:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--color-surface);
+}
+
+.ui-button-ghost {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-text-muted);
+}
+
+.ui-button-ghost:hover:not(:disabled) {
+  border-color: var(--color-border);
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+}
+
+.ui-input,
+.ui-textarea,
+.ui-select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  font-size: var(--font-size-md);
+  outline: none;
+}
+
+.ui-textarea {
+  resize: vertical;
+}
+
+.ui-textarea:focus,
+.ui-select:focus {
+  border-color: var(--accent);
+}
+
+.ui-input:disabled,
+.ui-textarea:disabled,
+.ui-select:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.ui-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.ui-badge-neutral {
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+}
+
+.ui-badge-accent {
+  background: var(--brand);
+  color: #fff;
+}
+
+.ui-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease, opacity 0.16s ease;
+}
+
+.ui-icon-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.ui-icon-button.is-active {
+  border-color: rgba(72, 180, 111, 0.45);
+}
+
+.modal-title {
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.modal-desc {
+  color: var(--muted);
+  margin-bottom: 14px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.project-picker-modal {
+  width: min(480px, calc(100vw - 32px));
+  padding: 0;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.project-picker-search {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.project-picker-input {
+  width: 100%;
+}
+
+.project-picker-list {
+  overflow-y: auto;
+  max-height: 400px;
+}
+
+.project-picker-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.project-picker-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s;
+}
+
+.project-picker-item:hover,
+.project-picker-item.selected {
+  background: var(--bg-soft);
+}
+
+.project-picker-item.selected {
+  background: var(--accent);
+  color: white;
+}
+
+.project-picker-name {
+  font-weight: 500;
+  flex: 1;
+}
+
+.project-picker-key {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.project-picker-item.selected .project-picker-key {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.project-picker-badge {
+  flex: 0 0 auto;
+}
+
+.project-picker-footer {
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.shortcut-modal {
+  width: min(600px, calc(100vw - 32px));
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+
+.shortcut-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.shortcut-modal-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.shortcut-modal-close {
+  background: transparent;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: var(--muted);
+  padding: 0;
+  line-height: 1;
+}
+
+.shortcut-modal-close:hover {
+  color: var(--text);
+}
+
+.shortcut-modal-content {
+  overflow-y: auto;
+  padding: 16px 20px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.shortcut-section h3 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--brand);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.shortcut-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.shortcut-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+}
+
+.shortcut-desc {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.shortcut-modal-footer {
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+}
+
+kbd {
+  display: inline-block;
+  padding: 3px 7px;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 1px 0 var(--border);
+  margin: 0 2px;
+}
+
+/* OpenCode shared controls and overlays */
+.modal-backdrop,
+.ui-modal-backdrop {
+  background: color-mix(in srgb, var(--text) 36%, transparent);
+  backdrop-filter: none;
+}
+
+.modal-card,
+.ui-modal-card,
+.shortcut-modal,
+.project-picker-modal {
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+  color: var(--text);
+}
+
+.ui-button,
+.ui-icon-button,
+.shortcut-modal-close {
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+  font-family: inherit;
+}
+
+.ui-button-primary {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: var(--bg);
+}
+
+.ui-button-primary:hover:not(:disabled) {
+  background: var(--brand-strong);
+  border-color: var(--brand-strong);
+}
+
+.ui-button-secondary,
+.ui-button-ghost,
+.ui-icon-button,
+.shortcut-modal-close {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.ui-button-secondary:hover:not(:disabled),
+.ui-button-ghost:hover:not(:disabled),
+.ui-icon-button:hover:not(:disabled),
+.shortcut-modal-close:hover {
+  background: var(--bg-soft);
+  border-color: var(--border-strong);
+}
+
+.ui-input,
+.ui-textarea,
+.ui-select,
+.project-picker-input {
+  background: var(--bg-soft);
+  border-color: var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  box-shadow: none;
+}
+
+.ui-textarea:focus,
+.ui-select:focus {
+  background: var(--panel);
+  border-color: var(--text);
+  box-shadow: none;
+}
+
+.ui-input:focus,
+.project-picker-input:focus {
+  background: var(--panel);
+  box-shadow: none;
+}
+
+.ui-badge,
+.project-picker-badge {
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+}
+
+.ui-badge-neutral {
+  background: var(--panel-soft);
+  border-color: var(--border);
+  color: var(--muted);
+}
+
+.ui-badge-accent {
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--bg);
+}
+
+.project-picker-item,
+.shortcut-item {
+  background: transparent;
+  border-color: var(--border);
+  border-radius: 0;
+}
+
+.project-picker-item:hover,
+.project-picker-item.selected {
+  background: var(--bg-soft);
+  border-color: var(--border-strong);
+}
+
+kbd {
+  background: var(--panel-soft);
+  border-color: var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+}

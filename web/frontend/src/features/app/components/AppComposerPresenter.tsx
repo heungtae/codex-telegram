@@ -1,3 +1,5 @@
+import { IconButton, Textarea } from "../../common/components/ui";
+
 export default function AppComposerPresenter({
   activityDetail,
   paletteOpen,
@@ -56,23 +58,10 @@ export default function AppComposerPresenter({
               })}
             </div>
           ) : null}
-          <div className={`composer-input-shell mode-${collaborationMode}`}>
-            <button
-              type="button"
-              className={`composer-mode mode-${collaborationMode}`}
-              disabled={composerLocked || modeSwitchBusy}
-              onMouseDown={(e) => {
-                e.preventDefault();
-              }}
-              onClick={onToggleComposerMode}
-              title="Press Tab to toggle mode"
-              aria-label={`Collaboration mode ${collaborationMode}. Press Tab to toggle.`}
-            >
-              <span className="composer-mode-label">{collaborationMode.toUpperCase()}</span>
-              <span className="composer-mode-key">TAB</span>
-            </button>
-            <textarea
+          <div className="composer-input-shell">
+            <Textarea
               ref={inputRef}
+              className="composer-input"
               rows={1}
               value={input}
               disabled={composerLocked}
@@ -85,35 +74,53 @@ export default function AppComposerPresenter({
             />
           </div>
         </div>
-        {status === "running" ? (
-          <button className="composer-action composer-stop" onClick={onInterrupt} aria-label="Stop" title="Stop">
-            <StopIcon />
-          </button>
-        ) : (
-          <button className="composer-action composer-send" onClick={onSendMessage} aria-label="Send" title="Send">
-            <SendIcon />
-          </button>
-        )}
-        {isCompactWorkspaceLayout ? (
-          <button
-            className={`composer-action composer-workspace-toggle ${isWorkspacePanelOpen ? "active" : ""}`}
-            onClick={onToggleWorkspacePanel}
-            aria-label="Workspace files"
-            title="Workspace files"
-            type="button"
-          >
-            <FolderIcon open={isWorkspacePanelOpen} />
-          </button>
-        ) : null}
-        <button
-          className="composer-action composer-new-chat"
-          onClick={onNewChat}
-          aria-label="New chat"
-          title="New chat"
-          disabled={interactionBusy}
-        >
-          <NewChatIcon />
-        </button>
+        <div className="composer-bottom-bar">
+          <div className="composer-left-group">
+            <IconButton
+              className="composer-action composer-new-chat"
+              onClick={onNewChat}
+              ariaLabel="New chat"
+              title="New chat"
+              disabled={interactionBusy}
+            >
+              <NewChatIcon />
+            </IconButton>
+            {collaborationMode === "plan" ? (
+              <button
+                type="button"
+                className="composer-plan-chip"
+                disabled={composerLocked || modeSwitchBusy}
+                onClick={onToggleComposerMode}
+                title="Plan mode active. Click to toggle."
+                aria-label="Plan mode active. Click to toggle."
+              >
+                PLAN
+              </button>
+            ) : null}
+            {isCompactWorkspaceLayout ? (
+              <IconButton
+                className={`composer-action composer-workspace-toggle ${isWorkspacePanelOpen ? "active" : ""}`}
+                onClick={onToggleWorkspacePanel}
+                ariaLabel="Workspace files"
+                title="Workspace files"
+                active={isWorkspacePanelOpen}
+              >
+                <FolderIcon open={isWorkspacePanelOpen} />
+              </IconButton>
+            ) : null}
+          </div>
+          <div className="composer-right-group">
+            {status === "running" ? (
+              <IconButton className="composer-action composer-stop" onClick={onInterrupt} ariaLabel="Stop" title="Stop">
+                <StopIcon />
+              </IconButton>
+            ) : (
+              <IconButton className="composer-action composer-send" onClick={onSendMessage} ariaLabel="Send" title="Send">
+                <SendIcon />
+              </IconButton>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

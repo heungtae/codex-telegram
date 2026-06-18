@@ -1,10 +1,12 @@
 import { FileChangeDiff, FileCodePreview } from "./FilePreviewParts";
 import { CloseIcon, ResetSizeIcon } from "../../common/components/Icons";
+import { EmptyState } from "../../common/components/ui";
 
 export default function WorkspacePreviewPanel({
   workspacePreview,
   onClose,
   onResetSize,
+  inline = false,
   className = "",
   style,
   onMouseDown,
@@ -19,44 +21,48 @@ export default function WorkspacePreviewPanel({
     <div
       className={`workspace-preview-panel ${isDiffMode ? "diff-mode" : "file-mode"} ${className}`.trim()}
       style={style}
-      role="dialog"
-      aria-modal="true"
+      role={inline ? "region" : "dialog"}
+      aria-modal={inline ? undefined : "true"}
       aria-label={isDiffMode ? "Diff preview" : "File preview"}
       onMouseDown={onMouseDown}
     >
-      <div className="workspace-preview-head">
-        <div className="workspace-preview-copy">
-          <div className="workspace-preview-title">
-            {isDiffMode ? "Diff Preview" : "File Preview"}
+      {!inline ? (
+        <div className="workspace-preview-head">
+          <div className="workspace-preview-copy">
+            <div className="workspace-preview-title">
+              {isDiffMode ? "Diff Preview" : "File Preview"}
+            </div>
+            <div className="workspace-preview-path">
+              {workspacePreview.status ? `[${workspacePreview.status}] ` : ""}
+              {workspacePreview.path}
+            </div>
           </div>
-          <div className="workspace-preview-path">
-            {workspacePreview.status ? `[${workspacePreview.status}] ` : ""}
-            {workspacePreview.path}
-          </div>
+          {onResetSize || onClose ? <div className="workspace-preview-actions">
+            {onResetSize ? (
+              <button
+                className="workspace-preview-action workspace-preview-reset"
+                type="button"
+                onClick={onResetSize}
+                title="Reset preview size to the default dimensions"
+                aria-label="Reset preview size to the default dimensions"
+              >
+                <ResetSizeIcon />
+              </button>
+            ) : null}
+            {onClose ? (
+              <button
+                className="workspace-preview-action workspace-preview-close"
+                type="button"
+                onClick={onClose}
+                title="Close preview (Esc)"
+                aria-label="Close preview (Esc)"
+              >
+                <CloseIcon />
+              </button>
+            ) : null}
+          </div> : null}
         </div>
-        <div className="workspace-preview-actions">
-          {onResetSize ? (
-            <button
-              className="workspace-preview-action workspace-preview-reset"
-              type="button"
-              onClick={onResetSize}
-              title="Reset preview size to the default dimensions"
-              aria-label="Reset preview size to the default dimensions"
-            >
-              <ResetSizeIcon />
-            </button>
-          ) : null}
-          <button
-            className="workspace-preview-action workspace-preview-close"
-            type="button"
-            onClick={onClose}
-            title="Close preview (Esc)"
-            aria-label="Close preview (Esc)"
-          >
-            <CloseIcon />
-          </button>
-        </div>
-      </div>
+      ) : null}
       {workspacePreview.loading ? (
         <div className="workspace-preview-empty">Loading preview...</div>
       ) : workspacePreview.error ? (
@@ -66,9 +72,9 @@ export default function WorkspacePreviewPanel({
           <FileChangeDiff diff={workspacePreview.diff} />
         </div>
       ) : !workspacePreview.previewAvailable ? (
-        <div className="workspace-preview-empty">
+        <EmptyState tone="notice" className="workspace-preview-empty">
           {workspacePreview.isBinary ? "Binary file preview is unavailable." : "Preview is unavailable."}
-        </div>
+        </EmptyState>
       ) : (
         <>
           {workspacePreview.truncated ? (

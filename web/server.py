@@ -18,7 +18,7 @@ def create_web_app() -> FastAPI:
     route_module.run_bang_command = run_bang_command
     route_module.get_guardian_settings = get_guardian_settings
     route_module.save_guardian_settings = save_guardian_settings
-    app = FastAPI(title="Codex Web", version=__version__)
+    app = FastAPI(title="Codex Bridge", version=__version__)
     app.mount("/assets", StaticFiles(directory=str(resolved_assets_dir())), name="assets")
     route_module.register_web_routes(app)
     return app

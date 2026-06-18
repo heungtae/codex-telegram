@@ -1,0 +1,403 @@
+.composer {
+  position: relative;
+  border: 1px solid var(--border);
+  background: rgba(10, 17, 28, 0.82);
+  padding: 10px;
+  border-radius: 0;
+  box-shadow: var(--shadow-sm);
+}
+
+.composer-inner {
+  max-width: 860px;
+  margin: 0 auto;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.input-wrap {
+  position: relative;
+  flex: 1;
+}
+
+.composer-left-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.composer-input-shell {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #0e1724;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.composer-input-shell:focus-within {
+  border-color: #5d81b2;
+  box-shadow: 0 0 0 3px rgba(123, 180, 255, 0.18);
+}
+
+.composer-plan-chip {
+  padding: 4px 9px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  background: none;
+  color: var(--muted);
+  transition: color 0.14s ease;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+.composer-plan-chip:hover:not(:disabled) {
+  border: none;
+  background: none;
+  color: var(--text);
+}
+
+.composer-plan-chip:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.composer textarea {
+  width: 100%;
+  min-height: 36px;
+  max-height: 180px;
+  resize: none;
+  overflow: auto;
+  border: 0;
+  border-radius: 0;
+  padding: 8px 10px;
+  background: transparent;
+  color: var(--text);
+}
+
+.composer textarea::placeholder {
+  color: var(--muted);
+}
+
+.composer textarea:focus {
+  outline: none;
+}
+
+.composer-action {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.16s ease, background 0.16s ease, border-color 0.16s ease;
+  flex: 0 0 auto;
+}
+
+.composer-action svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.composer-send {
+  border: none;
+  background: var(--brand);
+  color: #fff;
+}
+
+.composer-send:hover {
+  background: var(--brand-strong);
+  transform: translateY(-1px);
+}
+
+.composer-stop {
+  border: 1px solid rgba(255, 139, 128, 0.35);
+  background: rgba(115, 37, 40, 0.22);
+  color: var(--danger);
+}
+
+.composer-stop:hover {
+  background: rgba(139, 44, 48, 0.32);
+  border-color: rgba(255, 139, 128, 0.5);
+  transform: translateY(-1px);
+}
+
+.composer-new-chat {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+}
+
+.composer-new-chat:hover:not(:disabled) {
+  border: none;
+  background: transparent;
+  color: var(--text);
+  transform: none;
+}
+
+.composer-new-chat svg {
+  width: 18px;
+  height: 18px;
+}
+
+.slash-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 8px);
+  max-height: 230px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  background: #0e1724;
+  border-radius: 0;
+  box-shadow: var(--shadow-md);
+  padding: 6px;
+  z-index: 20;
+}
+
+.slash-item {
+  width: 100%;
+  text-align: left;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 0;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.slash-item:hover,
+.slash-item.active {
+  background: rgba(28, 120, 108, 0.18);
+  border-color: rgba(54, 199, 187, 0.28);
+}
+
+.primary {
+  border: none;
+  background: var(--brand);
+  color: #fff;
+  border-radius: 0;
+  padding: 12px 14px;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(11, 140, 130, 0.24);
+  transition: transform 0.12s ease, box-shadow 0.16s ease, background 0.16s ease;
+}
+
+.primary:hover {
+  background: var(--brand-strong);
+  transform: translateY(-1px);
+  box-shadow: 0 12px 22px rgba(6, 110, 103, 0.28);
+}
+
+.secondary {
+  border: 1px solid var(--border);
+  background: #172538;
+  color: var(--text);
+  border-radius: 0;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.secondary:hover {
+  border-color: #496581;
+  background: #1c3048;
+}
+
+.danger {
+  border: 1px solid rgba(255, 139, 128, 0.35);
+  background: rgba(115, 37, 40, 0.22);
+  color: var(--danger);
+  border-radius: 0;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+
+.activity-indicator {
+  max-width: 860px;
+  margin: 0 auto 12px;
+  padding: 0 6px;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.composer-activity-indicator {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: calc(100% + 8px);
+  z-index: 4;
+  margin: 0 auto;
+  padding: 8px 12px;
+  border: 1px solid rgba(43, 63, 84, 0.95);
+  border-radius: 0;
+  background: rgba(10, 17, 28, 0.94);
+  box-shadow: 0 14px 28px rgba(2, 8, 18, 0.3);
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+}
+
+/* OpenCode composer treatment */
+.composer {
+  background: var(--panel);
+  border-color: var(--border);
+  border-radius: 12px;
+  padding: 0;
+  box-shadow: none;
+}
+
+.composer-inner {
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+}
+
+.composer-input-shell {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 10px 12px 4px;
+}
+
+.composer-input-shell:focus-within {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.composer-bottom-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px 8px;
+}
+
+.composer-right-group {
+  display: flex;
+  align-items: center;
+}
+
+.composer textarea {
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+}
+
+.composer textarea::placeholder {
+  color: var(--muted);
+}
+
+.composer-action,
+.composer-workspace-toggle {
+  background: transparent;
+  border-color: var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+  color: var(--text);
+}
+
+.composer-action:hover,
+.composer-workspace-toggle:hover {
+  background: var(--panel-soft);
+  border-color: var(--border-strong);
+  transform: none;
+}
+
+.composer-workspace-toggle.active {
+  background: var(--panel-soft);
+  border-color: var(--text);
+  color: var(--text);
+}
+
+.composer-new-chat {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  box-shadow: none;
+}
+
+.composer-new-chat:hover:not(:disabled) {
+  border: none;
+  background: var(--bg-soft);
+  color: var(--text);
+  transform: none;
+}
+
+.composer-action.composer-send {
+  background: var(--text);
+  border: none;
+  border-radius: 50%;
+  color: var(--bg);
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+}
+
+.composer-action.composer-send svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.composer-action.composer-send:hover {
+  background: var(--muted);
+  border: none;
+  color: var(--bg);
+  transform: none;
+}
+
+.composer-stop {
+  background: transparent;
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.slash-panel {
+  background: var(--panel);
+  border-color: var(--border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+}
+
+.slash-item {
+  border-radius: 0;
+}
+
+.slash-item:hover,
+.slash-item.active {
+  background: var(--bg-soft);
+}
+
+.activity-indicator,
+.composer-activity-indicator {
+  color: var(--muted);
+}
+
+.composer-activity-indicator {
+  background: var(--panel);
+  border-color: var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+  backdrop-filter: none;
+}

@@ -1,0 +1,215 @@
+:root[data-theme="dark"] {
+  body,
+  .app,
+  .main,
+  .center-pane,
+  .workspace-layout,
+  .chat {
+    background: var(--bg);
+  }
+
+  .sidebar,
+  .panel,
+  .chat-header,
+  .login-card,
+  .modal-card,
+  .ui-modal-card,
+  .workspace-panel,
+  .workspace-preview-modal,
+  .approval,
+  .file-change-panel,
+  .file-change-entry {
+    background: var(--panel);
+    border-color: var(--border);
+    color: var(--text);
+  }
+
+  .workspace-preview-panel {
+    background: var(--bg-soft);
+    border-color: var(--border);
+    color: var(--text);
+  }
+
+  .composer {
+    background: #292525;
+    border-color: var(--border);
+    color: var(--text);
+  }
+
+  .msg.user,
+  .msg.assistant {
+    background: #4f4b4b;
+    border-color: var(--border);
+    color: var(--text);
+  }
+
+  .thread-item:hover,
+  .project-item:hover,
+  .agent-item.clickable:hover:not(:disabled),
+  .workspace-tree-item:hover,
+  .slash-item:hover,
+  .slash-item.active,
+  .project-picker-item:hover,
+  .project-picker-item.selected {
+    background: var(--bg-soft);
+  }
+
+  .thread-item.active,
+  .thread-tab-item.active,
+  .workspace-tree-item.selected,
+  .composer-mode.mode-plan,
+  .composer-workspace-toggle.active,
+  .msg.user {
+    background: var(--panel-soft);
+    border-color: var(--border-strong);
+    color: var(--text);
+  }
+
+  .ui-input,
+  .ui-textarea,
+  .ui-select,
+  .project-picker-input,
+  .login-card input,
+  .slash-panel {
+    background: var(--bg-soft);
+    border-color: var(--border);
+    color: var(--text);
+  }
+
+  .composer-inner {
+    background: transparent;
+    border-color: transparent;
+  }
+
+  .composer-input-shell,
+  .composer-bottom-bar,
+  .composer .ui-textarea,
+  .composer textarea {
+    background: #292525;
+  }
+
+  .ui-textarea:focus,
+  .ui-select:focus,
+  .composer-input-shell:focus-within {
+    background: #292525;
+    border-color: transparent;
+  }
+
+  .agent-floating-settings .ui-textarea:focus {
+    outline: none;
+    border-color: var(--border);
+    background: var(--panel-soft);
+    box-shadow: none;
+  }
+
+  .ui-input:focus,
+  .project-picker-input:focus,
+  .login-card input:focus {
+    background: var(--panel);
+  }
+
+  .primary,
+  .ui-button-primary {
+    background: var(--text);
+    border-color: var(--text);
+    color: var(--bg);
+  }
+
+  .secondary,
+  .ui-button-secondary,
+  .ui-button-ghost,
+  .ui-icon-button,
+  .theme-toggle,
+  .notify-toggle,
+  .composer-action,
+  .composer-new-chat,
+  .workspace-refresh,
+  .workspace-preview-action {
+    background: transparent;
+    border-color: var(--border);
+    color: var(--text);
+  }
+
+  .composer-action.composer-send {
+    background: var(--text);
+    border-color: transparent;
+    color: var(--bg);
+  }
+
+  .composer-action.composer-send:hover {
+    background: var(--muted);
+    border-color: transparent;
+    color: var(--bg);
+  }
+
+  .composer-new-chat:hover:not(:disabled) {
+    background: #3a3636;
+  }
+
+  .file-change-code {
+    background: #0f0000;
+    border-color: var(--border-strong);
+    color: var(--text);
+  }
+
+  .login-form-panel {
+    background: #201d1d;
+  }
+
+  .login-visual-panel {
+    background: #27221e;
+  }
+}
+
+:root[data-theme="light"] {
+  body,
+  .app,
+  .main,
+  .center-pane,
+  .workspace-layout,
+  .chat {
+    background: var(--bg);
+  }
+
+  .sidebar,
+  .panel,
+  .chat-header,
+  .composer,
+  .login-card,
+  .modal-card,
+  .ui-modal-card,
+  .workspace-panel,
+  .workspace-preview-modal,
+  .approval,
+  .file-change-panel,
+  .file-change-entry {
+    background: var(--panel);
+    border-color: var(--border);
+    color: var(--text);
+  }
+
+  .workspace-preview-panel {
+    background: var(--bg-soft);
+    border-color: var(--border);
+    color: var(--text);
+  }
+
+  .msg.assistant {
+    background: #f4f1f1;
+    border-color: var(--border);
+    color: var(--text);
+  }
+
+  .file-change-code {
+    background: #fff0f0;
+    border-color: var(--border-strong);
+    color: var(--text);
+  }
+
+  .agent-floating-settings .ui-textarea:focus {
+    outline: none;
+    border-color: var(--border);
+    background: var(--panel-soft);
+    box-shadow: none;
+  }
+}

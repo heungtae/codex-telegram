@@ -1,0 +1,131 @@
+:root {
+  --bg: #fdfcfc;
+  --bg-soft: #f8f7f7;
+  --panel: #fdfcfc;
+  --panel-soft: #f1eeee;
+  --border: rgba(15, 0, 0, 0.12);
+  --border-strong: #646262;
+  --text: #201d1d;
+  --muted: #646262;
+  --brand: #201d1d;
+  --brand-strong: #0f0000;
+  --accent: #007aff;
+  --accent-hover: #0056b3;
+  --danger: #ff3b30;
+  --warning: #ff9f0a;
+  --success: #30a14e;
+  --color-surface: var(--panel);
+  --color-surface-muted: var(--panel-soft);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-text-muted: var(--muted);
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --radius-sm: 4px;
+  --radius-md: 4px;
+  --radius-lg: 4px;
+  --shadow-sm: none;
+  --shadow-md: none;
+  --font-size-sm: 12px;
+  --font-size-md: 14px;
+  --layer-modal: 1200;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --bg: #201d1d;
+  --bg-soft: #292525;
+  --panel: #201d1d;
+  --panel-soft: #302c2c;
+  --border: rgba(253, 252, 252, 0.16);
+  --border-strong: #9a9898;
+  --text: #fdfcfc;
+  --muted: #b7b3b3;
+  --brand: #fdfcfc;
+  --brand-strong: #f1eeee;
+  --accent: #5fa8ff;
+  --accent-hover: #8bc0ff;
+  --danger: #ff6961;
+  --warning: #ffb340;
+  --success: #4bd66f;
+  --color-surface: var(--panel);
+  --color-surface-muted: var(--panel-soft);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-text-muted: var(--muted);
+  --shadow-sm: none;
+  --shadow-md: none;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--bg);
+}
+
+body {
+  margin: 0;
+  color: var(--text);
+  background: var(--bg);
+  font-family: "JetBrains Mono", "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 14px;
+  line-height: 1.5;
+  height: 100vh;
+  overflow: hidden;
+}
+
+button,
+input,
+textarea,
+select {
+  font-family: inherit;
+  color: inherit;
+}
+
+button,
+input,
+textarea,
+select {
+  border-radius: var(--radius-sm);
+}
+
+button:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+input:focus,
+input:focus-visible {
+  outline: none;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
