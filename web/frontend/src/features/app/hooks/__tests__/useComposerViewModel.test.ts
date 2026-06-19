@@ -36,8 +36,8 @@ test("createComposerViewModel packages composer props and handlers", async () =>
     setIsWorkspacePanelOpen: (updater) => {
       calls.push(`workspace:${updater(false)}`);
     },
-    startThread: async (options) => {
-      calls.push(`start:${options.replaceCurrentTab}`);
+    startThread: async (options = {}) => {
+      calls.push(`start:${options.replaceCurrentTab ?? "append"}`);
     },
     interactionBusy: false,
     StopIcon: () => null,
@@ -51,5 +51,5 @@ test("createComposerViewModel packages composer props and handlers", async () =>
   model.onToggleWorkspacePanel();
   await model.onNewChat();
 
-  assert.deepEqual(calls, ["toggle", "focus", "workspace:true", "start:true"]);
+  assert.deepEqual(calls, ["toggle", "focus", "workspace:true", "start:append"]);
 });
