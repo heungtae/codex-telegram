@@ -11,6 +11,7 @@ test("ChatHeader renders the active thread title and add action", () => {
       activeThreadTitle: "Thread One",
       onAddThread: () => {},
       disableAddThread: true,
+      onContextMenu: () => {},
     })
   );
 

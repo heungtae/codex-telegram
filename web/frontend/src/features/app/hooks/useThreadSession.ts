@@ -2,6 +2,56 @@ import { normalizeThreadId } from "../../common/utils";
 import { resolveProjectTabThreadId } from "../state/projectTabThreads";
 import type { ThreadSessionArgs } from "./useThreadSession.types";
 
+type OpenInTelegramDeps = {
+  threadId: string;
+  activeProjectKey: string;
+  activeProjectTabId: string;
+  api: ThreadSessionArgs["api"];
+  loadSessionSummary: () => Promise<void>;
+  loadThreads: (options: { projectKey?: string; projectTabId?: string; revealThreadId?: string }) => Promise<void>;
+  viewThread?: (threadId: string, projectTabId?: string) => Promise<void>;
+};
+
+export function upsertThreadSummary(items: Array<Record<string, unknown>>, threadId: string): Array<Record<string, unknown>> {
+  const normalizedThreadId = normalizeThreadId(threadId);
+  if (!normalizedThreadId) {
+    return items;
+  }
+  if (items.some((item) => normalizeThreadId(String(item?.id ?? "")) === normalizedThreadId)) {
+    return items;
+  }
+  return [{ id: normalizedThreadId, title: normalizedThreadId }, ...items];
+}
+
+export async function openThreadInTelegramForProject({
+  threadId,
+  activeProjectKey,
+  activeProjectTabId,
+  api,
+  loadSessionSummary,
+  loadThreads,
+  viewThread,
+}: OpenInTelegramDeps) {
+  const normalizedThreadId = normalizeThreadId(threadId);
+  if (!normalizedThreadId) {
+    return;
+  }
+  await api("/api/telegram/open-thread", {
+    method: "POST",
+    body: JSON.stringify({
+      thread_id: normalizedThreadId,
+      project_key: activeProjectKey || "",
+    }),
+  });
+  await loadSessionSummary();
+  await loadThreads({
+    projectKey: activeProjectKey,
+    projectTabId: activeProjectTabId,
+    revealThreadId: normalizedThreadId,
+  });
+  await viewThread?.(normalizedThreadId, activeProjectTabId);
+}
+
 export default function useThreadSession(args: ThreadSessionArgs) {
   const {
     api,
@@ -136,18 +186,42 @@ export default function useThreadSession(args: ThreadSessionArgs) {
     }
   };
 
+  const openThreadInTelegram = async (threadId: string) => {
+    await openThreadInTelegramForProject({
+      threadId,
+      activeProjectKey,
+      activeProjectTabId,
+      api,
+      loadSessionSummary,
+      loadThreads,
+      viewThread,
+    });
+  };
+
   const loadThreads = async (
     options: {
       projectKey?: string;
       projectTabId?: string;
       ensureDefaultTab?: boolean;
       resetThreadTabs?: boolean;
+      revealThreadId?: string;
     } = {}
   ) => {
     const projectKey = typeof options.projectKey === "string" ? options.projectKey : (activeProjectKey || "");
-    const projectTabId = typeof options.projectTabId === "string" ? options.projectTabId : (activeProjectTabId || "");
+    let projectTabId = typeof options.projectTabId === "string" ? options.projectTabId : (activeProjectTabId || "");
     const ensureDefaultTab = !!options.ensureDefaultTab;
     const resetThreadTabs = !!options.resetThreadTabs;
+    const revealThreadId = normalizeThreadId(options.revealThreadId);
+    if (revealThreadId && projectKey) {
+      const existingProjectTab = projectTabs.find((tab) => tab?.key === projectKey);
+      const existingProjectTabId = typeof existingProjectTab?.id === "string" ? existingProjectTab.id : "";
+      if (existingProjectTabId) {
+        projectTabId = existingProjectTabId;
+      } else {
+        const project = projectItems.find((item) => item?.key === projectKey) || { key: projectKey, name: projectKey, path: "" };
+        projectTabId = upsertProjectTab(project);
+      }
+    }
     const configuredThreadsLimit = Number.parseInt(String(me?.threads_list_limit ?? "20"), 10);
     const threadsLimit = Number.isFinite(configuredThreadsLimit)
       ? Math.max(1, Math.min(100, configuredThreadsLimit))
@@ -157,9 +231,45 @@ export default function useThreadSession(args: ThreadSessionArgs) {
       query.set("project_key", projectKey);
     }
     const summaries = await api(`/api/threads/summaries?${query.toString()}`);
-    const items = Array.isArray(summaries.items) ? summaries.items : [];
-    if (!projectTabId || projectTabId === activeProjectTabId) {
+    const rawItems = Array.isArray(summaries.items) ? summaries.items : [];
+    const items = revealThreadId ? upsertThreadSummary(rawItems, revealThreadId) : rawItems;
+    if (typeof console !== "undefined" && typeof console.debug === "function") {
+      console.debug("[threads] refreshed", {
+        projectKey,
+        projectTabId,
+        count: items.length,
+        revealThreadId,
+      });
+    }
+    if (!projectTabId || projectTabId === activeProjectTabId || revealThreadId) {
       setThreadItems(items);
+    }
+    if (projectTabId && revealThreadId) {
+      const revealedThread = items.find((item) => normalizeThreadId(String(item?.id ?? "")) === revealThreadId) || {
+        id: revealThreadId,
+        title: revealThreadId,
+      };
+      setThreadTabsByProjectTabId((prev) => {
+        const rows = Array.isArray(prev[projectTabId]) ? prev[projectTabId] : [];
+        if (rows.some((row) => normalizeThreadId(String(row?.id ?? "")) === revealThreadId)) {
+          return prev;
+        }
+        const title = typeof revealedThread?.title === "string" && revealedThread.title
+          ? revealedThread.title
+          : revealThreadId;
+        return {
+          ...prev,
+          [projectTabId]: [...rows, { id: revealThreadId, title, status: "idle", hasUnreadCompletion: false }],
+        };
+      });
+      setThreadProjectTabIdByThreadId((prev) => ({ ...prev, [revealThreadId]: projectTabId }));
+      ensureWorkspaceBucket(revealThreadId);
+      setActiveProjectTabId(projectTabId);
+      setActiveThreadTabIdByProjectTabId((prev) => ({ ...prev, [projectTabId]: revealThreadId }));
+      setActiveThread(revealThreadId);
+      setMessages([]);
+      setStatus("idle");
+      pendingComposerFocusRef.current = true;
     }
     if (ensureDefaultTab && projectTabId) {
       const opened = resetThreadTabs
@@ -484,6 +594,7 @@ export default function useThreadSession(args: ThreadSessionArgs) {
     resolveCurrentThreadId,
     syncThreadMessagesFromServer,
     startThread,
+    openThreadInTelegram,
     selectProject,
     viewThread,
     runCommand,

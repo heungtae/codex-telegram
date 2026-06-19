@@ -7,6 +7,7 @@
     projectTabId?: string;
     ensureDefaultTab?: boolean;
     resetThreadTabs?: boolean;
+    revealThreadId?: string;
   }) => Promise<void>;
   loadSkillSuggestions: () => Promise<void>;
   loadSessionSummary: () => Promise<void>;

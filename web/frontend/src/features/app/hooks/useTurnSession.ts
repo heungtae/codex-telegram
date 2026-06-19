@@ -10,6 +10,7 @@ import {
   handleFileChangeEvent,
   handleImageGenerationItemEvent,
   handleSystemMessageEvent,
+  handleThreadsChangedEvent,
   handleWebSearchItemEvent,
 } from "../events/sseMessageEvents";
 import { logSseEvent, safeParseSseData } from "../events/sseEventUtils";
@@ -309,6 +310,20 @@ export default function useTurnSession(args: TurnSessionArgs) {
       loadSessionSummary().catch(() => {});
     });
 
+    es.addEventListener("threads_changed", (ev) => {
+      const data = parseEventData("threads_changed", ev as MessageEvent<string>);
+      if (!data) {
+        return;
+      }
+      logEvent("threads_changed", data);
+      handleThreadsChangedEvent(data, {
+        loadSessionSummary,
+        loadThreads,
+        activeProjectKeyRef,
+        activeProjectTabIdRef,
+      }).catch(() => {});
+    });
+
     es.addEventListener("app_event", (ev) => {
       const data = parseEventData("app_event", ev as MessageEvent<string>);
       if (!data) {
@@ -319,7 +334,10 @@ export default function useTurnSession(args: TurnSessionArgs) {
         appendMessageToThread,
         applyMessageMutationForThread,
         loadSessionSummary,
+        loadThreads,
         loadWorkspaceStatus,
+        activeProjectKeyRef,
+        activeProjectTabIdRef,
         streamedTurnIdsRef,
         resolveThreadIdFromTurn,
         itemPhaseByTurnRef,
