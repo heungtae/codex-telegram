@@ -21,6 +21,7 @@ from bot.features_ui import features_keyboard, features_panel_text
 from models import state
 from utils.single_instance import find_local_conflict_candidates
 from utils.local_command import run_bang_command
+from web.telegram_sync import bind_telegram_thread_to_active_web
 
 logger = logging.getLogger("codex-telegram.bot")
 _last_conflict_log_at = 0.0
@@ -182,12 +183,15 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    if state_user.active_turn_id:
+    active_thread_running_turn_id = state_user.get_turn_for_thread(state_user.active_thread_id)
+    if not active_thread_running_turn_id and state_user.active_turn_id and not state_user.active_turn_id_by_thread:
+        active_thread_running_turn_id = state_user.active_turn_id
+    if active_thread_running_turn_id:
         await send_reply(
             update,
             (
                 "A turn is already running.\n"
-                f"turnId: {state_user.active_turn_id}\n"
+                f"turnId: {active_thread_running_turn_id}\n"
                 "Use /interrupt (or the Interrupt button) to stop it first."
             ),
             user_id,
@@ -205,6 +209,12 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "threadId": state_user.active_thread_id,
             "input": [{"type": "text", "text": text}],
         }
+        bound_user_ids = await bind_telegram_thread_to_active_web(
+            user_id,
+            state_user.active_thread_id,
+            project_key=user_manager.get_thread_project(state_user.active_thread_id),
+            notify_web=False,
+        )
         collaboration_mode = await _require_turn_collaboration_mode(state_user)
         params["collaborationMode"] = collaboration_mode
         logger.info(
@@ -220,7 +230,11 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         turn = result.get("turn", {})
         turn_id = turn.get("id", "unknown")
         if isinstance(turn_id, str) and turn_id and turn_id != "unknown":
-            state_user.set_turn(turn_id)
+            state_user.set_turn(turn_id, state_user.active_thread_id)
+            user_manager.bind_turn(user_id, turn_id, state_user.active_thread_id)
+            for bound_user_id in bound_user_ids:
+                if bound_user_id != user_id:
+                    user_manager.bind_turn_subscriber(bound_user_id, turn_id, state_user.active_thread_id)
 
         if state_user.selected_project_path:
             await send_reply(update, f"Turn started: {turn_id}\nWorkspace: {state_user.selected_project_path}", user_id)

@@ -8,6 +8,7 @@ from codex.commands import CommandResult
 from bot import handlers
 from models import state
 from models.user import user_manager
+from web.runtime import session_manager
 
 
 class HandlerResultTests(unittest.IsolatedAsyncioTestCase):
@@ -31,6 +32,55 @@ class HandlerResultTests(unittest.IsolatedAsyncioTestCase):
         state.codex_client = self.original_codex_client
         state.command_router = self.original_router
         handlers._last_conflict_log_at = self.original_conflict_log_at
+
+    async def test_message_handler_binds_telegram_turn_to_active_web_session(self):
+        web_session = await session_manager.create("admin", ttl_seconds=120)
+        try:
+            user = user_manager.get(1)
+            user.active_thread_id = "thread-1"
+            user.set_collaboration_mode_mask(
+                {"name": "build", "mode": "default", "model": "gpt-5.3-codex", "reasoning_effort": "medium"}
+            )
+            state.codex_client.call.return_value = {"turn": {"id": "turn-1"}}
+            update = SimpleNamespace(
+                effective_user=SimpleNamespace(id=1),
+                message=SimpleNamespace(text="hello"),
+            )
+
+            with patch("bot.handlers.send_reply", new=AsyncMock()), \
+                 patch("bot.handlers.get", side_effect=lambda key, default=None: [1] if key == "users.allowed_ids" else default), \
+                 patch("models.telegram_bridge.get", side_effect=lambda key, default=None: [1] if key == "users.allowed_ids" else default), \
+                 patch("bot.handlers.wait_for_codex", new=AsyncMock()):
+                await handlers.message_handler(update, context=SimpleNamespace())
+
+            self.assertEqual({1, web_session.user_id}, user_manager.find_user_ids_by_turn("turn-1"))
+            self.assertEqual("thread-1", user_manager.get_turn_thread("turn-1"))
+        finally:
+            await session_manager.delete(web_session.token)
+
+    async def test_message_handler_only_blocks_running_turn_on_active_thread(self):
+        user = user_manager.get(1)
+        user.active_thread_id = "thread-new"
+        user.set_turn("turn-old", "thread-old")
+        user.set_collaboration_mode_mask(
+            {"name": "build", "mode": "default", "model": "gpt-5.3-codex", "reasoning_effort": "medium"}
+        )
+        state.codex_client.call.return_value = {"turn": {"id": "turn-new"}}
+        update = SimpleNamespace(
+            effective_user=SimpleNamespace(id=1),
+            message=SimpleNamespace(text="hello"),
+        )
+
+        with patch("bot.handlers.send_reply", new=AsyncMock()), \
+             patch("bot.handlers.get", side_effect=lambda key, default=None: default), \
+             patch("bot.handlers.wait_for_codex", new=AsyncMock()):
+            await handlers.message_handler(update, context=SimpleNamespace())
+
+        state.codex_client.call.assert_awaited_once()
+        self.assertEqual("turn-new", user.active_turn_id)
+        self.assertEqual("turn-new", user.get_turn_for_thread("thread-new"))
+        self.assertEqual("turn-old", user.get_turn_for_thread("thread-old"))
+
 
     async def test_command_handler_projects_kind_uses_projects_keyboard(self):
         self.mock_router.route.return_value = CommandResult(

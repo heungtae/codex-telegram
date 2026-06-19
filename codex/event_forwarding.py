@@ -977,10 +977,16 @@ def truncate_telegram_text(text: str, footer: str) -> str:
     return text[:head_len] + suffix + footer
 
 
+def telegram_turn_footer(turn_id: str | None) -> str:
+    if isinstance(turn_id, str) and turn_id:
+        return f"\n\nturnId: {turn_id}"
+    return ""
+
+
 async def send_telegram_message(app, user_id: int, text: str, turn_id: str | None) -> None:
     if user_id <= 0 or app is None or not text.strip():
         return
-    footer = f"\n\nturnId: {turn_id or 'unknown'}"
+    footer = telegram_turn_footer(turn_id)
     try:
         await app.bot.send_message(
             chat_id=user_id,
@@ -1020,7 +1026,7 @@ async def send_telegram_file_change(app, user_id: int, payload: dict[str, Any]) 
     try:
         last_index = len(lines) - 1
         for index, line in enumerate(lines):
-            footer = f"\n\nturnId: {turn_id or 'unknown'}" if index == last_index else ""
+            footer = telegram_turn_footer(turn_id) if index == last_index else ""
             await app.bot.send_message(chat_id=user_id, text=truncate_telegram_text(line, footer))
             if index < last_index:
                 await asyncio.sleep(FILE_CHANGE_LINE_DELAY_SECONDS)
@@ -1034,12 +1040,60 @@ async def send_telegram_plan(app, user_id: int, payload: dict[str, Any]) -> None
         await send_telegram_message(app, user_id, f"Plan proposal\n\n{plan_text}", payload.get("turn_id"))
 
 
+def filter_telegram_targets_to_active_thread(
+    method: str,
+    target_user_ids: set[int],
+    thread_id: str | None,
+    turn_id: str | None,
+    params: dict | None,
+) -> set[int]:
+    if not target_user_ids:
+        return set()
+    payload_thread = (params or {}).get("thread")
+    parent_thread_id = (
+        payload_thread.get("forkedFromId")
+        if isinstance(payload_thread, dict) and isinstance(payload_thread.get("forkedFromId"), str)
+        else None
+    )
+    filtered: set[int] = set()
+    for user_id in target_user_ids:
+        if user_id <= 0:
+            filtered.add(user_id)
+            continue
+        active_thread_id = user_manager.get(user_id).active_thread_id
+        if (
+            isinstance(thread_id, str)
+            and thread_id
+            and (active_thread_id == thread_id or active_thread_id == parent_thread_id)
+        ):
+            filtered.add(user_id)
+            continue
+        if not thread_id and method in {"turn/completed", "turn/failed", "turn/cancelled"} and active_thread_id:
+            filtered.add(user_id)
+            continue
+        logger.info(
+            "Telegram forwarding skipped method=%s thread_id=%s turn_id=%s telegram_user_id=%s active_thread_id=%s reason=active_thread_mismatch",
+            method,
+            thread_id,
+            turn_id,
+            user_id,
+            active_thread_id,
+        )
+    return filtered
+
+
 def build_event_forwarder(app, config: ForwardingConfig):
     async def forward_event(method: str, params: dict | None):
         thread_id = extract_thread_id(method, params)
         turn_id = extract_turn_id(method, params)
         if thread_id is None and turn_id:
             thread_id = user_manager.get_turn_thread(turn_id)
+        if not turn_id and thread_id:
+            for user_id in user_manager.find_user_ids_by_thread(thread_id):
+                inferred_turn_id = user_manager.get(user_id).get_turn_for_thread(thread_id)
+                if inferred_turn_id:
+                    turn_id = inferred_turn_id
+                    break
         target_user_ids = set()
         if turn_id:
             target_user_ids.update(user_manager.find_user_ids_by_turn(turn_id))
@@ -1050,6 +1104,7 @@ def build_event_forwarder(app, config: ForwardingConfig):
             fallback_owner = user_manager.find_single_active_turn_owner()
             if fallback_owner is not None:
                 target_user_ids.add(fallback_owner)
+        target_user_ids = filter_telegram_targets_to_active_thread(method, target_user_ids, thread_id, turn_id, params)
 
         if method == "turn/started" and turn_id and target_user_ids:
             actual_mode = normalize_mode_kind((params or {}).get("collaboration_mode_kind") or (params or {}).get("collaborationModeKind"))
@@ -1076,7 +1131,7 @@ def build_event_forwarder(app, config: ForwardingConfig):
                         try:
                             await app.bot.send_message(
                                 chat_id=uid,
-                                text=truncate_telegram_text(message, f"\n\nturnId: {turn_id or 'unknown'}"),
+                                text=truncate_telegram_text(message, telegram_turn_footer(turn_id)),
                             )
                         except Exception:
                             logger.exception("Failed to forward app-server error to Telegram")
@@ -1235,12 +1290,20 @@ def build_event_forwarder(app, config: ForwardingConfig):
         if event_level(method, params) < config.threshold:
             return
         telegram_user_ids = [uid for uid in target_user_ids if uid > 0]
+        logger.info(
+            "Telegram forwarding targets method=%s thread_id=%s turn_id=%s target_user_ids=%s telegram_user_ids=%s",
+            method,
+            thread_id,
+            turn_id,
+            sorted(target_user_ids),
+            sorted(telegram_user_ids),
+        )
         if not telegram_user_ids or app is None:
             return
         message = format_event(method, params, config.rules)
         if message is None or not message.strip():
             return
-        footer = f"\n\nturnId: {turn_id or 'unknown'}"
+        footer = telegram_turn_footer(turn_id)
         for user_id in telegram_user_ids:
             logger.info(
                 "Forwarding app-server event to Telegram user_id=%s method=%s message=%s",

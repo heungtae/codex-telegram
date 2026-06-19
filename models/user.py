@@ -152,6 +152,17 @@ class UserManager:
         if isinstance(thread_id, str) and thread_id:
             self._thread_subscribers.setdefault(thread_id, set()).add(user_id)
 
+    def remove_thread_subscriber(self, user_id: int, thread_id: str | None):
+        if not isinstance(thread_id, str) or not thread_id:
+            return
+        subscribers = self._thread_subscribers.get(thread_id)
+        if subscribers is not None:
+            subscribers.discard(user_id)
+            if not subscribers:
+                self._thread_subscribers.pop(thread_id, None)
+        if self._thread_owners.get(thread_id) == user_id:
+            self._thread_owners.pop(thread_id, None)
+
     def bind_thread_project(self, thread_id: str | None, project_key: str | None):
         if isinstance(thread_id, str) and thread_id and isinstance(project_key, str) and project_key:
             self._thread_projects[thread_id] = project_key
@@ -196,6 +207,7 @@ class UserManager:
         if isinstance(turn_id, str) and turn_id:
             self._turn_subscribers.setdefault(turn_id, set()).add(user_id)
         if isinstance(thread_id, str) and thread_id:
+            self.bind_turn_thread(turn_id, thread_id)
             self.bind_thread_subscriber(user_id, thread_id)
 
     def bind_turn(self, user_id: int, turn_id: str | None, thread_id: str | None = None):
@@ -237,6 +249,60 @@ class UserManager:
             if user.active_turn_id == turn_id:
                 user_ids.add(uid)
         return user_ids
+
+    def remove_turn_subscriber(self, user_id: int, turn_id: str | None):
+        if not isinstance(turn_id, str) or not turn_id:
+            return
+        subscribers = self._turn_subscribers.get(turn_id)
+        if subscribers is not None:
+            subscribers.discard(user_id)
+            if not subscribers:
+                self._turn_subscribers.pop(turn_id, None)
+        if self._turn_owners.get(turn_id) == user_id:
+            self._turn_owners.pop(turn_id, None)
+        self.get(user_id).clear_turn(turn_id=turn_id)
+
+    def remove_user_turn_bindings_except_thread(self, user_id: int, thread_id: str | None):
+        if not isinstance(thread_id, str) or not thread_id:
+            return
+        turn_ids = set(self._turn_threads.keys())
+        turn_ids.update(
+            turn_id
+            for turn_id, subscribers in self._turn_subscribers.items()
+            if user_id in subscribers
+        )
+        turn_ids.update(
+            turn_id
+            for turn_id, owner_id in self._turn_owners.items()
+            if owner_id == user_id
+        )
+        user = self.get(user_id)
+        turn_ids.update(
+            turn_id
+            for mapped_thread_id, turn_id in user.active_turn_id_by_thread.items()
+            if mapped_thread_id != thread_id
+        )
+        for turn_id in list(turn_ids):
+            bound_thread_id = self._turn_threads.get(turn_id)
+            if bound_thread_id != thread_id:
+                self.remove_turn_subscriber(user_id, turn_id)
+                self.remove_thread_subscriber(user_id, bound_thread_id)
+
+    def keep_user_thread_subscription_only(self, user_id: int, thread_id: str | None):
+        if not isinstance(thread_id, str) or not thread_id:
+            return
+        for subscribed_thread_id in list(self._thread_subscribers.keys()):
+            if subscribed_thread_id != thread_id:
+                self.remove_thread_subscriber(user_id, subscribed_thread_id)
+        for owned_thread_id, owner_id in list(self._thread_owners.items()):
+            if owner_id == user_id and owned_thread_id != thread_id:
+                self._thread_owners.pop(owned_thread_id, None)
+        user = self.get(user_id)
+        for mapped_thread_id in list(user.active_turn_id_by_thread.keys()):
+            if mapped_thread_id != thread_id:
+                user.clear_turn(thread_id=mapped_thread_id)
+        self.remove_user_turn_bindings_except_thread(user_id, thread_id)
+        self.bind_thread_subscriber(user_id, thread_id)
 
     def clear_turn_bindings(self, turn_id: str | None):
         if not isinstance(turn_id, str) or not turn_id:
