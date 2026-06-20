@@ -56,6 +56,7 @@ async def post_init(
     match_approval_policy: Callable[..., Any],
     to_thread: Callable[..., Awaitable[Any]],
 ) -> None:
+    state.telegram_app = app
     state.codex_client = await setup_codex_fn()
     state.command_router = command_router_factory(state.codex_client)
     state.approval_guardian = approval_guardian_factory()
@@ -95,6 +96,7 @@ async def post_shutdown(
     *,
     state_module=state,
 ) -> None:
+    state_module.telegram_app = None
     if state_module.codex_client:
         await state_module.codex_client.stop()
         state_module.codex_client = None

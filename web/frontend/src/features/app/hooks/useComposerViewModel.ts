@@ -61,7 +61,7 @@ export function createComposerViewModel({
     isCompactWorkspaceLayout,
     isWorkspacePanelOpen,
     onToggleWorkspacePanel: () => setIsWorkspacePanelOpen((current) => !current),
-    onNewChat: async () => startThread({ replaceCurrentTab: true }),
+    onNewChat: async () => startThread(),
     interactionBusy,
     StopIcon,
     SendIcon,

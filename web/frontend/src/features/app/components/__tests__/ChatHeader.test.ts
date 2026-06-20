@@ -11,6 +11,7 @@ test("ChatHeader renders the active thread title and add action", () => {
       activeThreadTitle: "Thread One",
       onAddThread: () => {},
       disableAddThread: true,
+      onContextMenu: () => {},
     })
   );
 
@@ -19,4 +20,19 @@ test("ChatHeader renders the active thread title and add action", () => {
   assert.match(html, /aria-label="Add thread tab"/);
   assert.match(html, /disabled=""/);
   assert.doesNotMatch(html, /project-tab-chip/);
+});
+
+test("ChatHeader attaches the context action to the full header", () => {
+  const onContextMenu = () => {};
+  const element = ChatHeader({
+    activeThreadTitle: "Thread One",
+    onAddThread: () => {},
+    disableAddThread: false,
+    onContextMenu,
+  });
+
+  assert.equal(element.type, "header");
+  assert.equal(element.props.onContextMenu, onContextMenu);
+  const title = React.Children.toArray(element.props.children)[0];
+  assert.equal(title.props.onContextMenu, undefined);
 });

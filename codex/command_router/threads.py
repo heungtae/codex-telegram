@@ -126,6 +126,15 @@ class ThreadCommands:
 
         if thread_id:
             user_manager.set_active_thread(user_id, thread_id, project_key=(project or {}).get("key"))
+            if user_id > 0:
+                from web.telegram_sync import bind_telegram_thread_to_active_web
+
+                await bind_telegram_thread_to_active_web(
+                    user_id,
+                    thread_id,
+                    project_key=(project or {}).get("key"),
+                    notify_web=True,
+                )
 
         if project:
             return text_result(
@@ -149,6 +158,15 @@ class ThreadCommands:
 
         await self.ctx.codex.call("thread/resume", {"threadId": thread_id})
         user_manager.set_active_thread(user_id, thread_id)
+        if user_id > 0:
+            from web.telegram_sync import bind_telegram_thread_to_active_web
+
+            await bind_telegram_thread_to_active_web(
+                user_id,
+                thread_id,
+                project_key=user_manager.get_thread_project(thread_id),
+                notify_web=True,
+            )
         return text_result(f"Thread resumed: {thread_id}", thread_id=thread_id)
 
     async def fork(self, args: list[str], user_id: int) -> CommandResult:

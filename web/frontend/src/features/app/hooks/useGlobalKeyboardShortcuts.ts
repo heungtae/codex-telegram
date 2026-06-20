@@ -58,7 +58,7 @@ export default function useGlobalKeyboardShortcuts(args: UseGlobalKeyboardShortc
           case "N":
             commandRefs.focusComposer.current?.();
             if (!interactionBusy) {
-              commandRefs.startThread.current?.({ replaceCurrentTab: true }).catch(() => {});
+              commandRefs.startThread.current?.().catch(() => {});
             }
             break;
           case "t":

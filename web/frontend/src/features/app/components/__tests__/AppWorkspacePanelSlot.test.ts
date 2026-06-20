@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import AppWorkspacePanelSlot from "../AppWorkspacePanelSlot";
 
-test("AppWorkspacePanelSlot renders workspace panel with derived root label", () => {
+test("AppWorkspacePanelSlot renders the active preview before project structure", () => {
   const html = renderToStaticMarkup(
     React.createElement(AppWorkspacePanelSlot, {
       isCompactWorkspaceLayout: false,
@@ -39,7 +39,6 @@ test("AppWorkspacePanelSlot renders workspace panel with derived root label", ()
     })
   );
 
-  assert.match(html, /codex-telegram/);
   assert.match(html, /README\.md/);
   assert.match(html, /class="workspace-file-tab active"/);
   assert.match(html, /class="workspace-preview-panel file-mode workspace-preview-inline"/);
@@ -73,7 +72,6 @@ test("AppWorkspacePanelSlot renders desktop sidebar controls without explorer op
     })
   );
 
-  assert.match(html, /codex-telegram/);
   assert.match(html, /class="workspace-panel-collapse"/);
   assert.match(html, /aria-label="Collapse workspace panel"/);
   assert.match(html, /placeholder="Filter files\.\.\."/);

@@ -1,6 +1,6 @@
 import unittest
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 from codex.commands import CommandResult
 from bot import callbacks
@@ -127,6 +127,38 @@ class CallbackResultTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Collaboration mode set", kwargs["text"])
         self.assertIn("reply_markup", kwargs)
 
+    async def test_callback_start_routes_new_thread_and_logs_thread_id(self):
+        self.mock_router.route.return_value = CommandResult(
+            kind="text",
+            text="Thread started: thread-callback-1",
+            meta={"thread_id": "thread-callback-1"},
+        )
+        query = SimpleNamespace(
+            data="cmd:start",
+            answer=AsyncMock(),
+            edit_message_text=AsyncMock(),
+        )
+        update = SimpleNamespace(
+            callback_query=query,
+            effective_user=SimpleNamespace(id=1),
+            effective_chat=SimpleNamespace(id=100),
+        )
+
+        with patch("bot.callbacks._wait_for_codex", new=AsyncMock()), \
+             patch("bot.callbacks.logger") as mock_logger:
+            await callbacks.callback_handler(update, self.context)
+
+        self.mock_router.route.assert_awaited_once_with("/start", [], 1)
+        kwargs = self.context.bot.send_message.await_args.kwargs
+        self.assertEqual("Thread started: thread-callback-1", kwargs["text"])
+        self.assertIn("reply_markup", kwargs)
+        self.assertTrue(
+            any(
+                len(call.args) >= 4 and call.args[0] == "Telegram callback /start result user_id=%s kind=%s thread_id=%s"
+                for call in mock_logger.info.call_args_list
+            )
+        )
+
     async def test_callback_menu_shows_current_mode(self):
         user_manager.get(1).set_collaboration_mode("plan")
         query = SimpleNamespace(
@@ -206,6 +238,64 @@ class CallbackResultTests(unittest.IsolatedAsyncioTestCase):
         kwargs = self.context.bot.send_message.await_args.kwargs
         self.assertIn("Collaboration mode set", kwargs["text"])
         self.assertIn("reply_markup", kwargs)
+
+    async def test_callback_resume_shows_thread_changed_preview(self):
+        self.mock_router.route.side_effect = [
+            CommandResult(kind="text", text="Thread resumed: thread-1", meta={"thread_id": "thread-1"}),
+            CommandResult(
+                kind="read",
+                text=(
+                    "Thread: Existing discussion\n"
+                    "Status: active\n"
+                    "ID: thread-1\n"
+                    "Turns: 1\n"
+                    "Preview: What changed? It is synced."
+                ),
+                meta={"thread_id": "thread-1"},
+            ),
+        ]
+        query = SimpleNamespace(
+            data="resume:thread-1",
+            answer=AsyncMock(),
+            edit_message_text=AsyncMock(),
+        )
+        update = SimpleNamespace(
+            callback_query=query,
+            effective_user=SimpleNamespace(id=1),
+            effective_chat=SimpleNamespace(id=100),
+        )
+
+        await callbacks.callback_handler(update, self.context)
+
+        sent_text = query.edit_message_text.await_args.args[0]
+        self.assertIn("Telegram active thread changed", sent_text)
+        self.assertIn("Existing discussion", sent_text)
+        self.assertIn("What changed? It is synced.", sent_text)
+        self.mock_router.route.assert_any_await("/resume", ["thread-1"], 1)
+        self.mock_router.route.assert_any_await("/read", ["thread-1"], 1)
+
+    async def test_callback_resume_failure_stops_before_read(self):
+        self.mock_router.route.return_value = CommandResult(
+            kind="error",
+            text="Error: resume failed",
+        )
+        query = SimpleNamespace(
+            data="resume:thread-1",
+            answer=AsyncMock(),
+            edit_message_text=AsyncMock(),
+        )
+        update = SimpleNamespace(
+            callback_query=query,
+            effective_user=SimpleNamespace(id=1),
+            effective_chat=SimpleNamespace(id=100),
+        )
+
+        await callbacks.callback_handler(update, self.context)
+
+        sent_text = query.edit_message_text.await_args.args[0]
+        self.assertEqual("Error: resume failed", sent_text)
+        self.assertNotIn("Telegram active thread changed", sent_text)
+        self.mock_router.route.assert_awaited_once_with("/resume", ["thread-1"], 1)
 
 if __name__ == "__main__":
     unittest.main()

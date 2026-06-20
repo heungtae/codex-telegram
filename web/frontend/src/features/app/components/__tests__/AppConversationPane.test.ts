@@ -4,10 +4,18 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import AppConversationPane from "../AppConversationPane";
+import { shouldOpenInTelegramModal } from "../openInTelegramState";
 
 function Icon() {
   return React.createElement("span", null, "icon");
 }
+
+test("Open in Telegram modal only opens for a different non-empty thread", () => {
+  assert.equal(shouldOpenInTelegramModal("", "thread-1"), false);
+  assert.equal(shouldOpenInTelegramModal("thread-1", "thread-1"), false);
+  assert.equal(shouldOpenInTelegramModal(" thread-2 ", "thread-1"), true);
+  assert.equal(shouldOpenInTelegramModal("thread-2", ""), true);
+});
 
 test("AppConversationPane renders chat header, chat feed, and composer controls", () => {
   const html = renderToStaticMarkup(
@@ -18,11 +26,14 @@ test("AppConversationPane renders chat header, chat feed, and composer controls"
         projectTabStatusById: {},
         onSelectProjectTab: () => {},
         onCloseProjectTab: () => {},
+        threadItems: [{ id: "thread-1", title: "Thread One" }],
         threadTabs: [{ id: "thread-1", title: "Thread One" }],
         activeThread: "thread-1",
+        telegramActiveThreadId: "thread-1",
         onSelectThread: () => {},
         onCloseThread: () => {},
         onAddThread: () => {},
+        onOpenThreadInTelegram: () => {},
         disableAddThread: false,
       },
       workspace: {
@@ -94,12 +105,15 @@ test("AppConversationPane renders chat header, chat feed, and composer controls"
   assert.match(html, /class="ui-icon-button composer-action composer-send"/);
 });
 
-test("AppConversationPane renders a collapsed desktop workspace rail when workspace panel is closed", () => {
+test("AppConversationPane does not render the workspace panel shell when collapsed on desktop", () => {
   const baseProps = {
     tabs: {
+      threadItems: [{ id: "thread-1", title: "Thread One" }],
       threadTabs: [{ id: "thread-1", title: "Thread One" }],
       activeThread: "thread-1",
+      telegramActiveThreadId: "thread-1",
       onAddThread: () => {},
+      onOpenThreadInTelegram: () => {},
       disableAddThread: false,
     },
     workspace: {
@@ -162,17 +176,19 @@ test("AppConversationPane renders a collapsed desktop workspace rail when worksp
 
   const html = renderToStaticMarkup(React.createElement(AppConversationPane, baseProps));
 
-  assert.match(html, /workspace-panel-rail/);
-  assert.match(html, /aria-label="Open workspace panel"/);
+  assert.doesNotMatch(html, /workspace-panel-rail/);
   assert.doesNotMatch(html, /workspace-panel-shell/);
 });
 
 test("AppConversationPane suppresses preview overlay on desktop layout", () => {
   const baseProps = {
     tabs: {
+      threadItems: [{ id: "thread-1", title: "Thread One" }],
       threadTabs: [{ id: "thread-1", title: "Thread One" }],
       activeThread: "thread-1",
+      telegramActiveThreadId: "thread-1",
       onAddThread: () => {},
+      onOpenThreadInTelegram: () => {},
       disableAddThread: false,
     },
     workspace: {
@@ -252,9 +268,12 @@ test("AppConversationPane suppresses preview overlay on desktop layout", () => {
 test("AppConversationPane keeps preview overlay on mobile layout", () => {
   const baseProps = {
     tabs: {
+      threadItems: [{ id: "thread-1", title: "Thread One" }],
       threadTabs: [{ id: "thread-1", title: "Thread One" }],
       activeThread: "thread-1",
+      telegramActiveThreadId: "thread-1",
       onAddThread: () => {},
+      onOpenThreadInTelegram: () => {},
       disableAddThread: false,
     },
     workspace: {

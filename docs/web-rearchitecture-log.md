@@ -20,6 +20,365 @@ Rule:
   - ...
 ```
 
+## 2026-06-19 16:15 (local)
+- Objective:
+  - `Open in Telegram`을 현재 chat header thread에 대한 compact 확인 흐름으로 변경하고 연결 상태를 프로젝트 목록에 표시.
+- Files changed:
+  - `web/frontend/src/features/app/components/{AppConversationPane,ChatHeader,OpenInTelegramModal,SidebarProjectsPanel}.tsx`
+  - `web/frontend/src/features/app/components/{AppSidebarContentPanel,AppSidebarPane,openInTelegramState}.ts*`
+  - `web/frontend/src/features/app/containers/AppSidebarContainer.tsx`
+  - `web/frontend/src/features/app/hooks/useAppRuntimePresentation.tsx`
+  - `web/frontend/src/styles/{_overlays,_shell}.scss`
+  - 관련 frontend component/style 테스트
+- Changes:
+  - thread 선택 목록을 제거하고 연결/변경 여부만 묻는 `Yes`/`No` modal로 축소.
+  - chat header 전체에 우클릭 동작을 적용하고 이미 연결된 동일 thread에서는 modal/API 호출을 생략.
+  - Telegram active thread ID를 sidebar에 전달해 열린 thread 제목 왼쪽에 `T` 배지를 표시.
+  - 열린 thread 행의 투명한 왼쪽 border 제거.
+- Validation:
+  - 신규 회귀 테스트 RED 확인 후 구현.
+  - 변경 범위 테스트 8개 통과.
+  - `npm run lint` 0 errors(기존 warnings 41개 유지).
+  - `npm run build` 성공(142 modules transformed).
+  - 전체 `npm test`: 177개 중 170개 통과, 기존 workspace/sidebar/style assertion 7개 실패.
+- Next step:
+  - 기존 7개 frontend test assertion은 별도 범위에서 현재 UI 구조와 기대값을 정합화.
+
+## 2026-06-19 15:34 (local)
+- Objective:
+  - Telegram `/resume` 실패 시 active thread 변경 성공 메시지가 표시되는 P1 문제 수정.
+- Files changed:
+  - `bot/callbacks.py`
+  - `tests/test_callbacks_results.py`
+  - `docs/web-rearchitecture-log.md`
+- Changes:
+  - `/resume` 결과가 error이면 원본 실패 메시지를 표시하고 callback 처리를 종료하도록 변경.
+  - 실패 후 `/read` 호출 및 `Telegram active thread changed` 메시지 생성을 차단.
+  - 실패 경로에서 라우터가 `/resume` 한 번만 호출되는 회귀 테스트 추가.
+- Validation:
+  - 회귀 테스트 RED 확인: 기존 구현에서 성공 메시지가 생성되어 1 failed.
+  - `python -m pytest tests/test_callbacks_results.py -k 'callback_resume' -q`: 2 passed.
+  - `python -m pytest tests/test_callbacks_results.py tests/test_handlers_results.py tests/test_web_server_local_command.py -k 'resume or open_thread_in_telegram' -q`: 7 passed, 69 deselected.
+  - `python -m pytest tests/test_callbacks_results.py -q`: 12 passed.
+  - Python 3.10 로컬 환경에서는 저장소 외부 `tomllib` 호환 shim을 `PYTHONPATH`로 사용.
+- Next step:
+  - 변경 diff와 whitespace를 최종 검토한 후 `conf.toml`, `utils/**`를 제외하고 커밋 준비.
+
+## 2026-06-19 15:20 (local)
+- Objective:
+  - 기존 소유권 이전 용어를 명시적 cross-client 동작인 `Open in Telegram` / Telegram active-thread selection으로 전환.
+- Files changed:
+  - `web/routes.py`
+  - `web/telegram_thread_selection.py`
+  - `web/frontend/src/features/app/components/OpenInTelegramModal.tsx`
+  - `web/frontend/src/features/app/hooks/useThreadSession.ts`
+  - `docs/plans/20260616-open-in-telegram-side-command.md`
+  - 관련 테스트 및 `docs/web-rearchitecture-log.md`
+- Changes:
+  - API를 `POST /api/telegram/open-thread`로 변경하고 기존 경로를 제거.
+  - Python 모듈·함수·로그를 Telegram active-thread selection 용어로 통일.
+  - Web UI 컴포넌트, 액션, 상태, CSS를 `Open in Telegram` 용어로 rename.
+  - Web thread 조회는 Telegram active thread를 자동 변경하지 않고 명시적 동작만 변경한다는 계약을 문서화.
+  - 계획 문서를 체크리스트가 아닌 선언형 설계 문서로 정리.
+- Validation:
+  - Frontend contract tests RED 후 targeted tests 14 passed.
+  - Backend route tests RED 후 targeted tests 7 passed.
+  - 관련 Frontend targeted tests 20 passed.
+  - 관련 Python tests 101 passed, 기존 Windows path/CRLF assertion 3 failed.
+  - `npm run lint` 통과(0 errors, 기존 warnings 41건).
+  - `npm run build` 통과.
+  - 전체 Frontend tests 174개 중 167 passed, 기존 workspace/sidebar assertion 7 failed.
+  - `npx tsc -p . --noEmit`은 기존 component/test prop typing 오류로 실패; 기존 `ThreadSessionArgs`의 잘못된 입력 필드는 제거됨.
+- Next step:
+  - 실제 Web UI에서 `Open in Telegram` 동작과 Telegram active-thread 변경 알림을 수동 확인.
+
+## 2026-06-19 11:21 (local)
+- Objective:
+  - Open in Telegram 실패를 Web 모달에 표시하고 현재 Telegram 활성 스레드 상태를 Web UI에 동기화.
+- Files changed:
+  - `web/routes.py`
+  - `web/telegram_sync.py`
+  - `web/frontend/src/features/app/hooks/useAppRuntimePresentation.tsx`
+  - `web/frontend/src/features/app/hooks/__tests__/useAppRuntimePresentation.test.ts`
+  - `tests/test_web_server_local_command.py`
+  - `docs/web-rearchitecture-log.md`
+- Changes:
+  - Open in Telegram Promise를 프레젠테이션 계층에서 삼키지 않고 모달까지 전달하도록 변경.
+  - `/api/session/summary`에 nullable `telegram_active_thread_id`를 추가하고 Web 대화 모델에 연결.
+  - 단일 Telegram 사용자 설정 유무 및 Promise 거부 전파 회귀 테스트 추가.
+- Validation:
+  - Frontend presentation targeted test RED(2 failed) 후 GREEN(5 passed).
+  - Backend session summary targeted test RED(2 failed) 후 GREEN(2 passed, Python 3.10 + repo 외부 `tomli` 호환 shim).
+  - Open in Telegram 관련 Frontend targeted tests 19 passed.
+  - 관련 Python tests 101 passed, 기존 Windows path/CRLF assertion 3 failed.
+  - `npm run lint` 통과(0 errors, 기존 warnings 41건), `npm run build` 통과.
+  - 전체 Frontend tests 174개 중 167 passed, 기존 workspace/sidebar assertion 7 failed(신규 실패 없음).
+  - `npx tsc -p . --noEmit`은 기존 component/test prop typing 오류로 실패했으며 이번 P1/P2 변경 관련 신규 오류는 없음.
+- Next step:
+  - 실제 Web UI에서 Open in Telegram API 실패 시 모달 유지/오류 표시와 Telegram 측 thread 변경 후 current badge 갱신을 확인.
+
+## 2026-06-19 00:00 (local)
+- Objective:
+  - Open in Telegram/resume 시 thread title과 최근 대화 preview가 보이지 않는 문제 수정.
+- Files changed:
+  - `models/state.py`
+  - `app_runtime/bootstrap.py`
+  - `web/telegram_thread_selection.py`
+  - `web/routes.py`
+  - `bot/callbacks.py`
+  - `tests/test_web_server_local_command.py`
+  - `tests/test_callbacks_results.py`
+  - `docs/web-rearchitecture-log.md`
+- Changes:
+  - 현재 Telegram `Application` 참조를 runtime state에 저장하고 shutdown 시 clear하도록 추가.
+  - thread title, turn count, 최근 대화 preview를 만드는 Open in Telegram helper 추가.
+  - Web `/api/telegram/Open in Telegram`가 active thread 전환 후 Telegram에 `Telegram active thread changed` preview 메시지를 보내도록 변경.
+  - Telegram `resume:<thread_id>` callback도 같은 preview 포맷을 표시하도록 변경.
+  - Telegram app이 없는 Web-only 상태에서는 notification을 skip하고 route는 성공하도록 유지.
+- Validation:
+  - `& "C:\\Users\\BISTelligence\\AppData\\Local\\Programs\\Python\\Python314\\python.exe" -m pytest tests/test_web_server_local_command.py -k "open_thread_in_telegram_sends_active_thread_preview" -q` RED 후 통과.
+  - `& "C:\\Users\\BISTelligence\\AppData\\Local\\Programs\\Python\\Python314\\python.exe" -m pytest tests/test_callbacks_results.py -k "callback_resume_shows_thread_changed_preview" -q` RED 후 통과.
+  - `& "C:\\Users\\BISTelligence\\AppData\\Local\\Programs\\Python\\Python314\\python.exe" -m pytest tests/test_web_server_local_command.py -k "open_thread_in_telegram" -q` 통과.
+  - `& "C:\\Users\\BISTelligence\\AppData\\Local\\Programs\\Python\\Python314\\python.exe" -m pytest tests/test_callbacks_results.py -k "callback" -q` 통과.
+  - `& "C:\\Users\\BISTelligence\\AppData\\Local\\Programs\\Python\\Python314\\python.exe" -m pytest tests/test_thread_history.py -q` 통과.
+  - `& "C:\\Users\\BISTelligence\\AppData\\Local\\Programs\\Python\\Python314\\python.exe" -m pytest tests/test_web_server_local_command.py tests/test_callbacks_results.py tests/test_thread_history.py -k "open_thread_in_telegram or callback or thread_turn" -q` 통과.
+  - `cd web/frontend && npm run build` 통과.
+- Next step:
+  - 수동 확인: Web Open in Telegram와 Telegram Resume 버튼 모두 Telegram에 `Telegram active thread changed` + title + recent conversation이 표시되는지 확인.
+
+## 2026-06-18 16:02 (local)
+- Objective:
+  - Telegram-created thread가 Web 새 thread 생성처럼 즉시 보이지 않는 문제와 Web -> Telegram 경로 관측성 부족 보정.
+- Files changed:
+  - `web/frontend/src/features/app/events/sseMessageEvents.ts`
+  - `web/frontend/src/features/app/events/__tests__/sseMessageEvents.test.ts`
+  - `web/frontend/src/features/app/hooks/useThreadSession.ts`
+  - `web/frontend/src/features/app/hooks/__tests__/useThreadSession.test.ts`
+  - `web/telegram_sync.py`
+  - `web/routes.py`
+  - `codex/event_forwarding.py`
+  - `docs/web-rearchitecture-log.md`
+- Changes:
+  - `threads_changed`가 현재 active project가 아니라 이벤트의 `project_key`를 우선 사용하도록 변경.
+  - Telegram-created thread reveal 시 해당 project tab을 찾거나 만들고, summaries에 없으면 fallback row를 추가해 thread 영역에 즉시 표시되도록 변경.
+  - reveal된 thread를 Web 새 thread 생성과 동일하게 active thread로 전환하고 messages/status를 초기화.
+  - Web thread/turn sync와 Telegram forwarding target 로그를 추가해 Web -> Telegram 경로 확인 가능하게 보강.
+- Validation:
+  - `cd web/frontend && node --import tsx --test src/features/app/events/__tests__/sseMessageEvents.test.ts` RED 후 통과.
+  - `cd web/frontend && node --import tsx --test src/features/app/hooks/__tests__/useThreadSession.test.ts` RED 후 통과.
+  - `cd web/frontend && npm run build` 통과.
+  - `& "C:\\Users\\BISTelligence\\AppData\\Local\\Programs\\Python\\Python314\\python.exe" -m pytest tests/test_main_approval_flow.py tests/test_web_server_local_command.py -k "telegram or forwarding or turn_completed or item_completed or thread_status or open_thread_in_telegram or chat_messages_binds_web_turn or thread_summaries" -q` 통과.
+- Next step:
+  - 수동 확인 시 로그에서 `Web thread sync`, `Web turn sync`, `Telegram forwarding targets`, `Forwarding app-server event to Telegram` 순서 확인.
+
+## 2026-06-18 15:46 (local)
+- Objective:
+  - Web/TG 양방향 sync 미반영 원인 보정: Telegram-created thread UI 표시, Web turn Telegram forwarding, Open in Telegram 후 이전 thread 응답 차단.
+- Files changed:
+  - `models/user.py`
+  - `web/routes.py`
+  - `codex/event_forwarding.py`
+  - `web/frontend/src/features/app/events/sseMessageEvents.ts`
+  - `web/frontend/src/features/app/hooks/useThreadSession.ts`
+  - `web/frontend/src/features/app/hooks/useTurnSession.types.ts`
+  - `tests/test_main_approval_flow.py`
+  - `tests/test_web_server_local_command.py`
+  - `web/frontend/src/features/app/events/__tests__/sseMessageEvents.test.ts`
+  - `docs/web-rearchitecture-log.md`
+- Changes:
+  - `threads_changed` 이벤트가 `thread_id`를 `loadThreads`에 전달하고, refresh된 thread를 project tab 목록에 reveal하도록 추가.
+  - Web turn의 Telegram 전달 기준을 active thread equality가 아니라 explicit turn subscriber binding으로 복원.
+  - Open in Telegram 시 allowed Telegram user를 다른 thread의 turn/thread subscriber에서 제거해 이전 running 응답이 Telegram에 표시되지 않게 변경.
+  - turn subscriber binding 시 turn-thread mapping을 함께 기록하도록 보강.
+- Validation:
+  - `cd web/frontend && node --import tsx --test src/features/app/events/__tests__/sseMessageEvents.test.ts` RED 후 통과.
+  - `& "C:\\Users\\BISTelligence\\AppData\\Local\\Programs\\Python\\Python314\\python.exe" -m pytest tests/test_main_approval_flow.py -k "turn_subscriber_telegram_receives_web_turn_even_when_active_thread_differs or open_in_telegram_suppresses" -q` RED 후 통과.
+  - `& "C:\\Users\\BISTelligence\\AppData\\Local\\Programs\\Python\\Python314\\python.exe" -m pytest tests/test_web_server_local_command.py -k "open_thread_in_telegram_removes_allowed_user_from_other_thread_turns" -q` RED 후 통과.
+  - `& "C:\\Users\\BISTelligence\\AppData\\Local\\Programs\\Python\\Python314\\python.exe" -m pytest tests/test_main_approval_flow.py -k "telegram or forwarding or turn_completed or item_completed or thread_status or open_thread_in_telegram" -q` 통과.
+  - `& "C:\\Users\\BISTelligence\\AppData\\Local\\Programs\\Python\\Python314\\python.exe" -m pytest tests/test_web_server_local_command.py -k "telegram or chat_messages_binds_web_turn or thread_summaries" -q` 통과.
+  - `cd web/frontend && node --import tsx --test src/features/app/events/__tests__/sseMessageEvents.test.ts src/features/app/hooks/__tests__/useThreadSession.test.ts src/features/app/hooks/__tests__/useComposerViewModel.test.ts` 통과.
+  - `cd web/frontend && npm run build` 통과.
+  - `& "C:\\Users\\BISTelligence\\AppData\\Local\\Programs\\Python\\Python314\\python.exe" -m pytest tests/test_callbacks_results.py tests/test_handlers_results.py tests/test_main_approval_flow.py tests/test_web_server_local_command.py -k "callback_start or telegram_start_subscribes or telegram_project_select or open_thread_in_telegram or binds_web_turn or binds_telegram_turn or turn_subscriber_telegram or turn_events_are_fanned_out or thread_level_event_without_turn_id or thread_summaries or chat_messages_binds_web_turn" -q` 통과.
+- Next step:
+  - 실제 Web/TG 수동 경로 확인: Telegram New Thread -> Web project/thread 표시, Web message -> Telegram 표시, Open in Telegram 후 이전 thread 응답 미표시.
+
+## 2026-06-18 15:05 (local)
+- Objective:
+  - 수동 테스트로 확인된 Web composer New Chat 대체 버그, Telegram callback New Thread 관측성, Open in Telegram 후 이전 thread 응답 Telegram 표시 문제 수정.
+- Files changed:
+  - `web/frontend/src/features/app/hooks/useComposerViewModel.ts`
+  - `web/frontend/src/features/app/hooks/useGlobalKeyboardShortcuts.ts`
+  - `web/frontend/src/features/app/hooks/__tests__/useComposerViewModel.test.ts`
+  - `bot/callbacks.py`
+  - `tests/test_callbacks_results.py`
+  - `codex/event_forwarding.py`
+  - `tests/test_main_approval_flow.py`
+  - `web/telegram_sync.py`
+  - `docs/web-rearchitecture-log.md`
+- Changes:
+  - Composer New Chat와 Alt+N이 기존 thread tab을 대체하지 않고 새 thread를 append/open 하도록 `replaceCurrentTab` 전달 제거.
+  - Telegram callback `cmd:start`가 `/start` 결과의 kind/thread_id를 로그로 남기도록 추가.
+  - Telegram outbound forwarding은 Telegram user의 active thread가 이벤트 thread와 다를 때 전송하지 않도록 변경.
+  - Telegram-to-Web thread binding helper에 active web user 수, bound user 목록, notify 여부 로그 추가.
+  - 관련 regression tests 추가/갱신.
+- Validation:
+  - `cd web/frontend && node --import tsx --test src/features/app/hooks/__tests__/useComposerViewModel.test.ts` RED 후 통과.
+  - `& "C:\\Users\\BISTelligence\\AppData\\Local\\Programs\\Python\\Python314\\python.exe" -m pytest tests/test_callbacks_results.py -k "callback_start" -q` RED 후 통과.
+  - `& "C:\\Users\\BISTelligence\\AppData\\Local\\Programs\\Python\\Python314\\python.exe" -m pytest tests/test_main_approval_flow.py -k "open_in_telegram_suppresses" -q` RED 후 통과.
+  - `& "C:\\Users\\BISTelligence\\AppData\\Local\\Programs\\Python\\Python314\\python.exe" -m pytest tests/test_callbacks_results.py tests/test_command_router.py tests/test_main_approval_flow.py tests/test_web_server_local_command.py -k "callback_start or telegram_start_subscribes or telegram_project_select or open_thread_in_telegram or binds_web_turn or binds_telegram_turn or turn_events_are_fanned_out or thread_level_event_without_turn_id or unknown_command or threads_empty" -q` 통과.
+  - `cd web/frontend && node --import tsx --test src/features/app/hooks/__tests__/useComposerViewModel.test.ts src/features/app/hooks/__tests__/useThreadSession.test.ts src/features/app/events/__tests__/sseMessageEvents.test.ts` 통과.
+  - `cd web/frontend && npm run build` 통과.
+- Next step:
+  - 실제 Web composer New Chat, Telegram New Thread callback, Open in Telegram 중 이전 thread 응답 미표시를 수동 확인.
+
+## 2026-06-18 11:58 (local)
+- Objective:
+  - Web-Telegram sync stabilization for Telegram/Web turn forwarding, Open in Telegram during running turns, and thread-level Telegram event footers.
+- Files changed:
+  - `bot/handlers.py`
+  - `codex/command_router/projects.py`
+  - `web/routes.py`
+  - `codex/event_forwarding.py`
+  - `tests/test_handlers_results.py`
+  - `tests/test_web_server_local_command.py`
+  - `tests/test_main_approval_flow.py`
+  - `docs/web-rearchitecture-log.md`
+- Changes:
+  - Added regression tests for Telegram turn binding to active Web sessions, Web turn binding to Telegram, local-first Open in Telegram failure handling, thread-specific running-turn checks, and omission of `turnId: unknown`.
+  - Updated Telegram message handling to bind active Web counterpart sessions before `turn/start` and record returned turns by thread.
+  - Updated Telegram `/project` selection to bind active Web counterpart sessions and publish `threads_changed` for the newly-created project thread.
+  - Updated Web message handling to bind the allowed Telegram counterpart to the final turn thread.
+  - Updated Open in Telegram to change local Telegram active thread before best-effort app-server resume.
+  - Updated Telegram event forwarding to infer active turn IDs by thread and omit footer when no turn ID exists.
+- Validation:
+  - Initial `python -m pytest ...` failed under Python 3.10 because `tomllib` is unavailable.
+  - Python 3.14 narrow tests failed as expected before implementation.
+  - `& "C:\\Users\\BISTelligence\\AppData\\Local\\Programs\\Python\\Python314\\python.exe" -m pytest tests/test_handlers_results.py -k "binds_telegram_turn or only_blocks_running" -q` 통과.
+  - `& "C:\\Users\\BISTelligence\\AppData\\Local\\Programs\\Python\\Python314\\python.exe" -m pytest tests/test_web_server_local_command.py -k "open_thread_in_telegram_keeps_local or binds_web_turn" -q` 통과.
+  - `& "C:\\Users\\BISTelligence\\AppData\\Local\\Programs\\Python\\Python314\\python.exe" -m pytest tests/test_main_approval_flow.py -k "thread_level_event_without_turn_id" -q` 통과.
+  - `& "C:\\Users\\BISTelligence\\AppData\\Local\\Programs\\Python\\Python314\\python.exe" -m pytest tests/test_web_server_local_command.py -k "telegram_project_select" -q` 통과.
+  - `& "C:\\Users\\BISTelligence\\AppData\\Local\\Programs\\Python\\Python314\\python.exe" -m pytest tests/test_handlers_results.py tests/test_main_approval_flow.py tests/test_web_server_local_command.py -k "binds_telegram_turn or only_blocks_running or open_thread_in_telegram_rebinds_allowed or open_thread_in_telegram_keeps_local or open_thread_in_telegram_requires_single or binds_web_turn or telegram_start_subscribes or telegram_project_select or chat_messages_allows_turn_start or thread_level_event_without_turn_id or turn_events_are_fanned_out" -q` 통과.
+  - `& "C:\\Users\\BISTelligence\\AppData\\Local\\Programs\\Python\\Python314\\python.exe" -m pytest tests/test_command_router.py -q` 통과.
+  - `cd web/frontend && node --import tsx --test src/features/app/events/__tests__/sseMessageEvents.test.ts` 통과.
+  - `cd web/frontend && npm run build` 통과.
+  - `& "C:\\Users\\BISTelligence\\AppData\\Local\\Programs\\Python\\Python314\\python.exe" -m pytest tests/test_handlers_results.py tests/test_web_server_local_command.py tests/test_main_approval_flow.py -q` 실패: 기존 Windows path/newline expectation 3건 (`/tmp` -> `C:\\tmp`, 8.3 temp path, CRLF file content).
+- Next step:
+  - 실제 Telegram/Web UI로 New Thread, Telegram message, Web message, running Open in Telegram 흐름을 수동 확인.
+
+## 2026-06-18 10:35 (local)
+- Objective:
+  - 단일 Telegram allowed user와 Web UI session이 같은 thread를 양방향으로 공유하도록 Web-Telegram bridge 구현.
+- Files changed:
+  - `models/telegram_bridge.py`
+  - `web/telegram_sync.py`
+  - `web/runtime.py`
+  - `web/routes.py`
+  - `codex/command_router/threads.py`
+  - `web/frontend/src/features/app/events/sseMessageEvents.ts`
+  - `web/frontend/src/features/app/hooks/useTurnSession.ts`
+  - `tests/test_web_runtime.py`
+  - `tests/test_web_server_local_command.py`
+  - `web/frontend/src/features/app/events/__tests__/sseMessageEvents.test.ts`
+  - `docs/web-rearchitecture-log.md`
+- Changes:
+  - 활성 Web session user 목록을 조회하는 `WebSessionManager.active_user_ids()` 추가.
+  - `users.allowed_ids`가 단일 양수 Telegram user일 때만 thread subscriber를 Web/Telegram counterpart에 자동 등록하는 bridge helper 추가.
+  - Web thread start/resume/open/read/message 경로에서 Telegram user를 subscriber로 연결.
+  - Telegram `/start`/`/resume` 경로에서 활성 Web sessions를 subscriber로 연결하고 `threads_changed` SSE 이벤트 발행.
+  - Frontend SSE가 `threads_changed`를 수신하면 session summary와 현재 project tab thread 목록을 즉시 갱신하도록 추가.
+- Validation:
+  - `& "C:\\Users\\BISTelligence\\AppData\\Local\\Programs\\Python\\Python314\\python.exe" -m pytest tests/test_web_runtime.py tests/test_web_server_local_command.py -k "active_user_ids or open_thread_in_telegram or subscribes_single_allowed_telegram_user or telegram_start or threads_start" -q` 통과.
+  - `& "C:\\Users\\BISTelligence\\AppData\\Local\\Programs\\Python\\Python314\\python.exe" -m pytest tests/test_main_approval_flow.py -k "fan or subscriber" -q` 통과.
+  - `cd web/frontend && node --import tsx --test src/features/app/events/__tests__/sseMessageEvents.test.ts` 통과.
+  - `cd web/frontend && npm run build` 통과.
+  - `& "C:\\Users\\BISTelligence\\AppData\\Local\\Programs\\Python\\Python314\\python.exe" -m pytest tests/test_web_server_local_command.py -q` 실패: 기존 Windows path/newline expectation 3건.
+  - `cd web/frontend && npm test` 실패: 기존 workspace/sidebar style expectation 7건.
+- Next step:
+  - 실제 Telegram New Thread 버튼과 Web UI를 동시에 열어 `threads_changed` 수신 후 thread 목록이 즉시 갱신되는지 수동 확인.
+
+## 2026-06-18 10:04 (local)
+- Objective:
+  - Telegram 연동 상태에서 Web UI thread 생성이 생성 직후 active thread로 반영되지 않는 문제 확인 및 수정.
+- Files changed:
+  - `web/routes.py`
+  - `tests/test_web_server_local_command.py`
+  - `docs/web-rearchitecture-log.md`
+- Changes:
+  - `/api/projects/open-thread`가 새 thread를 생성한 뒤 Web session user의 active thread로 설정하도록 변경.
+  - selected project는 유지하면서 생성 thread만 active로 바뀌는 regression assertion 추가.
+- Validation:
+  - `& "C:\\Users\\BISTelligence\\AppData\\Local\\Programs\\Python\\Python314\\python.exe" -m pytest tests/test_web_server_local_command.py -k "projects_open_thread or open_thread_in_telegram" -q` 통과.
+  - `& "C:\\Users\\BISTelligence\\AppData\\Local\\Programs\\Python\\Python314\\python.exe" -m pytest tests/test_web_server_local_command.py -q` 실패: 기존 workspace/path newline 관련 3건.
+- Next step:
+  - Web UI에서 thread 생성 버튼 클릭 후 생성된 thread가 즉시 active tab/thread로 보이는지 수동 확인.
+
+## 2026-06-18 09:54 (local)
+- Objective:
+  - Open in Telegram가 Web 세션이 아니라 단일 allowed Telegram 사용자 세션의 active thread를 전환하도록 수정.
+- Files changed:
+  - `web/routes.py`
+  - `tests/test_web_server_local_command.py`
+  - `web/frontend/src/features/app/hooks/useThreadSession.ts`
+  - `web/frontend/src/features/app/hooks/useAppRuntimePresentation.tsx`
+  - `web/frontend/src/features/app/hooks/__tests__/useThreadSession.test.ts`
+  - `docs/web-rearchitecture-log.md`
+- Changes:
+  - `/api/telegram/Open in Telegram`가 `users.allowed_ids`의 단일 Telegram user id를 대상으로 `/resume` 및 active thread binding을 수행하도록 변경.
+  - allowed Telegram user가 0명 또는 여러 명이면 Open in Telegram를 400 에러로 거부하도록 regression 테스트 추가.
+  - Open in Telegram 후 Web UI가 선택 thread로 자동 전환하지 않고 metadata만 refresh하도록 frontend helper를 분리.
+  - Web session active thread를 Telegram active thread로 표시하던 잘못된 modal 상태 전달을 제거.
+- Validation:
+  - `& "C:\\Users\\BISTelligence\\AppData\\Local\\Programs\\Python\\Python314\\python.exe" -m pytest tests/test_web_server_local_command.py -k open_thread_in_telegram -q` 통과.
+  - `node --import tsx --test src/features/app/hooks/__tests__/useThreadSession.test.ts` 통과.
+  - `node --import tsx --test src/features/app/hooks/__tests__/useThreadSession.test.ts src/features/app/hooks/__tests__/useAppRuntimePresentation.test.ts src/features/app/components/__tests__/AppConversationPane.test.ts src/features/app/components/__tests__/OpenInTelegramModal.test.tsx src/features/app/components/__tests__/ChatHeader.test.ts` 통과.
+  - `npm run build` 통과.
+  - `npm test` 실패: `AppWorkspacePanelSlot` 및 shell style 관련 기존 workspace sidebar 기대값 불일치 7건.
+- Next step:
+  - 실제 Telegram `/start` 후 Web UI Open in Telegram로 Telegram 메시지가 선택 thread에 들어가는지 수동 확인.
+
+## 2026-06-16 00:00 (local)
+- Objective:
+  - Open in Telegram / side command 설계를 `docs/plans` 형식으로 재작성.
+- Files changed:
+  - `docs/plans/20260616-open-in-telegram-side-command.md`
+- Changes:
+  - 기존 설계 내용을 `docs/plans`의 기존 계획 문서 형식에 맞춰 재구성.
+  - 이번 브랜치의 구현 범위를 Open in Telegram 1번으로 명시하고, side command는 후속 작업으로 분리.
+- Validation:
+  - 문서 작성만 수행.
+- Next step:
+  - Open in Telegram 기능 구현 범위를 문서 기준으로 유지하고, 코드 변경은 해당 계획을 따라 진행.
+
+## 2026-06-16 00:00 (local)
+- Objective:
+  - Open in Telegram v1을 문서화하고, 현재 thread 헤더에서 Open in Telegram 모달을 여는 흐름을 구현.
+- Files changed:
+  - `docs/superpowers/specs/2026-06-16-open-in-telegram-side-command-design.md`
+  - `web/routes.py`
+  - `web/frontend/src/features/app/components/AppConversationPane.tsx`
+  - `web/frontend/src/features/app/components/ChatHeader.tsx`
+  - `web/frontend/src/features/app/components/OpenInTelegramModal.tsx`
+  - `web/frontend/src/features/app/components/__tests__/AppConversationPane.test.ts`
+  - `web/frontend/src/features/app/components/__tests__/ChatHeader.test.ts`
+  - `web/frontend/src/features/app/components/__tests__/OpenInTelegramModal.test.tsx`
+  - `web/frontend/src/features/app/hooks/useAppRuntimePresentation.tsx`
+  - `web/frontend/src/features/app/hooks/useThreadSession.ts`
+  - `web/frontend/src/features/app/hooks/useThreadSession.types.ts`
+  - `web/frontend/src/styles/_overlays.scss`
+  - `web/frontend/src/styles/_shell.scss`
+- Changes:
+  - 현재 thread 헤더를 우클릭하면 Open in Telegram 모달이 열리도록 연결.
+  - Open in Telegram 대상 thread 목록과 현재 Telegram 점유 thread를 표시하고, 선택한 thread로 전환하는 `/api/telegram/Open in Telegram` 경로를 추가.
+  - frontend thread session/context에 Open in Telegram 액션을 노출하고, modal UI 및 스타일을 추가.
+  - AppConversationPane 테스트를 현재 레이아웃에 맞게 정리.
+  - side command는 설계 문서에만 반영하고 이번 구현 범위에서는 제외.
+- Validation:
+  - `node --import tsx --test src/features/app/components/__tests__/ChatHeader.test.ts src/features/app/components/__tests__/AppConversationPane.test.ts src/features/app/components/__tests__/OpenInTelegramModal.test.tsx src/features/app/hooks/__tests__/useAppRuntimePresentation.test.ts` 통과.
+  - `& "C:\\Users\\BISTelligence\\AppData\\Local\\Programs\\Python\\Python314\\python.exe" -m pytest tests/test_web_server_local_command.py -k open_thread_in_telegram -q` 통과.
+  - `& "C:\\Users\\BISTelligence\\AppData\\Local\\Programs\\Python\\Python314\\python.exe" -m pytest tests/test_web_server_local_command.py -q` 실행 시 저장소 기존 경로/개행 관련 실패 3건 존재.
+- Next step:
+  - 기존 backend 경로/개행 실패와 이번 Open in Telegram 변경의 연관 여부를 별도 정리하거나, 나머지 연관 테스트를 좁혀서 추가 확인.
+
 ## 2026-06-16 (local)
 - Objective:
   - Workspace panel을 `.main` 내부 `.workspace-layout`에서 `.app` flex 레벨의 오른쪽 사이드바로 분리. 왼쪽 사이드바와 동일한 구조로 독립된 `workspace-right-sidebar` 생성.
@@ -1790,6 +2149,37 @@ Rule:
   - `cd web/frontend && npm run build` 통과.
 - Next step:
   - 실제 브라우저에서 THREADS 진입 시 네트워크 탭으로 실패 endpoint를 확인해 잔여 문제 여부 확정.
+
+## 2026-06-19 10:09 (local)
+- Objective:
+  - Telegram 송수신을 단일 active thread 기준으로 고정하고, Web Open in Telegram 직후 대화 기록이 비는 문제를 복구.
+- Files changed:
+  - `models/user.py`
+  - `models/telegram_bridge.py`
+  - `codex/event_forwarding.py`
+  - `web/routes.py`
+  - `web/frontend/src/features/app/hooks/useThreadSession.ts`
+  - `web/frontend/src/features/app/hooks/__tests__/useThreadSession.test.ts`
+  - `tests/test_main_approval_flow.py`
+  - `tests/test_web_server_local_command.py`
+- Summary:
+  - Web Open in Telegram 후 `loadThreads(...revealThreadId)`와 `viewThread(threadId, projectTabId)`를 호출해 기존 `/api/threads/read` history sync 경로로 대화 기록을 다시 표시하도록 변경.
+  - Telegram user의 stale thread/turn subscription을 선택 thread만 남기고 정리하는 `keep_user_thread_subscription_only` helper 추가.
+  - Web thread sync가 Telegram을 임의 Web thread에 자동 연결하지 않고, Telegram active thread와 일치할 때만 연결되도록 변경.
+  - app-server event forwarding에서 Telegram 대상자는 event thread와 Telegram active thread가 일치할 때만 유지하고, mismatch skip 로그를 남기도록 변경.
+  - stale subscription, running Open in Telegram 후 old thread 차단, Open in Telegram history restore 회귀 테스트를 추가/갱신.
+- Validation:
+  - `python -m py_compile models/user.py models/telegram_bridge.py codex/event_forwarding.py web/routes.py tests/test_main_approval_flow.py tests/test_web_server_local_command.py` 통과.
+  - `& "C:\Users\BISTelligence\AppData\Local\Programs\Python\Python314\python.exe" -m pytest tests/test_main_approval_flow.py -q` 통과 (29 passed, 3 subtests).
+  - `& "C:\Users\BISTelligence\AppData\Local\Programs\Python\Python314\python.exe" -m pytest tests/test_web_server_local_command.py::WebServerLocalCommandTests::test_open_thread_in_telegram_removes_allowed_user_from_other_thread_turns tests/test_web_server_local_command.py::WebServerLocalCommandTests::test_chat_messages_binds_web_turn_to_allowed_telegram_user_when_thread_is_active tests/test_web_server_local_command.py::WebServerLocalCommandTests::test_threads_start_does_not_change_telegram_active_thread tests/test_web_server_local_command.py::WebServerLocalCommandTests::test_telegram_start_subscribes_active_web_session_and_notifies_thread_refresh tests/test_web_server_local_command.py::WebServerLocalCommandTests::test_telegram_project_select_subscribes_active_web_session_and_notifies_thread_refresh -q` 통과 (5/5).
+  - `& "C:\Users\BISTelligence\AppData\Local\Programs\Python\Python314\python.exe" -m pytest tests/test_handlers_results.py tests/test_callbacks_results.py -q` 통과 (27/27).
+  - `cd web/frontend && node --import tsx --test src/features/app/hooks/__tests__/useThreadSession.test.ts` 통과 (3/3).
+  - `cd web/frontend && npm run build` 통과.
+  - `python -m pytest ...`는 기본 `python`이 3.10이라 `tomllib` import 실패로 수집 단계에서 중단됨. Python 3.14 명시 경로로 재검증 완료.
+  - `& "C:\Users\BISTelligence\AppData\Local\Programs\Python\Python314\python.exe" -m pytest tests/test_web_server_local_command.py -q`는 기존 Windows path/newline assertion 3건으로 실패 (`/tmp` vs `C:\tmp`, 8.3 temp path, CRLF content).
+  - `cd web/frontend && npm test -- --run`는 기존 workspace panel/style assertion 7건으로 실패.
+- Next step:
+  - Python 3.11+ 환경에서 targeted pytest를 재실행하고, 실제 Web/Telegram 수동 테스트로 running/non-running Open in Telegram 후 old thread Telegram 출력 차단을 확인.
 
 ## 2026-05-08 15:32 (local)
 - Objective:

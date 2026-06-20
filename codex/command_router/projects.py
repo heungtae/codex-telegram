@@ -210,6 +210,15 @@ class ProjectCommands:
             if isinstance(new_thread_id, str) and new_thread_id:
                 user_manager.set_active_thread(user_id, new_thread_id, project_key=selected["key"])
                 state.clear_turn()
+                if user_id > 0:
+                    from web.telegram_sync import bind_telegram_thread_to_active_web
+
+                    await bind_telegram_thread_to_active_web(
+                        user_id,
+                        new_thread_id,
+                        project_key=selected["key"],
+                        notify_web=True,
+                    )
             else:
                 user_manager.clear_active_thread(user_id)
                 thread_start_note = "\nProject switched, but failed to create a new thread. Run /start."

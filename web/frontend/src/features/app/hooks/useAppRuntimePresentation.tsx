@@ -46,6 +46,21 @@ export function buildConversationViewModel<
   return { tabs, workspace, conversation, composer, icons };
 }
 
+export function createOpenInTelegramAction(
+  openThreadInTelegram: (threadId: string) => Promise<void>
+) {
+  return (threadId: string) => openThreadInTelegram(threadId);
+}
+
+export function resolveTelegramActiveThreadId(sessionSummary: unknown): string {
+  if (!sessionSummary || typeof sessionSummary !== "object") {
+    return "";
+  }
+  const value = (sessionSummary as { telegram_active_thread_id?: unknown })
+    .telegram_active_thread_id;
+  return typeof value === "string" ? value.trim() : "";
+}
+
 export default function useAppRuntimePresentation(args) {
   const {
     theme,
@@ -89,6 +104,7 @@ export default function useAppRuntimePresentation(args) {
         })
       : null;
   const settingsBusy = !!session.agentConfigLoading || !!session.agentConfigSaving;
+  const telegramActiveThreadId = resolveTelegramActiveThreadId(session.sessionSummary);
   const activeThreadTabs = threads.threadTabsByProjectTabId[threads.activeProjectTabId] || [];
   const selectProjectTab = (tabId) => {
     threads.setActiveProjectTabId(tabId);
@@ -99,6 +115,9 @@ export default function useAppRuntimePresentation(args) {
   const closeThreadTab = (threadId) =>
     threadActions.closeThreadTab(threads.activeProjectTabId, threadId);
   const addThread = () => threadActions.startThread().catch(() => {});
+  const openThreadInTelegram = createOpenInTelegramAction(
+    threadActions.openThreadInTelegram
+  );
   const selectThread = (projectTabId, threadId) => {
     if (projectTabId !== threads.activeProjectTabId) {
       threads.setActiveProjectTabId(projectTabId);
@@ -193,6 +212,7 @@ export default function useAppRuntimePresentation(args) {
         projectTabStatusById,
         threadTabsByProjectTabId: threads.threadTabsByProjectTabId,
         activeThread: threads.activeThread,
+        telegramActiveThreadId,
       },
     },
     runtime: {
@@ -248,11 +268,14 @@ export default function useAppRuntimePresentation(args) {
       projectTabStatusById,
       onSelectProjectTab: selectProjectTab,
       onCloseProjectTab: threadActions.closeProjectTab,
+      threadItems: threads.threadItems,
       threadTabs: activeThreadTabs,
       activeThread: threads.activeThread,
+      telegramActiveThreadId,
       onSelectThread: threadActions.viewThread,
       onCloseThread: closeThreadTab,
       onAddThread: addThread,
+      onOpenThreadInTelegram: openThreadInTelegram,
       disableAddThread,
     },
     workspace: {

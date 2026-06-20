@@ -12,6 +12,12 @@ class WebRuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(fetched)
         self.assertEqual("admin", fetched.username)
 
+    async def test_session_manager_lists_active_user_ids(self):
+        mgr = WebSessionManager()
+        session = await mgr.create("admin", ttl_seconds=120)
+
+        self.assertEqual([session.user_id], await mgr.active_user_ids())
+
     async def test_event_hub_publish_and_subscribe(self):
         hub = WebEventHub()
         queue = await hub.subscribe(-1)

@@ -45,6 +45,7 @@ export default function AppSidebarPane({
   threadItems,
   threadTabsByProjectTabId,
   activeThread,
+  telegramActiveThreadId,
   onSelectThread,
   onCloseThread,
   onAddThread,
@@ -103,6 +104,7 @@ export default function AppSidebarPane({
         threadItems={threadItems}
         threadTabsByProjectTabId={threadTabsByProjectTabId}
         activeThread={activeThread}
+        telegramActiveThreadId={telegramActiveThreadId}
         onSelectThread={onSelectThread}
         onCloseThread={onCloseThread}
         onAddThread={onAddThread}

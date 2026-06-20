@@ -46,6 +46,7 @@ function ProjectBaseRowItem({ row, interactionBusy, onSelectProject, onMoreClick
 export default function SidebarProjectsPanel({
   projectRows,
   activeThread,
+  telegramActiveThreadId,
   interactionBusy,
   disableAddThread,
   onSelectProject,
@@ -57,6 +58,7 @@ export default function SidebarProjectsPanel({
 }: {
   projectRows: ProjectRow[];
   activeThread: string;
+  telegramActiveThreadId: string;
   interactionBusy: boolean;
   disableAddThread: boolean;
   onSelectProject: (key: string) => void;
@@ -254,6 +256,9 @@ export default function SidebarProjectsPanel({
                       const isActiveThread =
                         normalizeThreadId(thread.id) ===
                         normalizeThreadId(activeThread as string);
+                      const isTelegramThread =
+                        normalizeThreadId(thread.id) ===
+                        normalizeThreadId(telegramActiveThreadId);
                       return (
                         <div
                           key={thread.id}
@@ -264,6 +269,15 @@ export default function SidebarProjectsPanel({
                             className="session-tab-main"
                             onClick={() => onSelectThread(row.projectTabId, thread.id)}
                           >
+                            {isTelegramThread ? (
+                              <span
+                                className="telegram-thread-badge"
+                                title="Connected to Telegram"
+                                aria-label="Connected to Telegram"
+                              >
+                                T
+                              </span>
+                            ) : null}
                             <span className="session-tab-title">{thread.title}</span>
                             {thread.hasUnreadCompletion ? (
                               <span className="session-tab-dot" />
