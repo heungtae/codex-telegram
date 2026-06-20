@@ -1,175 +1,113 @@
-import React from "react";
+import {
+  Bell,
+  BellOff,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Ellipsis,
+  FileCode,
+  Folder,
+  FolderOpen,
+  Maximize,
+  Menu,
+  Minimize,
+  Moon,
+  PanelLeft,
+  PanelRight,
+  Plus,
+  RotateCw,
+  Save,
+  SendHorizontal,
+  Settings,
+  Square,
+  SquarePen,
+  Sun,
+  X,
+} from "lucide-react";
+
+const iconProps = {
+  "aria-hidden": true,
+  focusable: false,
+  strokeWidth: 2,
+};
 
 export function ThemeIcon({ theme }) {
-  if (theme === "light") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M11 2h2v3h-2zM11 19h2v3h-2zM2 11h3v2H2zM19 11h3v2h-3zM5.64 4.22l2.12 2.12-1.42 1.41-2.12-2.12zM16.24 14.83l2.12 2.12-1.42 1.41-2.12-2.12zM4.22 18.36l2.12-2.12 1.41 1.42-2.12 2.12zM16.83 7.76l2.12-2.12 1.41 1.42-2.12 2.12zM12 7a5 5 0 1 0 5 5 5 5 0 0 0-5-5z" />
-      </svg>
-    );
-  }
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M14.04 2.3a8.74 8.74 0 0 0-1.69 5.19 8.9 8.9 0 0 0 8.89 8.89 8.74 8.74 0 0 0 .46-.01A9 9 0 1 1 14.04 2.3Z" />
-    </svg>
-  );
+  const Icon = theme === "light" ? Sun : Moon;
+  return <Icon {...iconProps} />;
 }
 
 export function SidebarToggleIcon({ collapsed: _collapsed = false }) {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        fill="currentColor"
-        fillRule="evenodd"
-        d="M2 3h20v18H2V3zm1 1h5v16H3V4zm7 0h11v16H10V4z"
-      />
-    </svg>
-  );
+  return <PanelLeft {...iconProps} />;
+}
+
+export function PanelRightIcon() {
+  return <PanelRight {...iconProps} />;
 }
 
 export function SendIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 19V5M5 12l7-7 7 7" />
-    </svg>
-  );
+  return <SendHorizontal {...iconProps} />;
 }
 
 export function StopIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M7 7h10v10H7z" />
-    </svg>
-  );
+  return <Square {...iconProps} />;
 }
 
 export function NotificationIcon({ enabled }) {
-  if (!enabled) {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M18 16v-5a6 6 0 1 0-12 0v5l-2 2v1h16v-1zM9.6 20a2.4 2.4 0 0 0 4.8 0" />
-        <path d="M5 5l14 14" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" />
-      </svg>
-    );
-  }
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M18 16v-5a6 6 0 1 0-12 0v5l-2 2v1h16v-1zM9.6 20a2.4 2.4 0 0 0 4.8 0" />
-    </svg>
-  );
+  const Icon = enabled ? Bell : BellOff;
+  return <Icon {...iconProps} />;
 }
 
 export function NewChatIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-      <path d="M12 5v14M5 12h14" />
-    </svg>
-  );
+  return <Plus {...iconProps} />;
 }
 
 export function RefreshIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M17.65 6.35A7.95 7.95 0 0 0 12 4V1L7 6l5 5V7a5 5 0 1 1-5 5H5a7 7 0 1 0 12.65-5.65Z" />
-    </svg>
-  );
+  return <RotateCw {...iconProps} />;
 }
 
 export function SaveIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M17 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7Zm-5 16a3 3 0 1 1 3-3 3 3 0 0 1-3 3Zm3-10H5V5h10Z" />
-    </svg>
-  );
+  return <Save {...iconProps} />;
 }
 
 export function SettingsIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M19.14 12.94a7.43 7.43 0 0 0 .05-.94 7.43 7.43 0 0 0-.05-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.28 7.28 0 0 0-1.63-.94L14.4 2.8a.49.49 0 0 0-.49-.4h-3.84a.49.49 0 0 0-.49.4l-.36 2.52c-.58.23-1.13.54-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.68 8.84a.5.5 0 0 0 .12.64l2.03 1.58a7.43 7.43 0 0 0-.05.94 7.43 7.43 0 0 0 .05.94L2.8 14.52a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .6.22l2.39-.96c.5.4 1.05.71 1.63.94l.36 2.52a.49.49 0 0 0 .49.4h3.84a.49.49 0 0 0 .49-.4l.36-2.52c.58-.23 1.13-.54 1.63-.94l2.39.96a.5.5 0 0 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64ZM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7Z" />
-    </svg>
-  );
+  return <Settings {...iconProps} />;
 }
 
 export function MenuIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M4 7h16v2H4zm0 5h16v2H4zm0 5h16v2H4z" />
-    </svg>
-  );
+  return <Menu {...iconProps} />;
 }
 
 export function ChevronIcon({ expanded = false }) {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      {expanded ? <path d="M7 10l5 5 5-5z" /> : <path d="M10 7l5 5-5 5z" />}
-    </svg>
-  );
+  const Icon = expanded ? ChevronDown : ChevronRight;
+  return <Icon {...iconProps} />;
 }
 
 export function FolderIcon({ open = false }) {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      {open ? (
-        <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v7A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5z" />
-      ) : (
-        <path d="M4 6.5A2.5 2.5 0 0 1 6.5 4H10l2 2h5.5A2.5 2.5 0 0 1 20 8.5v1H4zM4 10h16v6.5A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5z" />
-      )}
-    </svg>
-  );
+  const Icon = open ? FolderOpen : Folder;
+  return <Icon {...iconProps} />;
 }
 
 export function ExpandIcon({ expanded = false }) {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      {expanded ? (
-        <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3" />
-      ) : (
-        <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
-      )}
-    </svg>
-  );
+  const Icon = expanded ? Minimize : Maximize;
+  return <Icon {...iconProps} />;
 }
 
 export function FileIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M6.5 3h7L19 8.5v11A1.5 1.5 0 0 1 17.5 21h-11A1.5 1.5 0 0 1 5 19.5v-15A1.5 1.5 0 0 1 6.5 3Zm6 1.5V9h4.5" />
-    </svg>
-  );
+  return <FileCode {...iconProps} />;
 }
 
 export function CloseIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M6.2 5.1 5.1 6.2 10.9 12l-5.8 5.8 1.1 1.1L12 13.1l5.8 5.8 1.1-1.1-5.8-5.8 5.8-5.8-1.1-1.1-5.8 5.8Z" />
-    </svg>
-  );
-}
-
-export function ResetSizeIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M6 6h5V4H4v7h2Zm13 0v5h2V4h-7v2Zm-5 12h5v-5h2v7h-7Zm-8-5H4v7h7v-2H6Z" />
-      <path d="M8 9h8v6H8z" />
-    </svg>
-  );
+  return <X {...iconProps} />;
 }
 
 export function MoreIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <circle cx="5" cy="12" r="1.5" fill="currentColor" />
-      <circle cx="12" cy="12" r="1.5" fill="currentColor" />
-      <circle cx="19" cy="12" r="1.5" fill="currentColor" />
-    </svg>
-  );
+  return <Ellipsis {...iconProps} />;
 }
 
 export function ComposeIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
-    </svg>
-  );
+  return <SquarePen {...iconProps} />;
+}
+
+export function CheckIcon() {
+  return <Check {...iconProps} />;
 }

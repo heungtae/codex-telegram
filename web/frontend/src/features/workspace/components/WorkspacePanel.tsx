@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from "react";
 import { basename, normalizeWorkspacePath } from "../../common/utils";
-import { ExpandIcon, FileIcon, FolderIcon, RefreshIcon } from "../../common/components/Icons";
+import { ExpandIcon, FileIcon, FolderIcon, PanelRightIcon, RefreshIcon } from "../../common/components/Icons";
 import { EmptyState } from "../../common/components/ui";
 import { buildWorkspaceDirectoryStatus, filterWorkspaceTree } from "../workspaceTreeModel";
 import WorkspaceDeletedEntries from "./WorkspaceDeletedEntries";
@@ -103,7 +103,7 @@ export default function WorkspacePanel({
             aria-label="Collapse workspace panel"
             title="Collapse workspace panel"
           >
-            &lsaquo;
+            <PanelRightIcon />
           </button>
         ) : null}
       </div>

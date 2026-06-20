@@ -7,8 +7,6 @@
   workspacePreviewMaxWidth: number;
   workspacePreviewMinHeight: number;
   workspacePreviewMaxHeight: number;
-  workspacePreviewDefaultWidth: number;
-  workspacePreviewDefaultHeight: number;
   isResizingSidebar: boolean;
   isResizingWorkspacePanel: boolean;
   isResizingWorkspacePreview: boolean;
@@ -29,5 +27,4 @@
   setWorkspacePreview: (next: unknown) => void;
   persistWorkspacePreviewWidth: (width: number) => void;
   persistWorkspacePreviewHeight: (height: number) => void;
-  clearWorkspacePreviewSize: () => void;
 };

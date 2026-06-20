@@ -1,4 +1,5 @@
 import { IconButton } from "../../common/components/ui";
+import { NewChatIcon } from "../../common/components/Icons";
 
 export default function ChatHeader({
   activeThreadTitle,
@@ -15,7 +16,7 @@ export default function ChatHeader({
         title="Add thread tab"
         disabled={disableAddThread}
       >
-        <img className="tab-action-icon" src="/assets/icons-tab-add.svg" alt="" aria-hidden="true" />
+        <NewChatIcon />
       </IconButton>
     </header>
   );

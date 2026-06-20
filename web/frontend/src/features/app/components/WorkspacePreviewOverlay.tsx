@@ -9,7 +9,6 @@ export default function WorkspacePreviewOverlay({
   workspacePreviewResizeRef,
   setIsResizingWorkspacePreview,
   setWorkspacePreview,
-  resetWorkspacePreviewSize,
 }) {
   if (!workspacePreview) {
     return null;
@@ -24,7 +23,6 @@ export default function WorkspacePreviewOverlay({
       <WorkspacePreviewPanel
         workspacePreview={workspacePreview}
         onClose={() => setWorkspacePreview(null)}
-        onResetSize={resetWorkspacePreviewSize}
         className={`workspace-preview-modal ${isResizingWorkspacePreview ? "resizing" : ""}`}
         style={{
           width: isMobileLayout ? "calc(100vw - 20px)" : `${workspacePreviewWidth}px`,

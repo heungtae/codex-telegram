@@ -1,4 +1,5 @@
 import React from "react";
+import { ChevronIcon } from "../../common/components/Icons";
 
 const ACTION_LABELS = {
   approve: "Approve",
@@ -49,7 +50,7 @@ export default function GuardianRulesSummary({
           title="Rules TOML"
         >
           <span>Configure rules</span>
-          <span aria-hidden="true">›</span>
+          <ChevronIcon />
         </button>
       </div>
     </section>

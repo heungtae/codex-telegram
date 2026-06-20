@@ -1,4 +1,5 @@
 import React, { useId, useState } from "react";
+import { ChevronIcon } from "../../common/components/Icons";
 
 export default function RunningSubagentsList({ activeSubagents }) {
   const [isOpen, setIsOpen] = useState(true);
@@ -19,7 +20,7 @@ export default function RunningSubagentsList({ activeSubagents }) {
           aria-controls={listId}
         >
           <span className="running-subagents-title">Running Subagents</span>
-          <span className="running-subagents-chevron" aria-hidden="true" />
+          <span className="running-subagents-chevron"><ChevronIcon expanded={isOpen} /></span>
         </button>
         <span className="running-subagents-count">{activeSubagents.length} active</span>
       </div>

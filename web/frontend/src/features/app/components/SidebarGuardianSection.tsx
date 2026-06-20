@@ -1,5 +1,5 @@
 import React, { useId, useState } from "react";
-import { RefreshIcon, SaveIcon } from "../../common/components/Icons";
+import { ChevronIcon, RefreshIcon, SaveIcon } from "../../common/components/Icons";
 import GuardianSettingDropdown from "./GuardianSettingDropdown";
 
 export default function SidebarGuardianSection({
@@ -31,7 +31,7 @@ export default function SidebarGuardianSection({
           aria-controls={sectionId}
         >
           <span className="guardian-toggle-label">{activeAgentDef.title}</span>
-          <span className="guardian-toggle-chevron" aria-hidden="true" />
+          <span className="guardian-toggle-chevron"><ChevronIcon expanded={isOpen} /></span>
         </button>
         <button
           type="button"

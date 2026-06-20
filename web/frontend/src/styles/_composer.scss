@@ -104,7 +104,8 @@
 .composer-action svg {
   width: 16px;
   height: 16px;
-  fill: currentColor;
+  fill: none;
+  stroke: currentColor;
 }
 
 .composer-send {

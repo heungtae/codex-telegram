@@ -2,6 +2,7 @@ import AuthenticatedAppPresenter from "./AuthenticatedAppPresenter";
 import AppMainFrame from "./AppMainFrame";
 import AppMainPresenter from "./AppMainPresenter";
 import AppSidebarPresenter from "./AppSidebarPresenter";
+import { PanelRightIcon } from "../../common/components/Icons";
 
 export default function AuthenticatedAppLayout({
   isMobileLayout,
@@ -66,7 +67,7 @@ export default function AuthenticatedAppLayout({
                   aria-label="Open workspace panel"
                   title="Open workspace panel"
                 >
-                  &lsaquo;
+                  <PanelRightIcon />
                 </button>
               )}
             </div>

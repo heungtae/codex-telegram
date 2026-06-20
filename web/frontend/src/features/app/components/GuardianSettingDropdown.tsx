@@ -1,4 +1,5 @@
 import React, { useEffect, useId, useRef, useState } from "react";
+import { CheckIcon, ChevronIcon } from "../../common/components/Icons";
 import {
   getGuardianSettingLabel,
   getNextDropdownIndex,
@@ -99,7 +100,7 @@ export default function GuardianSettingDropdown({
         <span className="setting-dropdown-value">
           {getGuardianSettingLabel(fieldKey, value)}
         </span>
-        <span className="setting-dropdown-chevron" aria-hidden="true" />
+        <span className="setting-dropdown-chevron"><ChevronIcon expanded={isOpen} /></span>
       </button>
       {isOpen ? (
         <div id={listId} className="setting-dropdown-menu" role="listbox" aria-label={label}>
@@ -122,9 +123,7 @@ export default function GuardianSettingDropdown({
               >
                 <span>{getGuardianSettingLabel(fieldKey, option)}</span>
                 {isSelected ? (
-                  <span className="setting-dropdown-check" aria-hidden="true">
-                    ✓
-                  </span>
+                  <span className="setting-dropdown-check"><CheckIcon /></span>
                 ) : null}
               </button>
             );

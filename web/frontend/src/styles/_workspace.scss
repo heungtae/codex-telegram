@@ -56,7 +56,8 @@
 .workspace-refresh svg {
   width: 16px;
   height: 16px;
-  fill: currentColor;
+  fill: none;
+  stroke: currentColor;
 }
 
 .workspace-refresh:hover {
@@ -119,7 +120,8 @@
 .workspace-tree-icon svg {
   width: 16px;
   height: 16px;
-  fill: currentColor;
+  fill: none;
+  stroke: currentColor;
 }
 
 .workspace-tree-label {
@@ -190,7 +192,8 @@
 .workspace-file-tab-icon svg {
   width: 16px;
   height: 16px;
-  fill: currentColor;
+  fill: none;
+  stroke: currentColor;
 }
 
 .workspace-file-tab-label {
@@ -217,6 +220,11 @@
   background: var(--bg-soft);
   border-color: var(--border-strong);
   color: var(--text);
+}
+
+.workspace-panel-collapse svg {
+  width: 18px;
+  height: 18px;
 }
 
 .workspace-sidebar-body {
@@ -314,7 +322,8 @@
 .workspace-unified-action svg {
   width: 16px;
   height: 16px;
-  fill: currentColor;
+  fill: none;
+  stroke: currentColor;
 }
 
 .workspace-unified-expand svg {
@@ -507,7 +516,8 @@
 .workspace-preview-action svg {
   width: 16px;
   height: 16px;
-  fill: currentColor;
+  fill: none;
+  stroke: currentColor;
 }
 
 .workspace-preview-close {
@@ -518,20 +528,7 @@
   cursor: pointer;
 }
 
-.workspace-preview-reset {
-  border: 1px solid var(--border);
-  background: rgba(12, 20, 32, 0.72);
-  color: var(--text);
-  border-radius: 0;
-  cursor: pointer;
-}
-
 .workspace-preview-close:hover {
-  background: rgba(19, 33, 52, 0.94);
-  border-color: rgba(81, 106, 138, 0.8);
-}
-
-.workspace-preview-reset:hover {
   background: rgba(19, 33, 52, 0.94);
   border-color: rgba(81, 106, 138, 0.8);
 }
@@ -722,7 +719,8 @@
 .agent-floating-settings-close svg {
   width: 16px;
   height: 16px;
-  fill: currentColor;
+  fill: none;
+  stroke: currentColor;
 }
 
 .agent-floating-settings-close:disabled {
@@ -795,7 +793,8 @@
 .theme-toggle svg {
   width: 16px;
   height: 16px;
-  fill: currentColor;
+  fill: none;
+  stroke: currentColor;
   flex: 0 0 auto;
 }
 

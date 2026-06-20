@@ -71,7 +71,7 @@ export default function useAppRuntimePresentation(args) {
     showToast,
   } = domainRuntime;
   const { composerViewModel } = composerRuntime;
-  const { resetWorkspacePreviewSize, projectPicker } = effectsRuntime;
+  const { projectPicker } = effectsRuntime;
 
   const activeAgentDef = session.activeAgentSettings
     ? AGENT_CONFIG_DEFS[session.activeAgentSettings]
@@ -264,7 +264,6 @@ export default function useAppRuntimePresentation(args) {
       workspacePreviewResizeRef: refs.workspacePreviewResizeRef,
       setIsResizingWorkspacePreview: workspace.setIsResizingWorkspacePreview,
       setWorkspacePreview: workspace.setWorkspacePreview,
-      resetWorkspacePreviewSize,
       workspacePanel,
       isWorkspaceExpanded: ui.isWorkspaceExpanded,
       isResizingWorkspacePanel: workspace.isResizingWorkspacePanel,

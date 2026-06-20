@@ -293,7 +293,8 @@
   width: 16px;
   height: 16px;
   flex-shrink: 0;
-  fill: currentColor;
+  fill: none;
+  stroke: currentColor;
 }
 
 .sidebar-top-actions .ui-icon-button {
@@ -476,17 +477,13 @@
 
 .projects-toggle-chevron {
   flex-shrink: 0;
-  width: 7px;
-  height: 7px;
-  border-right: 1px solid currentColor;
-  border-bottom: 1px solid currentColor;
-  transform: rotate(45deg) translateY(-2px);
-  transition: transform 0.15s;
+  display: inline-flex;
   color: var(--muted);
 }
 
-.projects-toggle.open .projects-toggle-chevron {
-  transform: rotate(225deg) translate(-2px, -2px);
+.projects-toggle-chevron svg {
+  width: 14px;
+  height: 14px;
 }
 
 .projects-busy-note {
@@ -535,7 +532,8 @@
   width: 14px;
   height: 14px;
   flex-shrink: 0;
-  fill: currentColor;
+  fill: none;
+  stroke: currentColor;
   color: var(--muted);
 }
 
@@ -611,7 +609,8 @@
   width: 14px;
   height: 14px;
   flex-shrink: 0;
-  fill: currentColor;
+  fill: none;
+  stroke: currentColor;
   color: var(--muted);
 }
 
@@ -668,7 +667,8 @@
 .project-action-btn svg {
   width: 16px;
   height: 16px;
-  fill: currentColor;
+  fill: none;
+  stroke: currentColor;
 }
 
 .project-flat-item {
@@ -756,7 +756,8 @@
   width: 14px;
   height: 14px;
   flex-shrink: 0;
-  fill: currentColor;
+  fill: none;
+  stroke: currentColor;
   color: var(--muted);
 }
 
@@ -781,19 +782,9 @@
   z-index: 1;
 }
 
-.project-session-toggle::after {
-  content: "";
-  display: block;
-  width: 6px;
-  height: 6px;
-  border-right: 1px solid currentColor;
-  border-bottom: 1px solid currentColor;
-  transform: rotate(45deg) translateY(-2px);
-  transition: transform 0.15s;
-}
-
-.project-session-toggle.open::after {
-  transform: rotate(225deg) translate(-2px, -2px);
+.project-session-toggle svg {
+  width: 14px;
+  height: 14px;
 }
 
 .project-thread-list {
@@ -896,14 +887,16 @@
 .agent-settings-icon {
   width: 14px;
   height: 14px;
-  fill: currentColor;
+  fill: none;
+  stroke: currentColor;
   flex: 0 0 auto;
 }
 
 .agent-settings-btn svg {
   width: 14px;
   height: 14px;
-  fill: currentColor;
+  fill: none;
+  stroke: currentColor;
   flex: 0 0 auto;
 }
 
@@ -1014,7 +1007,8 @@
 .agent-settings-action svg {
   width: 16px;
   height: 16px;
-  fill: currentColor;
+  fill: none;
+  stroke: currentColor;
 }
 
 .agent-settings-action-primary {
@@ -1091,7 +1085,8 @@
 .agent-settings-inline-btn svg {
   width: 14px;
   height: 14px;
-  fill: currentColor;
+  fill: none;
+  stroke: currentColor;
   flex: 0 0 auto;
 }
 
@@ -1186,7 +1181,11 @@
   background: transparent;
   color: var(--text);
   cursor: pointer;
-  font-size: 18px;
+}
+
+.workspace-panel-rail-toggle svg {
+  width: 18px;
+  height: 18px;
 }
 
 .chat-header {
@@ -1260,17 +1259,13 @@
 
 .threads-toggle-chevron {
   flex-shrink: 0;
-  width: 7px;
-  height: 7px;
-  border-right: 1px solid currentColor;
-  border-bottom: 1px solid currentColor;
-  transform: rotate(45deg) translateY(-2px);
-  transition: transform 0.15s;
+  display: inline-flex;
   color: var(--muted);
 }
 
-.threads-toggle.open .threads-toggle-chevron {
-  transform: rotate(225deg) translate(-2px, -2px);
+.threads-toggle-chevron svg {
+  width: 14px;
+  height: 14px;
 }
 
 .threads-list {
@@ -1430,13 +1425,8 @@
 .threads-compose-btn svg {
   width: 16px;
   height: 16px;
-  fill: currentColor;
-}
-
-.tab-action-icon {
-  width: 16px;
-  height: 16px;
-  display: block;
+  fill: none;
+  stroke: currentColor;
 }
 
 .notify-toggle {
@@ -1455,7 +1445,8 @@
 .notify-toggle svg {
   width: 16px;
   height: 16px;
-  fill: currentColor;
+  fill: none;
+  stroke: currentColor;
 }
 
 .notify-toggle.on {
@@ -1639,17 +1630,13 @@
 
 .guardian-toggle-chevron {
   flex-shrink: 0;
-  width: 7px;
-  height: 7px;
-  border-right: 1px solid currentColor;
-  border-bottom: 1px solid currentColor;
-  transform: rotate(45deg) translateY(-2px);
-  transition: transform 0.15s;
+  display: inline-flex;
   color: var(--muted);
 }
 
-.guardian-toggle.open .guardian-toggle-chevron {
-  transform: rotate(225deg) translate(-2px, -2px);
+.guardian-toggle-chevron svg {
+  width: 14px;
+  height: 14px;
 }
 
 .guardian-settings-body {
@@ -1707,16 +1694,13 @@
 
 .setting-dropdown-chevron {
   flex-shrink: 0;
-  width: 8px;
-  height: 8px;
-  border-right: 1.5px solid var(--muted);
-  border-bottom: 1.5px solid var(--muted);
-  transform: rotate(45deg) translateY(-3px);
-  transition: transform 0.15s;
+  display: inline-flex;
+  color: var(--muted);
 }
 
-.setting-dropdown-trigger.open .setting-dropdown-chevron {
-  transform: rotate(225deg) translateY(1px);
+.setting-dropdown-chevron svg {
+  width: 14px;
+  height: 14px;
 }
 
 .setting-dropdown-menu {
@@ -1770,6 +1754,11 @@
   line-height: 1;
 }
 
+.setting-dropdown-check svg {
+  width: 14px;
+  height: 14px;
+}
+
 /* panel 안에서 dropdown이 overlay를 넘어가도록 overflow 허용 */
 .sidebar-settings-popover {
   overflow: visible;
@@ -1818,17 +1807,14 @@
 }
 
 .running-subagents-chevron {
-  width: 7px;
-  height: 7px;
   flex: 0 0 auto;
-  border-right: 1px solid var(--muted);
-  border-bottom: 1px solid var(--muted);
-  transform: rotate(45deg) translateY(-2px);
-  transition: transform 0.15s ease;
+  display: inline-flex;
+  color: var(--muted);
 }
 
-.running-subagents-toggle.open .running-subagents-chevron {
-  transform: rotate(225deg) translate(-2px, -2px);
+.running-subagents-chevron svg {
+  width: 14px;
+  height: 14px;
 }
 
 .running-subagents-count {
@@ -2039,4 +2025,9 @@
 .guardian-rules-configure:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.guardian-rules-configure svg {
+  width: 14px;
+  height: 14px;
 }

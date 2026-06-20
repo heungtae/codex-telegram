@@ -1864,3 +1864,22 @@ Rule:
   - `cd web/frontend && npm run build` 통과.
 - Next step:
   - 2단계에서 타입 정밀화(`any`/암시 타입 축소)와 Hook dependency 경고 해소를 점진 진행.
+## 2026-06-20 14:08 (local)
+- Objective:
+  - Web UI의 커스텀 아이콘을 `lucide-react`로 통일하고 Workspace preview reset 제어를 제거.
+- Files changed:
+  - `web/frontend/src/features/common/components/Icons.tsx`
+  - `web/frontend/src/features/app/components/*`, `web/frontend/src/features/workspace/components/*`
+  - `web/frontend/src/styles/_composer.scss`, `_shell.scss`, `_workspace.scss`
+  - 관련 프런트엔드 테스트 및 기존 tab add/close SVG 자산
+- Changes:
+  - 공통 아이콘 어댑터를 Lucide 기반으로 전환하고 상태별 아이콘, 좌우 패널 아이콘, chevron/check 아이콘을 통일.
+  - CSS/텍스트로 그리던 chevron과 tab add/close 이미지를 공통 Lucide 컴포넌트로 교체.
+  - Workspace preview reset 버튼과 관련 prop/state 전달 및 저장값 초기화 로직을 제거.
+  - Lucide outline이 채워지지 않도록 관련 SVG 스타일을 stroke 기반으로 정리.
+- Validation:
+  - `cd web/frontend && npm test` 통과 (181/181).
+  - `cd web/frontend && npm run lint` 통과 (0 errors, 기존 warnings 40개).
+  - `cd web/frontend && npm run build` 통과.
+- Next step:
+  - 실제 브라우저에서 light/dark 테마와 좌우 패널, dropdown, workspace 아이콘의 시각적 정렬 확인.

@@ -1,11 +1,10 @@
 import { FileChangeDiff, FileCodePreview } from "./FilePreviewParts";
-import { CloseIcon, ResetSizeIcon } from "../../common/components/Icons";
+import { CloseIcon } from "../../common/components/Icons";
 import { EmptyState } from "../../common/components/ui";
 
 export default function WorkspacePreviewPanel({
   workspacePreview,
   onClose,
-  onResetSize,
   inline = false,
   className = "",
   style,
@@ -37,20 +36,8 @@ export default function WorkspacePreviewPanel({
               {workspacePreview.path}
             </div>
           </div>
-          {onResetSize || onClose ? <div className="workspace-preview-actions">
-            {onResetSize ? (
-              <button
-                className="workspace-preview-action workspace-preview-reset"
-                type="button"
-                onClick={onResetSize}
-                title="Reset preview size to the default dimensions"
-                aria-label="Reset preview size to the default dimensions"
-              >
-                <ResetSizeIcon />
-              </button>
-            ) : null}
-            {onClose ? (
-              <button
+          {onClose ? <div className="workspace-preview-actions">
+            <button
                 className="workspace-preview-action workspace-preview-close"
                 type="button"
                 onClick={onClose}
@@ -58,8 +45,7 @@ export default function WorkspacePreviewPanel({
                 aria-label="Close preview (Esc)"
               >
                 <CloseIcon />
-              </button>
-            ) : null}
+            </button>
           </div> : null}
         </div>
       ) : null}

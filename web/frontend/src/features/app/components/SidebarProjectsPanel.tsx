@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 
-import { ComposeIcon, FolderIcon, MoreIcon } from "../../common/components/Icons";
+import { ChevronIcon, CloseIcon, ComposeIcon, FolderIcon, MoreIcon } from "../../common/components/Icons";
 import { IconButton } from "../../common/components/ui";
 import { normalizeThreadId } from "../../common/utils";
 import { createOpenExplorerPayload } from "../state/projectExplorer.js";
@@ -174,7 +174,7 @@ export default function SidebarProjectsPanel({
             aria-controls={projectsListId}
           >
             <span className="projects-toggle-label">Projects</span>
-            <span className="projects-toggle-chevron" aria-hidden="true" />
+            <span className="projects-toggle-chevron"><ChevronIcon expanded={isProjectsExpanded} /></span>
           </button>
           {interactionBusy ? (
             <span className="projects-busy-note">Switch unavailable while running</span>
@@ -226,7 +226,9 @@ export default function SidebarProjectsPanel({
                       aria-expanded={isExpanded}
                       aria-controls={listId}
                       aria-label={isExpanded ? "Collapse threads" : "Expand threads"}
-                    />
+                    >
+                      <ChevronIcon expanded={isExpanded} />
+                    </button>
                   </div>
                   <IconButton
                     className="project-action-btn"
@@ -276,12 +278,7 @@ export default function SidebarProjectsPanel({
                             ariaLabel={`Close thread ${thread.title}`}
                             title="Close thread"
                           >
-                            <img
-                              className="tab-action-icon"
-                              src="/assets/icons-tab-close.svg"
-                              alt=""
-                              aria-hidden="true"
-                            />
+                            <CloseIcon />
                           </IconButton>
                         </div>
                       );

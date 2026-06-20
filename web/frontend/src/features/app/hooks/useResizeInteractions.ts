@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect } from "react";
+﻿import { useEffect } from "react";
 import type { UseResizeInteractionsArgs } from "./useResizeInteractions.types";
 
 export default function useResizeInteractions(args: UseResizeInteractionsArgs) {
@@ -11,8 +11,6 @@ export default function useResizeInteractions(args: UseResizeInteractionsArgs) {
     workspacePreviewMaxWidth,
     workspacePreviewMinHeight,
     workspacePreviewMaxHeight,
-    workspacePreviewDefaultWidth,
-    workspacePreviewDefaultHeight,
     isResizingSidebar,
     isResizingWorkspacePanel,
     isResizingWorkspacePreview,
@@ -33,7 +31,6 @@ export default function useResizeInteractions(args: UseResizeInteractionsArgs) {
     setWorkspacePreview,
     persistWorkspacePreviewWidth: persistWidth,
     persistWorkspacePreviewHeight: persistHeight,
-    clearWorkspacePreviewSize: clearSize,
   } = args;
 
   useEffect(() => {
@@ -132,11 +129,4 @@ export default function useResizeInteractions(args: UseResizeInteractionsArgs) {
     }
   }, [workspacePreviewHeight]);
 
-  const resetWorkspacePreviewSize = useCallback(() => {
-    clearSize();
-    setWorkspacePreviewWidth(workspacePreviewDefaultWidth);
-    setWorkspacePreviewHeight(workspacePreviewDefaultHeight);
-  }, []);
-
-  return { resetWorkspacePreviewSize };
 }

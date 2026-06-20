@@ -21,10 +21,8 @@ import {
   WORKSPACE_PREVIEW_WIDTH_STORAGE_KEY,
   WORKSPACE_PREVIEW_MIN_HEIGHT,
   WORKSPACE_PREVIEW_MAX_HEIGHT,
-  WORKSPACE_PREVIEW_DEFAULT_HEIGHT,
   WORKSPACE_PREVIEW_MIN_WIDTH,
   WORKSPACE_PREVIEW_MAX_WIDTH,
-  WORKSPACE_PREVIEW_DEFAULT_WIDTH,
 } from "./workspacePreviewConstants";
 
 const SIDEBAR_MIN = 260;
@@ -51,18 +49,6 @@ function persistWorkspacePreviewWidth(width) {
   }
   try {
     window.localStorage.setItem(WORKSPACE_PREVIEW_WIDTH_STORAGE_KEY, String(width));
-  } catch {
-    // Ignore storage failures; preview sizing should not block runtime behavior.
-  }
-}
-
-function clearWorkspacePreviewSize() {
-  if (typeof window === "undefined") {
-    return;
-  }
-  try {
-    window.localStorage.removeItem(WORKSPACE_PREVIEW_HEIGHT_STORAGE_KEY);
-    window.localStorage.removeItem(WORKSPACE_PREVIEW_WIDTH_STORAGE_KEY);
   } catch {
     // Ignore storage failures; preview sizing should not block runtime behavior.
   }
@@ -181,7 +167,7 @@ export default function useAppRuntimeEffects({
     setIsWorkspacePanelOpen: ui.setIsWorkspacePanelOpen,
     setIsResizingWorkspacePanel: workspace.setIsResizingWorkspacePanel,
   });
-  const { resetWorkspacePreviewSize } = useResizeInteractions({
+  useResizeInteractions({
     sidebarMin: SIDEBAR_MIN,
     sidebarMax: SIDEBAR_MAX,
     workspacePanelMin: WORKSPACE_PANEL_MIN,
@@ -190,8 +176,6 @@ export default function useAppRuntimeEffects({
     workspacePreviewMaxWidth: WORKSPACE_PREVIEW_MAX_WIDTH,
     workspacePreviewMinHeight: WORKSPACE_PREVIEW_MIN_HEIGHT,
     workspacePreviewMaxHeight: WORKSPACE_PREVIEW_MAX_HEIGHT,
-    workspacePreviewDefaultWidth: WORKSPACE_PREVIEW_DEFAULT_WIDTH,
-    workspacePreviewDefaultHeight: WORKSPACE_PREVIEW_DEFAULT_HEIGHT,
     isResizingSidebar: ui.isResizingSidebar,
     isResizingWorkspacePanel: workspace.isResizingWorkspacePanel,
     isResizingWorkspacePreview: workspace.isResizingWorkspacePreview,
@@ -212,7 +196,6 @@ export default function useAppRuntimeEffects({
     setWorkspacePreview: workspace.setWorkspacePreview,
     persistWorkspacePreviewWidth,
     persistWorkspacePreviewHeight,
-    clearWorkspacePreviewSize,
   });
   useAppUiEffects({
     activeToken: palette.activeToken,
@@ -267,7 +250,6 @@ export default function useAppRuntimeEffects({
   });
 
   return {
-    resetWorkspacePreviewSize,
     projectPicker,
   };
 }

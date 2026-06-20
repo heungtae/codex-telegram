@@ -1,7 +1,7 @@
 import { useId, useState } from "react";
 
 import { IconButton } from "../../common/components/ui";
-import { ComposeIcon } from "../../common/components/Icons";
+import { ChevronIcon, CloseIcon, ComposeIcon } from "../../common/components/Icons";
 import { normalizeThreadId } from "../../common/utils";
 
 export default function SidebarThreadsPanel({
@@ -41,7 +41,7 @@ export default function SidebarThreadsPanel({
           aria-controls={listId}
         >
           <span className="threads-toggle-label">Threads</span>
-          <span className="threads-toggle-chevron" aria-hidden="true" />
+          <span className="threads-toggle-chevron"><ChevronIcon expanded={isOpen} /></span>
         </button>
         <IconButton
           className="threads-compose-btn"
@@ -81,12 +81,7 @@ export default function SidebarThreadsPanel({
                     ariaLabel={`Close thread ${tab.title || tab.id}`}
                     title="Close thread tab"
                   >
-                    <img
-                      className="tab-action-icon"
-                      src="/assets/icons-tab-close.svg"
-                      alt=""
-                      aria-hidden="true"
-                    />
+                    <CloseIcon />
                   </IconButton>
                 ) : null}
               </div>
