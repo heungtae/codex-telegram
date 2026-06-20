@@ -244,97 +244,54 @@
 }
 
 .open-in-telegram-modal {
-  width: min(620px, calc(100vw - 32px));
+  width: min(420px, calc(100vw - 32px));
   padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-height: min(78vh, 760px);
 }
 
-.open-in-telegram-current {
+.open-in-telegram-existing {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+  background: var(--bg-soft);
   color: var(--muted);
   font-size: 12px;
 }
 
-.open-in-telegram-current-label {
+.open-in-telegram-existing-label {
   font-weight: 600;
 }
 
-.open-in-telegram-current-value {
-  color: var(--text);
-  word-break: break-word;
-}
-
-.open-in-telegram-list {
+.open-in-telegram-existing-value {
   display: flex;
-  flex-direction: column;
+  align-items: baseline;
+  gap: 6px;
   min-height: 0;
-  max-height: 360px;
-  overflow: auto;
-  border: 1px solid var(--border);
-  border-radius: 0;
-  background: var(--bg-soft);
-}
-
-.open-in-telegram-empty {
-  padding: 20px;
-  text-align: center;
-}
-
-.open-in-telegram-item {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 10px 12px;
-  border: 0;
-  border-bottom: 1px solid var(--border);
-  background: transparent;
   color: var(--text);
-  text-align: left;
-  cursor: pointer;
 }
 
-.open-in-telegram-item:last-child {
-  border-bottom: 0;
+.open-in-telegram-existing-id {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-family: ui-monospace, monospace;
 }
 
-.open-in-telegram-item:hover {
-  background: var(--panel-soft);
-}
-
-.open-in-telegram-item.selected {
-  background: var(--panel);
-}
-
-.open-in-telegram-item-main {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.open-in-telegram-item-title {
+.open-in-telegram-existing-title,
+.open-in-telegram-target {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.open-in-telegram-target {
+  color: var(--text);
+  font-size: 13px;
   font-weight: 600;
-}
-
-.open-in-telegram-item-id {
-  color: var(--muted);
-  font-size: 12px;
-  word-break: break-all;
-}
-
-.open-in-telegram-item.current .open-in-telegram-item-title {
-  color: var(--brand);
 }
 
 .open-in-telegram-error {

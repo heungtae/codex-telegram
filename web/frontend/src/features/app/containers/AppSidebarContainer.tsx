@@ -52,6 +52,7 @@ type SidebarDomains = {
     threadItems: ThreadItem[];
     threadTabsByProjectTabId: ThreadTabsByProjectTabId;
     activeThread: string;
+    telegramActiveThreadId: string;
   };
 };
 
@@ -142,6 +143,7 @@ export default function AppSidebarContainer() {
       threadItems={threads.threadItems}
       threadTabsByProjectTabId={threads.threadTabsByProjectTabId}
       activeThread={threads.activeThread}
+      telegramActiveThreadId={threads.telegramActiveThreadId}
       onSelectThread={thread.selectThread}
       onCloseThread={thread.closeThread}
       onAddThread={thread.startThread}

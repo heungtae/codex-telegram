@@ -62,7 +62,7 @@ test("project session states color only the folder and title", () => {
 
   assert.doesNotMatch(
     shellStyles,
-    /\.project-session-row\.state-(?:unread|failed|cancelled)\s*\{[\s\S]*?border-left-color:/,
+    /\.project-session-row\.state-(?:unread|failed|cancelled)\s*\{[^}]*border-left-color:/,
   );
   assert.match(
     shellStyles,
@@ -71,6 +71,13 @@ test("project session states color only the folder and title", () => {
 });
 
 test("thread states color only the thread title", () => {
+  const threadItemRule = shellStyles.match(
+    /\.thread-tab-item\s*\{([\s\S]*?)\n\}/,
+  );
+
+  assert.ok(threadItemRule, "thread tab item styles must exist");
+  assert.doesNotMatch(threadItemRule[1], /border-left:/);
+
   for (const [state, color] of [
     ["running", "var\\(--accent\\)"],
     ["completed", "#48b46f"],

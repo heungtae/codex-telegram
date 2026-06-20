@@ -104,6 +104,7 @@ export default function useAppRuntimePresentation(args) {
         })
       : null;
   const settingsBusy = !!session.agentConfigLoading || !!session.agentConfigSaving;
+  const telegramActiveThreadId = resolveTelegramActiveThreadId(session.sessionSummary);
   const activeThreadTabs = threads.threadTabsByProjectTabId[threads.activeProjectTabId] || [];
   const selectProjectTab = (tabId) => {
     threads.setActiveProjectTabId(tabId);
@@ -211,6 +212,7 @@ export default function useAppRuntimePresentation(args) {
         projectTabStatusById,
         threadTabsByProjectTabId: threads.threadTabsByProjectTabId,
         activeThread: threads.activeThread,
+        telegramActiveThreadId,
       },
     },
     runtime: {
@@ -269,7 +271,7 @@ export default function useAppRuntimePresentation(args) {
       threadItems: threads.threadItems,
       threadTabs: activeThreadTabs,
       activeThread: threads.activeThread,
-      telegramActiveThreadId: resolveTelegramActiveThreadId(session.sessionSummary),
+      telegramActiveThreadId,
       onSelectThread: threadActions.viewThread,
       onCloseThread: closeThreadTab,
       onAddThread: addThread,

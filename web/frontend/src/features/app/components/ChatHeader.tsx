@@ -7,8 +7,12 @@ export default function ChatHeader({
   onContextMenu,
 }) {
   return (
-    <header className="chat-header">
-      <h2 className="chat-header-title" title="Right-click to open in Telegram" onContextMenu={onContextMenu}>
+    <header
+      className="chat-header"
+      title="Right-click to open in Telegram"
+      onContextMenu={onContextMenu}
+    >
+      <h2 className="chat-header-title">
         {activeThreadTitle || "New thread"}
       </h2>
       <IconButton

@@ -23,6 +23,7 @@ export default function AppSidebarContentPanel({
   threadItems,
   threadTabsByProjectTabId,
   activeThread,
+  telegramActiveThreadId,
   onSelectThread,
   onCloseThread,
   onAddThread,
@@ -51,6 +52,7 @@ export default function AppSidebarContentPanel({
       <SidebarProjectsPanel
         projectRows={projectRows}
         activeThread={activeThread}
+        telegramActiveThreadId={telegramActiveThreadId}
         interactionBusy={interactionBusy}
         disableAddThread={disableAddThread}
         onSelectProject={(key) => (selectProject as (k: string) => Promise<unknown>)(key).catch(() => {})}

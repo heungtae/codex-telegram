@@ -7,6 +7,7 @@ import AppComposerPresenter from "./AppComposerPresenter";
 import ChatHeader from "./ChatHeader";
 import OpenInTelegramModal from "./OpenInTelegramModal";
 import WorkspacePreviewOverlay from "./WorkspacePreviewOverlay";
+import { shouldOpenInTelegramModal } from "./openInTelegramState";
 
 export default function AppConversationPane({ tabs, workspace, conversation, composer, icons }) {
   const {
@@ -68,17 +69,19 @@ export default function AppConversationPane({ tabs, workspace, conversation, com
   } = composer;
   const { StopIcon, SendIcon, FolderIcon, NewChatIcon } = icons;
   const [isOpenInTelegramModalOpen, setIsOpenInTelegramModalOpen] = React.useState(false);
-  const [selectedTelegramThreadId, setSelectedTelegramThreadId] = React.useState("");
+  const [targetTelegramThread, setTargetTelegramThread] = React.useState({ id: "", title: "" });
   const [openInTelegramBusy, setOpenInTelegramBusy] = React.useState(false);
   const [openInTelegramError, setOpenInTelegramError] = React.useState("");
 
   const openInTelegramModal = () => {
-    const initialThreadId =
-      normalizeThreadId(activeThreadTab?.id || activeThread) ||
-      normalizeThreadId(telegramActiveThreadId) ||
-      normalizeThreadId(threadItems[0]?.id) ||
-      "";
-    setSelectedTelegramThreadId(initialThreadId);
+    const targetThreadId = normalizeThreadId(activeThreadTab?.id || activeThread);
+    if (!shouldOpenInTelegramModal(targetThreadId, telegramActiveThreadId)) {
+      return;
+    }
+    setTargetTelegramThread({
+      id: targetThreadId,
+      title: activeThreadTab?.title || targetThreadId,
+    });
     setOpenInTelegramError("");
     setIsOpenInTelegramModalOpen(true);
   };
@@ -89,14 +92,14 @@ export default function AppConversationPane({ tabs, workspace, conversation, com
   };
 
   const handleOpenInTelegramConfirm = async () => {
-    const normalizedSelectedThreadId = normalizeThreadId(selectedTelegramThreadId);
-    if (!normalizedSelectedThreadId || openInTelegramBusy) {
+    const targetThreadId = normalizeThreadId(targetTelegramThread.id);
+    if (!targetThreadId || openInTelegramBusy) {
       return;
     }
     setOpenInTelegramBusy(true);
     setOpenInTelegramError("");
     try {
-      await onOpenThreadInTelegram(normalizedSelectedThreadId);
+      await onOpenThreadInTelegram(targetThreadId);
       setIsOpenInTelegramModalOpen(false);
     } catch (err) {
       setOpenInTelegramError(err instanceof Error ? err.message : "Failed to open thread in Telegram.");
@@ -113,10 +116,9 @@ export default function AppConversationPane({ tabs, workspace, conversation, com
           setIsOpenInTelegramModalOpen(false);
           setOpenInTelegramError("");
         }}
-        threadItems={threadItems}
-        selectedThreadId={selectedTelegramThreadId}
-        onSelectThread={setSelectedTelegramThreadId}
         onConfirm={handleOpenInTelegramConfirm}
+        targetThreadId={targetTelegramThread.id}
+        targetThreadTitle={targetTelegramThread.title}
         currentTelegramThreadId={telegramActiveThreadId}
         currentTelegramThreadTitle={telegramActiveThread?.title || telegramActiveThread?.id || ""}
         loading={openInTelegramBusy}

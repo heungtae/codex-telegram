@@ -11,6 +11,7 @@ const NOOP = () => {};
 const BASE_PROPS = {
   projectRows: [] as ProjectRow[],
   activeThread: "",
+  telegramActiveThreadId: "",
   interactionBusy: false,
   disableAddThread: false,
   onSelectProject: NOOP,
@@ -20,6 +21,37 @@ const BASE_PROPS = {
   onCloseThread: NOOP,
   onAddThread: NOOP,
 };
+
+test("Telegram-connected open thread renders a T badge before its title", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(SidebarProjectsPanel, {
+      ...BASE_PROPS,
+      telegramActiveThreadId: "t-1",
+      projectRows: [
+        {
+          type: "session",
+          projectTabId: "project:alpha",
+          key: "alpha",
+          name: "Alpha",
+          path: "/alpha",
+          status: "idle",
+          isActive: true,
+          threadTabs: [
+            { id: "t-1", title: "Telegram Chat", status: "idle", hasUnreadCompletion: false },
+            { id: "t-2", title: "Other Chat", status: "idle", hasUnreadCompletion: false },
+          ],
+        },
+      ],
+    })
+  );
+
+  assert.match(html, /class="telegram-thread-badge"[^>]*title="Connected to Telegram"/);
+  assert.equal((html.match(/class="telegram-thread-badge"/g) || []).length, 1);
+  assert.ok(
+    html.indexOf("telegram-thread-badge") < html.indexOf("Telegram Chat"),
+    "Telegram badge should render before the connected thread title"
+  );
+});
 
 test("기본 프로젝트 행 렌더", () => {
   const html = renderToStaticMarkup(
@@ -31,10 +63,10 @@ test("기본 프로젝트 행 렌더", () => {
     })
   );
 
-  assert.match(html, /project-base-row/);
+  assert.match(html, /project-flat-item/);
   assert.match(html, /Alpha Project/);
-  assert.match(html, /\/alpha/);
-  assert.match(html, /project-pill/);
+  assert.match(html, /project-base-name/);
+  assert.match(html, /project-badge-d/);
 });
 
 test("열린 세션 행 렌더", () => {
@@ -161,7 +193,7 @@ test("이름 버튼과 화살표 토글 버튼이 분리된다", () => {
   assert.match(html, /project-session-toggle/);
 });
 
-test("세션 닫기 버튼에 프로젝트명 aria-label이 포함된다", () => {
+test("세션 헤더에 더보기와 새 채팅 작업이 표시된다", () => {
   const html = renderToStaticMarkup(
     React.createElement(SidebarProjectsPanel, {
       ...BASE_PROPS,
@@ -180,7 +212,9 @@ test("세션 닫기 버튼에 프로젝트명 aria-label이 포함된다", () =>
     })
   );
 
-  assert.match(html, /Close project Alpha Project/);
+  assert.match(html, /aria-label="More options"/);
+  assert.match(html, /aria-label="New chat"/);
+  assert.doesNotMatch(html, /Close project/);
 });
 
 test("세션별 채팅 목록이 격리된다", () => {
@@ -279,7 +313,7 @@ test("펼친 세션에 새 채팅 버튼이 표시된다", () => {
     })
   );
 
-  assert.match(html, /Add new chat/);
+  assert.match(html, /aria-label="New chat"/);
 });
 
 test("프로젝트가 없을 때 빈 상태 메시지를 표시한다", () => {

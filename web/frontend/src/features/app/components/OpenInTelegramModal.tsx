@@ -1,65 +1,55 @@
-import { Badge, Button, EmptyState, Modal } from "../../common/components/ui";
+import { Button, Modal } from "../../common/components/ui";
 
 function normalizeThreadId(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function threadTitle(thread) {
-  const title = typeof thread?.title === "string" ? thread.title.trim() : "";
-  return title || normalizeThreadId(thread?.id) || "Untitled thread";
+function threadTitle(value, fallback) {
+  const title = typeof value === "string" ? value.trim() : "";
+  return title || normalizeThreadId(fallback) || "Untitled thread";
+}
+
+function shortThreadId(value) {
+  return normalizeThreadId(value).slice(0, 8);
 }
 
 export default function OpenInTelegramModal({
   isOpen,
   onClose,
-  threadItems,
-  selectedThreadId,
-  onSelectThread,
   onConfirm,
+  targetThreadId,
+  targetThreadTitle,
   currentTelegramThreadId,
   currentTelegramThreadTitle,
   loading = false,
   errorMessage = "",
 }) {
   const normalizedCurrentThreadId = normalizeThreadId(currentTelegramThreadId);
-  const currentThreadLabel = currentTelegramThreadTitle || normalizedCurrentThreadId || "none";
+  const isChangingConnection = !!normalizedCurrentThreadId;
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} ariaLabel="Open in Telegram" className="open-in-telegram-modal">
       <div className="modal-title">Open in Telegram</div>
       <div className="modal-desc">
-        Choose which thread Telegram should use for messages.
+        {isChangingConnection
+          ? "Change the Telegram connection to this thread?"
+          : "Connect this thread to Telegram?"}
       </div>
-      <div className="open-in-telegram-current">
-        <span className="open-in-telegram-current-label">Active in Telegram:</span>
-        <span className="open-in-telegram-current-value">{currentThreadLabel}</span>
-      </div>
-      <div className="open-in-telegram-list" role="list" aria-label="Available threads">
-        {threadItems.length === 0 ? (
-          <EmptyState className="open-in-telegram-empty">No threads available in this project.</EmptyState>
-        ) : (
-          threadItems.map((thread) => {
-            const threadId = normalizeThreadId(thread?.id);
-            const title = threadTitle(thread);
-            const isSelected = threadId === normalizeThreadId(selectedThreadId);
-            const isCurrentTelegramThread = threadId === normalizedCurrentThreadId;
-            return (
-              <button
-                key={threadId}
-                type="button"
-                className={`open-in-telegram-item${isSelected ? " selected" : ""}${isCurrentTelegramThread ? " current" : ""}`}
-                onMouseDown={(event) => event.stopPropagation()}
-                onClick={() => onSelectThread(threadId)}
-              >
-                <span className="open-in-telegram-item-main">
-                  <span className="open-in-telegram-item-title">{title}</span>
-                  {isCurrentTelegramThread ? <Badge variant="accent">current</Badge> : null}
-                </span>
-                <span className="open-in-telegram-item-id">{threadId}</span>
-              </button>
-            );
-          })
-        )}
+      {isChangingConnection ? (
+        <div className="open-in-telegram-existing">
+          <span className="open-in-telegram-existing-label">Connected now</span>
+          <span className="open-in-telegram-existing-value">
+            <span className="open-in-telegram-existing-id">{shortThreadId(normalizedCurrentThreadId)}</span>
+            {currentTelegramThreadTitle ? (
+              <span className="open-in-telegram-existing-title">
+                {threadTitle(currentTelegramThreadTitle, normalizedCurrentThreadId)}
+              </span>
+            ) : null}
+          </span>
+        </div>
+      ) : null}
+      <div className="open-in-telegram-target" title={normalizeThreadId(targetThreadId)}>
+        {threadTitle(targetThreadTitle, targetThreadId)}
       </div>
       {errorMessage ? <div className="open-in-telegram-error">{errorMessage}</div> : null}
       <div className="modal-actions open-in-telegram-actions">
@@ -68,12 +58,18 @@ export default function OpenInTelegramModal({
           variant="primary"
           onMouseDown={(event) => event.stopPropagation()}
           onClick={onConfirm}
-          disabled={loading || !normalizeThreadId(selectedThreadId)}
+          disabled={loading || !normalizeThreadId(targetThreadId)}
         >
-          {loading ? "Opening..." : "Open in Telegram"}
+          {loading ? (isChangingConnection ? "Changing..." : "Connecting...") : "Yes"}
         </Button>
-        <Button type="button" variant="ghost" onMouseDown={(event) => event.stopPropagation()} onClick={onClose} disabled={loading}>
-          Cancel
+        <Button
+          type="button"
+          variant="ghost"
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={onClose}
+          disabled={loading}
+        >
+          No
         </Button>
       </div>
     </Modal>

@@ -4,10 +4,18 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import AppConversationPane from "../AppConversationPane";
+import { shouldOpenInTelegramModal } from "../openInTelegramState";
 
 function Icon() {
   return React.createElement("span", null, "icon");
 }
+
+test("Open in Telegram modal only opens for a different non-empty thread", () => {
+  assert.equal(shouldOpenInTelegramModal("", "thread-1"), false);
+  assert.equal(shouldOpenInTelegramModal("thread-1", "thread-1"), false);
+  assert.equal(shouldOpenInTelegramModal(" thread-2 ", "thread-1"), true);
+  assert.equal(shouldOpenInTelegramModal("thread-2", ""), true);
+});
 
 test("AppConversationPane renders chat header, chat feed, and composer controls", () => {
   const html = renderToStaticMarkup(

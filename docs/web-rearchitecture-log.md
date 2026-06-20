@@ -20,6 +20,30 @@ Rule:
   - ...
 ```
 
+## 2026-06-19 16:15 (local)
+- Objective:
+  - `Open in Telegram`을 현재 chat header thread에 대한 compact 확인 흐름으로 변경하고 연결 상태를 프로젝트 목록에 표시.
+- Files changed:
+  - `web/frontend/src/features/app/components/{AppConversationPane,ChatHeader,OpenInTelegramModal,SidebarProjectsPanel}.tsx`
+  - `web/frontend/src/features/app/components/{AppSidebarContentPanel,AppSidebarPane,openInTelegramState}.ts*`
+  - `web/frontend/src/features/app/containers/AppSidebarContainer.tsx`
+  - `web/frontend/src/features/app/hooks/useAppRuntimePresentation.tsx`
+  - `web/frontend/src/styles/{_overlays,_shell}.scss`
+  - 관련 frontend component/style 테스트
+- Changes:
+  - thread 선택 목록을 제거하고 연결/변경 여부만 묻는 `Yes`/`No` modal로 축소.
+  - chat header 전체에 우클릭 동작을 적용하고 이미 연결된 동일 thread에서는 modal/API 호출을 생략.
+  - Telegram active thread ID를 sidebar에 전달해 열린 thread 제목 왼쪽에 `T` 배지를 표시.
+  - 열린 thread 행의 투명한 왼쪽 border 제거.
+- Validation:
+  - 신규 회귀 테스트 RED 확인 후 구현.
+  - 변경 범위 테스트 8개 통과.
+  - `npm run lint` 0 errors(기존 warnings 41개 유지).
+  - `npm run build` 성공(142 modules transformed).
+  - 전체 `npm test`: 177개 중 170개 통과, 기존 workspace/sidebar/style assertion 7개 실패.
+- Next step:
+  - 기존 7개 frontend test assertion은 별도 범위에서 현재 UI 구조와 기대값을 정합화.
+
 ## 2026-06-19 15:34 (local)
 - Objective:
   - Telegram `/resume` 실패 시 active thread 변경 성공 메시지가 표시되는 P1 문제 수정.
