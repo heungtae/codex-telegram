@@ -2,10 +2,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const shellStyles = readFileSync(
-  new URL("../_shell.scss", import.meta.url),
-  "utf8",
-);
+const shellStyles = [
+  "_sidebar.scss",
+  "_projects.scss",
+  "_agents.scss",
+  "_layout.scss",
+  "_threads.scss",
+].map((f) => readFileSync(new URL(`../${f}`, import.meta.url), "utf8")).join("\n");
 const themeStyles = readFileSync(
   new URL("../_themes.scss", import.meta.url),
   "utf8",
@@ -46,8 +49,8 @@ test("project session states color only the folder and title", () => {
   assert.match(shellStyles, /\.project-session-row\.active\s*\{/);
   for (const [state, color] of [
     ["running", "var\\(--accent\\)"],
-    ["unread", "#48b46f"],
-    ["failed", "#e05c5c"],
+    ["unread", "var\\(--success\\)"],
+    ["failed", "var\\(--danger\\)"],
     ["cancelled", "var\\(--muted\\)"],
   ]) {
     assert.match(
@@ -80,9 +83,9 @@ test("thread states color only the thread title", () => {
 
   for (const [state, color] of [
     ["running", "var\\(--accent\\)"],
-    ["completed", "#48b46f"],
-    ["failed", "#dd5d67"],
-    ["cancelled", "#e39e4f"],
+    ["completed", "var\\(--success\\)"],
+    ["failed", "var\\(--danger\\)"],
+    ["cancelled", "var\\(--warning\\)"],
   ]) {
     assert.match(
       shellStyles,
@@ -104,7 +107,7 @@ test("settings popover is a fixed layer independent of the sidebar", () => {
 
   assert.ok(popoverRule, "settings popover styles must exist");
   assert.match(popoverRule[1], /position:\s*fixed/);
-  assert.match(popoverRule[1], /border-radius:\s*10px/);
+  assert.match(popoverRule[1], /border-radius:\s*var\(--radius-pill\)/);
   assert.doesNotMatch(popoverRule[1], /right:\s*0/);
 });
 

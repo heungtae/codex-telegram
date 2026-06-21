@@ -1,4 +1,4 @@
-:root[data-theme="dark"] {
+﻿:root[data-theme="dark"] {
   body,
   .app,
   .main,
@@ -183,9 +183,22 @@
   }
 
   .file-change-code {
-    background: #0f0000;
-    border-color: var(--border-strong);
+    background: #0d1117;
+    border: none;
     color: var(--text);
+  }
+
+  .file-change-code-row.type-add {
+    background: rgba(46, 160, 67, 0.15);
+  }
+
+  .file-change-code-row.type-del {
+    background: rgba(248, 81, 73, 0.15);
+  }
+
+  .file-change-code-row.type-hunk,
+  .file-change-code-row.type-meta {
+    background: rgba(79, 140, 201, 0.15);
   }
 
   .login-form-panel {
@@ -237,8 +250,8 @@
   }
 
   .file-change-code {
-    background: #fff0f0;
-    border-color: var(--border-strong);
+    background: #ffffff;
+    border: none;
     color: var(--text);
   }
 
@@ -261,5 +274,14 @@
 
   .agent-settings-action-primary {
     color: var(--muted);
+  }
+
+  .composer-action.composer-send {
+    color: var(--bg);
+  }
+
+  .composer-action.composer-send:hover {
+    background: var(--muted);
+    color: var(--bg);
   }
 }

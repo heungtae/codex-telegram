@@ -1,0 +1,241 @@
+﻿.threads-section {
+  margin-bottom: 12px;
+}
+
+.threads-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 0 0 0 6px;
+  color: inherit;
+}
+
+.threads-toggle-label {
+  font-size: var(--font-size-body);
+  font-weight: 600;
+  color: var(--muted);
+  padding-right: 6px;
+}
+
+.threads-toggle-chevron {
+  flex-shrink: 0;
+  display: inline-flex;
+  color: var(--muted);
+}
+
+.threads-toggle-chevron svg {
+  width: 14px;
+  height: 14px;
+}
+
+.threads-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 6px;
+}
+
+.thread-tab-item {
+  min-width: 0;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font-size: var(--font-size-body);
+  margin-bottom: 2px;
+}
+
+.telegram-thread-badge {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.thread-tab-item:hover {
+  background: var(--bg-soft);
+}
+
+.thread-tab-item.active {
+  background: var(--bg-soft);
+  color: var(--text);
+}
+
+.thread-tab-item.state-running .session-tab-title {
+  color: var(--accent);
+}
+
+.thread-tab-item.state-completed .session-tab-title {
+  color: var(--success);
+}
+
+.thread-tab-item.state-failed .session-tab-title {
+  color: var(--danger);
+}
+
+.thread-tab-item.state-cancelled .session-tab-title {
+  color: var(--warning);
+}
+
+.thread-tab-item.unread {
+  font-weight: 600;
+}
+
+.session-tab-main {
+  flex: 1;
+  min-width: 0;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  padding: 7px 6px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.session-tab-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-tab-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  background: var(--success);
+}
+
+.session-tab-close {
+  width: 26px;
+  height: 26px;
+  margin-right: 3px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s;
+}
+
+.thread-tab-item:hover .session-tab-close {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ui-icon-button.session-tab-close {
+  border: 0;
+}
+
+.ui-icon-button.session-tab-close:hover:not(:disabled) {
+  background: transparent;
+  border: 0;
+}
+
+.ui-icon-button.session-tab-close:focus-visible {
+  outline: none;
+}
+
+.session-tab-add {
+  width: 100%;
+  min-height: 32px;
+}
+
+.threads-compose-btn {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s;
+}
+
+.threads-section .panel-head:hover .threads-compose-btn {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ui-icon-button.threads-compose-btn {
+  border: 0;
+}
+
+.ui-icon-button.threads-compose-btn:hover:not(:disabled) {
+  background: transparent;
+  border: 0;
+}
+
+.ui-icon-button.threads-compose-btn:focus-visible {
+  outline: none;
+}
+
+.threads-compose-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.threads-compose-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+}
+
+.notify-toggle {
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--panel-soft);
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  cursor: pointer;
+}
+
+.notify-toggle svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+}
+
+.notify-toggle.on {
+  border-color: var(--success);
+}
+
+.notify-toggle.mobile {
+  width: 36px;
+  min-width: 36px;
+  padding: 0;
+  justify-content: center;
+}
+
+.notify-toggle.mobile span {
+  display: none;
+}
+

@@ -15,11 +15,6 @@
   --warning: #ff9f0a;
   --success: #30a14e;
   --icon-btn-active-color: #9a9898;
-  --color-surface: var(--panel);
-  --color-surface-muted: var(--panel-soft);
-  --color-border: var(--border);
-  --color-text: var(--text);
-  --color-text-muted: var(--muted);
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -27,9 +22,15 @@
   --radius-sm: 4px;
   --radius-md: 4px;
   --radius-lg: 4px;
+  --radius-card: 8px;
+  --radius-modal: 12px;
+  --radius-pill: 10px;
+  --radius-xl: 14px;
   --shadow-sm: none;
   --shadow-md: none;
+  --font-size-xs: 11px;
   --font-size-sm: 12px;
+  --font-size-body: 13px;
   --font-size-md: 14px;
   --layer-modal: 1200;
   color-scheme: light;
@@ -52,13 +53,6 @@
   --warning: #ffb340;
   --success: #4bd66f;
   --icon-btn-active-color: #7e7b7b;
-  --color-surface: var(--panel);
-  --color-surface-muted: var(--panel-soft);
-  --color-border: var(--border);
-  --color-text: var(--text);
-  --color-text-muted: var(--muted);
-  --shadow-sm: none;
-  --shadow-md: none;
   color-scheme: dark;
 }
 
