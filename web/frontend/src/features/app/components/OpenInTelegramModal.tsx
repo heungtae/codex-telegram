@@ -28,8 +28,7 @@ export default function OpenInTelegramModal({
   const isChangingConnection = !!normalizedCurrentThreadId;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} ariaLabel="Open in Telegram" className="open-in-telegram-modal">
-      <div className="modal-title">Open in Telegram</div>
+    <Modal isOpen={isOpen} onClose={onClose} ariaLabel="Open in Telegram" className="open-in-telegram-modal" title="Open in Telegram">
       <div className="modal-desc">
         {isChangingConnection
           ? "Change the Telegram connection to this thread?"

@@ -10,7 +10,9 @@
 }
 
 .modal-card {
-  width: min(520px, calc(100vw - 32px));
+  width: fit-content;
+  min-width: min(420px, calc(100vw - 32px));
+  max-width: min(680px, calc(100vw - 32px));
   border: 1px solid var(--border);
   border-radius: 0;
   background: var(--panel);
@@ -148,6 +150,43 @@
   border-color: rgba(72, 180, 111, 0.45);
 }
 
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+}
+
+.modal-header-title {
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--brand);
+}
+
+.modal-close-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+  padding: 0 4px;
+}
+
+.modal-close-btn:hover {
+  color: var(--text);
+}
+
+.modal-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 0 20px;
+}
+
+.modal-body {
+  padding: 20px;
+}
+
 .modal-title {
   font-weight: 700;
   color: var(--text);
@@ -161,8 +200,15 @@
 
 .modal-actions {
   display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: 12px;
+  flex-wrap: nowrap;
+}
+
+.modal-actions .ui-button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  height: 44px;
+  border-radius: 12px;
 }
 
 .project-picker-modal {
@@ -260,6 +306,7 @@
   background: var(--bg-soft);
   color: var(--muted);
   font-size: 12px;
+  margin-bottom: 14px;
 }
 
 .open-in-telegram-existing-label {
@@ -292,12 +339,14 @@
   color: var(--text);
   font-size: 13px;
   font-weight: 600;
+  margin-bottom: 14px;
 }
 
 .open-in-telegram-error {
   color: var(--danger);
   font-size: 12px;
   line-height: 1.5;
+  margin-bottom: 14px;
 }
 
 .open-in-telegram-actions {
@@ -409,7 +458,7 @@ kbd {
 .project-picker-modal {
   background: var(--panel);
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
+  border-radius: 20px;
   box-shadow: none;
   color: var(--text);
 }
@@ -503,6 +552,11 @@ kbd {
 .project-picker-item.selected {
   background: var(--bg-soft);
   border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.project-picker-item.selected .project-picker-key {
+  color: var(--muted);
 }
 
 kbd {

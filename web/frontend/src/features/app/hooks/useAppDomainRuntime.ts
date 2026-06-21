@@ -411,6 +411,7 @@ export default function useAppDomainRuntime({ me, domains }) {
     threadActions: {
       ...threadSession,
       closeProjectTab: projectThreadTabs.closeProjectTab,
+      collapseProjectTab: projectThreadTabs.collapseProjectTab,
       closeThreadTab,
       chooseProjectClickMode,
     },

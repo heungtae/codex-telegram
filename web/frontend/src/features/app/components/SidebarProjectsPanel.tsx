@@ -87,6 +87,15 @@ export default function SidebarProjectsPanel({
     )
   );
 
+  const prevSessionKeysRef = useRef<Record<string, string>>(
+    Object.fromEntries(
+      projectRows
+        .filter((r): r is ProjectSessionRow => r.type === "session")
+        .map((r) => [r.projectTabId, r.key])
+    )
+  );
+  const [xButtonSessions, setXButtonSessions] = useState<Set<string>>(new Set());
+
   // Context menu state
   const [openMenuKey, setOpenMenuKey] = useState<string | null>(null);
   const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
@@ -99,11 +108,26 @@ export default function SidebarProjectsPanel({
     );
     const currentIds = new Set(sessionRows.map((r) => r.projectTabId));
 
+    const toAdd: string[] = [];
     for (const row of sessionRows) {
-      if (row.isActive && !knownSessionIds.current.has(row.projectTabId)) {
+      const isNew = !knownSessionIds.current.has(row.projectTabId);
+      const keyChanged = !isNew && prevSessionKeysRef.current[row.projectTabId] !== row.key;
+      if (isNew || keyChanged) toAdd.push(row.projectTabId);
+      prevSessionKeysRef.current[row.projectTabId] = row.key;
+      if (row.isActive && isNew) {
         setExpandedSessions((prev) => new Set([...prev, row.projectTabId]));
       }
     }
+    if (toAdd.length > 0) {
+      setXButtonSessions((prev) => new Set([...prev, ...toAdd]));
+    }
+    setXButtonSessions((prev) => {
+      const toRemove = [...prev].filter((id) => !currentIds.has(id));
+      if (!toRemove.length) return prev;
+      const next = new Set(prev);
+      for (const id of toRemove) next.delete(id);
+      return next;
+    });
     setExpandedSessions((prev) => {
       const toRemove = [...prev].filter((id) => !currentIds.has(id));
       if (!toRemove.length) return prev;
@@ -111,8 +135,25 @@ export default function SidebarProjectsPanel({
       for (const id of toRemove) next.delete(id);
       return next;
     });
+    Object.keys(prevSessionKeysRef.current).forEach((id) => {
+      if (!currentIds.has(id)) delete prevSessionKeysRef.current[id];
+    });
     knownSessionIds.current = currentIds;
   }, [projectRows]);
+
+  const handleCloseProjectTab = (projectTabId: string) => {
+    onCloseProjectTab(projectTabId);
+    setXButtonSessions((prev) => {
+      const next = new Set(prev);
+      next.delete(projectTabId);
+      return next;
+    });
+    setExpandedSessions((prev) => {
+      const next = new Set(prev);
+      next.delete(projectTabId);
+      return next;
+    });
+  };
 
   const toggleExpand = (projectTabId: string) => {
     setExpandedSessions((prev) => {
@@ -249,6 +290,16 @@ export default function SidebarProjectsPanel({
                   >
                     <ComposeIcon />
                   </IconButton>
+                  {!row.isDefault && xButtonSessions.has(row.projectTabId) ? (
+                    <IconButton
+                      className="project-action-btn"
+                      onClick={() => handleCloseProjectTab(row.projectTabId)}
+                      ariaLabel="Close project"
+                      title="Close project"
+                    >
+                      <CloseIcon />
+                    </IconButton>
+                  ) : null}
                 </div>
                 {isExpanded ? (
                   <div id={listId} className="project-thread-list">

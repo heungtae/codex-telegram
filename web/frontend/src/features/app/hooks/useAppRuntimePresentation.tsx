@@ -108,6 +108,10 @@ export default function useAppRuntimePresentation(args) {
   const activeThreadTabs = threads.threadTabsByProjectTabId[threads.activeProjectTabId] || [];
   const selectProjectTab = (tabId) => {
     threads.setActiveProjectTabId(tabId);
+    const restoredThreadId = threads.activeThreadTabIdByProjectTabId[tabId];
+    if (restoredThreadId) {
+      threadActions.viewThread(restoredThreadId, tabId);
+    }
     if (ui.isMobileLayout) {
       ui.setIsSidebarOpen(false);
     }
@@ -228,7 +232,7 @@ export default function useAppRuntimePresentation(args) {
       thread: {
         selectProject: threadActions.selectProject,
         selectProjectTab,
-        closeProjectTab: threadActions.closeProjectTab,
+        closeProjectTab: threadActions.collapseProjectTab,
         selectThread,
         closeThread,
         startThread,
@@ -267,7 +271,7 @@ export default function useAppRuntimePresentation(args) {
       activeProjectTabId: threads.activeProjectTabId,
       projectTabStatusById,
       onSelectProjectTab: selectProjectTab,
-      onCloseProjectTab: threadActions.closeProjectTab,
+      onCloseProjectTab: threadActions.collapseProjectTab,
       threadItems: threads.threadItems,
       threadTabs: activeThreadTabs,
       activeThread: threads.activeThread,

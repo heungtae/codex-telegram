@@ -133,11 +133,41 @@ export default function useProjectThreadTabs(args: UseProjectThreadTabsArgs) {
     }
   };
 
+  const collapseProjectTab = (projectTabId: string) => {
+    if (!projectTabId) {
+      return;
+    }
+    const existingTabs = projectTabs;
+    const index = existingTabs.findIndex((tab) => tab.id === projectTabId);
+    const fallback = index > 0 ? existingTabs[index - 1] : existingTabs[index + 1];
+    setThreadTabsByProjectTabId((prev) => ({ ...prev, [projectTabId]: [] }));
+    setActiveThreadTabIdByProjectTabId((prev) => ({ ...prev, [projectTabId]: "" }));
+    const ownedThreads = Array.isArray(threadTabsByProjectTabId[projectTabId])
+      ? threadTabsByProjectTabId[projectTabId].map((row) => normalizeThreadId(row.id)).filter(Boolean)
+      : [];
+    ownedThreads.forEach((threadId) => removeWorkspaceBucket(threadId));
+    setThreadProjectTabIdByThreadId((prev) => {
+      const next = { ...prev };
+      Object.entries(next).forEach(([threadId, tabId]) => {
+        if (tabId === projectTabId) {
+          delete next[threadId];
+        }
+      });
+      return next;
+    });
+    if (activeProjectTabId === projectTabId) {
+      setActiveProjectTabId(fallback?.id || "");
+      setActiveThread(fallback ? normalizeThreadId(activeThreadTabIdByProjectTabId[fallback.id]) : "");
+      setMessages([]);
+    }
+  };
+
   return {
     upsertProjectTab,
     setActiveThreadForProjectTab,
     openThreadInProjectTab,
     updateThreadTabState,
     closeProjectTab,
+    collapseProjectTab,
   };
 }

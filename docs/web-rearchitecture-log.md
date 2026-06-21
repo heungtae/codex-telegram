@@ -20,6 +20,24 @@ Rule:
   - ...
 ```
 
+## 2026-06-21 (local)
+- Objective:
+  - 모달 UI 세 가지 버그 수정: content/버튼 간격 불일치, 버튼 고정 너비, light 테마 project picker hover 텍스트 비가시 + project picker default 항목 key 중복 표시.
+- Files changed:
+  - `web/frontend/src/styles/_overlays.scss`
+  - `web/frontend/src/features/app/components/ProjectModals.tsx`
+- Changes:
+  - `.open-in-telegram-existing`, `.open-in-telegram-target`, `.open-in-telegram-error`에 `margin-bottom: 14px` 추가 — `.modal-desc`와 동일한 간격을 버튼 위에 항상 확보.
+  - `.modal-actions .ui-button`: `flex: 1` → `flex: 0 0 auto` + `white-space: nowrap`으로 버튼이 텍스트 길이에 따라 자동 확장되도록 변경.
+  - `.modal-card`: 고정 `width: min(520px, …)` → `width: fit-content; min-width: min(420px, …); max-width: min(680px, …)`으로 모달 너비도 버튼에 맞게 자동 확장.
+  - 오버라이드 섹션 `.project-picker-item.selected`에 `color: var(--text)` 추가 — light 테마에서 `color: white`가 리셋되지 않아 배경과 동화되던 문제 수정.
+  - `.project-picker-item.selected .project-picker-key`에 `color: var(--muted)` 추가 — 선택 항목 key의 `rgba(255,255,255,0.7)` 리셋.
+  - project picker의 default 항목: name + key + 배지 → name + 배지만 표시 (key 숨김).
+- Validation:
+  - `npm run build` 성공.
+- Next step:
+  - 브라우저에서 light/dark 테마 전환 후 Alt+P project picker 키보드 이동, OpenInTelegramModal 간격, 버튼/모달 너비 자동 확장을 시각 확인.
+
 ## 2026-06-19 16:15 (local)
 - Objective:
   - `Open in Telegram`을 현재 chat header thread에 대한 compact 확인 흐름으로 변경하고 연결 상태를 프로젝트 목록에 표시.
