@@ -60,15 +60,17 @@ export default function AuthenticatedAppLayout({
               {isWorkspacePanelOpen ? (
                 rightPanel
               ) : (
-                <button
-                  className="workspace-panel-rail-toggle"
-                  type="button"
-                  onClick={onToggleWorkspacePanel}
-                  aria-label="Open workspace panel"
-                  title="Open workspace panel"
-                >
-                  <PanelRightIcon />
-                </button>
+                <div className="workspace-panel-closed-header">
+                  <button
+                    className="sidebar-toggle-btn workspace-panel-open-btn"
+                    type="button"
+                    onClick={onToggleWorkspacePanel}
+                    aria-label="Open workspace panel"
+                    title="Open workspace panel"
+                  >
+                    <PanelRightIcon />
+                  </button>
+                </div>
               )}
             </div>
           </>

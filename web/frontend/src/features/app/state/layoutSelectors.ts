@@ -1,5 +1,6 @@
-export function getWorkspacePanelStyle(isCompactWorkspaceLayout, workspacePanelWidth) {
-  return isCompactWorkspaceLayout ? undefined : { width: workspacePanelWidth };
+export function getWorkspacePanelStyle(isCompactWorkspaceLayout, workspacePanelWidth, isWorkspaceExpanded = false) {
+  if (isCompactWorkspaceLayout || isWorkspaceExpanded) return undefined;
+  return { width: workspacePanelWidth };
 }
 
 export function getSidebarStyle({

@@ -1,3 +1,4 @@
+import { ListTodo } from "lucide-react";
 import { IconButton, Textarea } from "../../common/components/ui";
 
 export default function AppComposerPresenter({
@@ -94,6 +95,7 @@ export default function AppComposerPresenter({
                 title="Plan mode active. Click to toggle."
                 aria-label="Plan mode active. Click to toggle."
               >
+                <ListTodo size={13} />
                 PLAN
               </button>
             ) : null}

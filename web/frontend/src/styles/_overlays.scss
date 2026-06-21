@@ -133,12 +133,12 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid transparent;
+  border: 0;
   border-radius: var(--radius-md);
   background: transparent;
-  color: inherit;
+  color: var(--muted);
   cursor: pointer;
-  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease, opacity 0.16s ease;
+  transition: background 0.16s ease, color 0.16s ease, opacity 0.16s ease;
 }
 
 .ui-icon-button:disabled {
@@ -146,8 +146,13 @@
   opacity: 0.5;
 }
 
+.ui-icon-button:active:not(:disabled) {
+  color: var(--icon-btn-active-color);
+  background: transparent;
+}
+
 .ui-icon-button.is-active {
-  border-color: rgba(72, 180, 111, 0.45);
+  color: var(--text);
 }
 
 .modal-header {
@@ -484,19 +489,26 @@ kbd {
 
 .ui-button-secondary,
 .ui-button-ghost,
-.ui-icon-button,
 .shortcut-modal-close {
   background: transparent;
   border-color: var(--border);
   color: var(--text);
 }
 
+.ui-icon-button {
+  color: var(--muted);
+}
+
 .ui-button-secondary:hover:not(:disabled),
 .ui-button-ghost:hover:not(:disabled),
-.ui-icon-button:hover:not(:disabled),
 .shortcut-modal-close:hover {
   background: var(--bg-soft);
   border-color: var(--border-strong);
+}
+
+.ui-icon-button:hover:not(:disabled) {
+  background: var(--panel-soft);
+  border: 0;
 }
 
 .ui-input,

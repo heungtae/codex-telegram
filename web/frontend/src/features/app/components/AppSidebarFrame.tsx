@@ -119,10 +119,6 @@ export default function AppSidebarFrame({
       >
         {isDesktopSidebarCollapsed ? (
           <div className="sidebar-collapsed-header">
-            <div className="sidebar-collapsed-logo-wrap">
-              <img className="sidebar-logo-light" src="/assets/assets/codex-telegram-icon-black.svg" alt="" aria-hidden="true" />
-              <img className="sidebar-logo-dark" src="/assets/assets/codex-telegram-icon-ivory.svg" alt="" aria-hidden="true" />
-            </div>
             <button
               type="button"
               className="sidebar-toggle-btn sidebar-expand-btn"

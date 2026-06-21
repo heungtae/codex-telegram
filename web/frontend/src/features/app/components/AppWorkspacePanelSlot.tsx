@@ -23,7 +23,7 @@ export default function AppWorkspacePanelSlot({
   onToggleWorkspaceExpand,
 }) {
   const workspaceRootLabel = basename(activeWorkspacePath || "") || "Workspace";
-  const workspacePanelStyle = getWorkspacePanelStyle(isCompactWorkspaceLayout, workspacePanelWidth);
+  const workspacePanelStyle = getWorkspacePanelStyle(isCompactWorkspaceLayout, workspacePanelWidth, isWorkspaceExpanded);
   const workspaceStatusItems =
     workspaceStatus && typeof workspaceStatus.items === "object" ? workspaceStatus.items : {};
 

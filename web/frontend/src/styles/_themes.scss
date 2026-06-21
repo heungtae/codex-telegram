@@ -78,7 +78,6 @@
 
   .composer-inner {
     background: transparent;
-    border-color: transparent;
   }
 
   .composer-input-shell,
@@ -118,15 +117,51 @@
   .secondary,
   .ui-button-secondary,
   .ui-button-ghost,
-  .ui-icon-button,
-  .theme-toggle,
-  .notify-toggle,
   .composer-action,
-  .composer-new-chat,
+  .composer-new-chat {
+    background: transparent;
+    border-color: var(--border);
+    color: var(--text);
+  }
+
   .workspace-refresh,
   .workspace-preview-action {
     background: transparent;
-    border-color: var(--border);
+    border-color: transparent;
+    color: var(--muted);
+  }
+
+  .ui-icon-button,
+  .theme-toggle,
+  .notify-toggle {
+    background: transparent;
+    color: var(--muted);
+  }
+
+  .ui-icon-button:hover:not(:disabled),
+  .notify-toggle:hover:not(:disabled),
+  .theme-toggle:hover:not(:disabled),
+  .workspace-refresh:hover:not(:disabled),
+  .workspace-preview-action:hover:not(:disabled) {
+    background: var(--panel-soft);
+  }
+
+  .ui-icon-button.project-action-btn:hover:not(:disabled),
+  .ui-icon-button.session-tab-close:hover:not(:disabled),
+  .ui-icon-button.threads-compose-btn:hover:not(:disabled) {
+    background: transparent;
+  }
+
+  .ui-icon-button:active:not(:disabled),
+  .notify-toggle:active:not(:disabled),
+  .theme-toggle:active:not(:disabled),
+  .workspace-refresh:active:not(:disabled),
+  .workspace-preview-action:active:not(:disabled) {
+    color: var(--icon-btn-active-color);
+    background: transparent;
+  }
+
+  .ui-icon-button.is-active {
     color: var(--text);
   }
 
@@ -144,6 +179,7 @@
 
   .composer-new-chat:hover:not(:disabled) {
     background: #3a3636;
+    border-radius: 50%;
   }
 
   .file-change-code {
@@ -211,5 +247,19 @@
     border-color: var(--border);
     background: var(--panel-soft);
     box-shadow: none;
+  }
+
+  .workspace-preview-body .file-change-code {
+    background: var(--panel-soft);
+  }
+
+  .ui-icon-button,
+  .theme-toggle,
+  .notify-toggle {
+    color: var(--muted);
+  }
+
+  .agent-settings-action-primary {
+    color: var(--muted);
   }
 }

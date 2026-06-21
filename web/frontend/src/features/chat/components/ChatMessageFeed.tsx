@@ -1,3 +1,5 @@
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { formatEventPanelTitle } from "../../common/utils";
 import { FileChangeDiff } from "../../workspace/components/FilePreviewParts";
 
@@ -53,7 +55,11 @@ export default function ChatMessageFeed({ renderItems }) {
         <div className={`msg ${m.role}${m.variant ? ` ${m.variant}` : ""}${m.kind ? ` kind-${m.kind}` : ""}`}>
           {m.kind === "plan" ? <div className="msg-label">Plan</div> : null}
           {m.kind === "plan_checklist" ? <div className="msg-label">Plan Checklist</div> : null}
-          <div className="msg-body">{m.text}</div>
+          <div className="msg-body">
+            {m.role === "assistant"
+              ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.text}</ReactMarkdown>
+              : m.text}
+          </div>
           {m.turnId ? <div className="msg-meta">turnId: {m.turnId}</div> : null}
         </div>
       </div>

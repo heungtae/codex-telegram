@@ -204,27 +204,25 @@
 
 .workspace-panel-collapse {
   flex: 0 0 auto;
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  border: 0;
+  border-radius: 8px;
   background: transparent;
   color: var(--muted);
   cursor: pointer;
 }
 
 .workspace-panel-collapse:hover {
-  background: var(--bg-soft);
-  border-color: var(--border-strong);
-  color: var(--text);
+  background: var(--panel-soft);
 }
 
 .workspace-panel-collapse svg {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
 }
 
 .workspace-sidebar-body {
@@ -312,11 +310,12 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--text);
+  color: var(--muted);
   cursor: pointer;
+  transition: color 0.16s ease;
 }
 
 .workspace-unified-action svg {
@@ -335,13 +334,16 @@
 }
 
 .workspace-unified-action:hover {
-  background: var(--bg-soft);
-  border-color: var(--border-strong);
+  background: var(--panel-soft);
+  border-radius: 8px;
+}
+
+.workspace-unified-action:active:not(:disabled) {
+  color: var(--icon-btn-active-color);
+  background: transparent;
 }
 
 .workspace-unified-action.active {
-  background: var(--panel-soft);
-  border-color: var(--text);
   color: var(--text);
 }
 
@@ -676,10 +678,7 @@
 }
 
 .agent-floating-settings {
-  position: absolute;
-  top: 86px;
-  left: 14px;
-  z-index: 5;
+  z-index: 1215;
 }
 
 .agent-floating-settings-card {
@@ -721,6 +720,15 @@
   height: 16px;
   fill: none;
   stroke: currentColor;
+}
+
+.agent-floating-settings-close:hover:not(:disabled) {
+  background: var(--panel-soft);
+  border-radius: 8px;
+}
+
+.agent-floating-settings-close:active:not(:disabled) {
+  color: var(--icon-btn-active-color);
 }
 
 .agent-floating-settings-close:disabled {
@@ -789,6 +797,11 @@
   transition: transform 0.12s ease, background 0.16s ease, border-color 0.16s ease;
 }
 
+.theme-toggle {
+  background: transparent;
+  border-radius: 8px;
+}
+
 .menu-toggle svg,
 .theme-toggle svg {
   width: 16px;
@@ -835,8 +848,8 @@
 }
 
 .theme-toggle:hover {
-  background: rgba(19, 33, 52, 0.94);
-  border-color: rgba(81, 106, 138, 0.8);
+  background: var(--bg-soft);
+  border-color: var(--border-strong);
   transform: translateY(-1px);
 }
 
@@ -947,15 +960,15 @@
 .workspace-refresh,
 .workspace-preview-action {
   background: transparent;
-  border-color: var(--border);
+  border-color: transparent;
   border-radius: var(--radius-sm);
-  color: var(--text);
+  color: var(--muted);
 }
 
 .workspace-refresh:hover,
 .workspace-preview-action:hover {
-  background: var(--bg-soft);
-  border-color: var(--border-strong);
+  background: var(--panel-soft);
+  border-color: transparent;
 }
 
 .workspace-preview-body,
@@ -987,16 +1000,14 @@
   border-color: var(--border-strong);
 }
 
-.menu-toggle,
-.theme-toggle {
+.menu-toggle {
   background: transparent;
   border-color: var(--border);
   border-radius: var(--radius-sm);
   color: var(--text);
 }
 
-.menu-toggle:hover,
-.theme-toggle:hover {
+.menu-toggle:hover {
   background: var(--bg-soft);
   border-color: var(--border-strong);
   transform: none;

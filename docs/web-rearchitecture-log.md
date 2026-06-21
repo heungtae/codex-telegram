@@ -22,6 +22,47 @@ Rule:
 
 ## 2026-06-21 (local)
 - Objective:
+  - Windows 호환성 보완, assistant 메시지 Markdown 렌더링, UI polish (ChatHeader 단순화, FloatingGuardianSettings 위치 동적 계산, PLAN chip 아이콘, favicon), 디자인 시스템 icon button 스타일 통일.
+- Files changed:
+  - `utils/single_instance.py`
+  - `web/frontend/index.html`
+  - `web/frontend/package.json`
+  - `web/frontend/package-lock.json`
+  - `web/frontend/src/features/app/components/AppComposerPresenter.tsx`
+  - `web/frontend/src/features/app/components/AppSidebarFrame.tsx`
+  - `web/frontend/src/features/app/components/AppWorkspacePanelSlot.tsx`
+  - `web/frontend/src/features/app/components/AuthenticatedAppLayout.tsx`
+  - `web/frontend/src/features/app/components/ChatHeader.tsx`
+  - `web/frontend/src/features/app/components/FloatingGuardianSettingsPanel.tsx`
+  - `web/frontend/src/features/app/state/layoutSelectors.ts`
+  - `web/frontend/src/features/app/state/__tests__/layoutSelectors.test.ts`
+  - `web/frontend/src/features/chat/components/ChatMessageFeed.tsx`
+  - `web/frontend/src/styles/_chat.scss`
+  - `web/frontend/src/styles/_composer.scss`
+  - `web/frontend/src/styles/_foundation.scss`
+  - `web/frontend/src/styles/_overlays.scss`
+  - `web/frontend/src/styles/_shell.scss`
+  - `web/frontend/src/styles/_themes.scss`
+  - `web/frontend/src/styles/_workspace.scss`
+- Changes:
+  - **Windows 호환 SingleInstanceLock**: `fcntl`을 POSIX-only optional import로 변경, Windows에서는 `O_CREAT | O_EXCL` 기반 파일 잠금 fallback 사용. `/tmp` 하드코딩 → `tempfile.gettempdir()`. `/proc` 미존재 시 안전한 early return 추가.
+  - **Markdown 렌더링**: `react-markdown` + `remark-gfm` 의존성 추가. `ChatMessageFeed`에서 assistant 메시지에 한해 Markdown 렌더링 적용. `_chat.scss`에 p/h1-h3/ul-ol/code/pre/table/blockquote 스타일 추가.
+  - **favicon**: `index.html`에 `/favicon.ico` link 추가.
+  - **PLAN chip 아이콘**: `AppComposerPresenter`의 plan chip 버튼에 `ListTodo` (lucide) 아이콘 추가.
+  - **ChatHeader 단순화**: Add thread tab 버튼(`onAddThread`, `disableAddThread` props) 제거 — 헤더를 타이틀 표시 전용으로 단순화.
+  - **FloatingGuardianSettings 위치 동적 계산**: `useState` + `useEffect`로 `.sidebar-settings-popover` 요소 위치를 읽어 `position: fixed`로 패널을 동적 배치. CSS absolute 포지셔닝 제거, z-index 1215로 통일.
+  - **workspace expanded 시 panel 너비 무효화**: `getWorkspacePanelStyle`에 `isWorkspaceExpanded` 파라미터 추가, expanded 상태에서 `undefined` 반환하여 flex 레이아웃이 너비를 결정하도록 변경. `AppWorkspacePanelSlot`에서 인수 전달.
+  - **workspace panel closed 버튼 재구성**: `AuthenticatedAppLayout`의 rail toggle을 `workspace-panel-closed-header` + `sidebar-toggle-btn workspace-panel-open-btn` 구조로 교체.
+  - **sidebar collapsed 헤더 로고 제거**: `AppSidebarFrame`에서 collapsed 상태 로고 이미지 wrap 및 관련 CSS 삭제.
+  - **디자인 시스템 icon button 통일**: `--icon-btn-active-color` CSS 변수 추가(dark/light). `.ui-icon-button` border 제거, hover → `var(--panel-soft)`, active 상태 추가. theme-toggle/notify-toggle/workspace-refresh/preview-action도 동일한 muted→hover→active 패턴으로 정리. `_themes.scss`에서 dark/light 테마별 override 분리.
+  - **기타 polish**: composer border/radius를 `.composer-inner`로 이동, plan chip hover pill화, composer max-width 860→820, sidebar-header sticky화, projects-section sticky화, thread-tab 최대 높이 제한 제거, agent-settings-action hover/active, workspace-unified-action active 상태 추가.
+- Validation:
+  - `npm run build` 결과 필요.
+- Next step:
+  - 브라우저에서 Markdown 렌더링, FloatingGuardianSettings 위치, icon button hover/active 시각 확인. `npm run build` 통과 검증.
+
+## 2026-06-21 (local)
+- Objective:
   - 모달 UI 세 가지 버그 수정: content/버튼 간격 불일치, 버튼 고정 너비, light 테마 project picker hover 텍스트 비가시 + project picker default 항목 key 중복 표시.
 - Files changed:
   - `web/frontend/src/styles/_overlays.scss`
