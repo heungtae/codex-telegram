@@ -1,8 +1,8 @@
 import type { InputHTMLAttributes } from "react";
+import { cn } from "./cn";
 
 type InputProps = InputHTMLAttributes<HTMLInputElement>;
 
 export default function Input({ className = "", type = "text", ...props }: InputProps) {
-  const classes = ["ui-input", className].filter(Boolean).join(" ");
-  return <input type={type} className={classes} {...props} />;
+  return <input type={type} className={cn("ui-input", className)} {...props} />;
 }

@@ -1,4 +1,5 @@
 import type { MouseEvent, ReactNode } from "react";
+import { cn } from "./cn";
 
 type ModalProps = {
   ariaLabel: string;
@@ -14,7 +15,7 @@ export default function Modal({ ariaLabel, children, className = "", isOpen, onC
     return null;
   }
 
-  const cardClasses = ["modal-card", "ui-modal-card", className].filter(Boolean).join(" ");
+  const cardClasses = cn("modal-card", "ui-modal-card", className);
   const stopDialogMouseDown = (event: MouseEvent<HTMLDivElement>) => {
     event.stopPropagation();
   };

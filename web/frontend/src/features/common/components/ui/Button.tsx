@@ -1,4 +1,5 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { cn } from "./cn";
 
 type ButtonVariant = "primary" | "secondary" | "ghost";
 
@@ -14,9 +15,8 @@ export default function Button({
   variant = "secondary",
   ...props
 }: ButtonProps) {
-  const classes = ["ui-button", `ui-button-${variant}`, className].filter(Boolean).join(" ");
   return (
-    <button type={type} className={classes} {...props}>
+    <button type={type} className={cn("ui-button", `ui-button-${variant}`, className)} {...props}>
       {children}
     </button>
   );

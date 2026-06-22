@@ -1,4 +1,5 @@
 import type { HTMLAttributes, ReactNode } from "react";
+import { cn } from "./cn";
 
 type EmptyStateTone = "default" | "notice";
 
@@ -13,16 +14,8 @@ export default function EmptyState({
   tone = "default",
   ...props
 }: EmptyStateProps) {
-  const classes = [
-    "ui-empty-state",
-    `ui-empty-state-${tone}`,
-    className,
-  ]
-    .filter(Boolean)
-    .join(" ");
-
   return (
-    <div className={classes} {...props}>
+    <div className={cn("ui-empty-state", `ui-empty-state-${tone}`, className)} {...props}>
       {children}
     </div>
   );
