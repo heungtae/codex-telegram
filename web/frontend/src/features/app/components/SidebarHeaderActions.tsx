@@ -31,7 +31,7 @@ export default function SidebarHeaderActions({
             setTurnNotificationEnabled(next);
             persistTurnNotificationEnabled(next);
           }}
-          ariaLabel="Toggle turn completion notification"
+          aria-label="Toggle turn completion notification"
           title={`Turn notification ${turnNotificationEnabled ? "on" : "off"}`}
         >
           <NotificationIcon enabled={turnNotificationEnabled} />
@@ -39,7 +39,7 @@ export default function SidebarHeaderActions({
         <IconButton
           className="theme-toggle icon-only"
           onClick={onToggleTheme}
-          ariaLabel="Toggle theme"
+          aria-label="Toggle theme"
           title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
         >
           <ThemeIcon theme={theme} />
@@ -49,7 +49,7 @@ export default function SidebarHeaderActions({
           onClick={() =>
             isMobileLayout ? onToggleSidebarOpen(false) : onToggleSidebarCollapsed()
           }
-          ariaLabel={isMobileLayout ? "Close sidebar" : "Collapse sidebar"}
+          aria-label={isMobileLayout ? "Close sidebar" : "Collapse sidebar"}
           title={isMobileLayout ? "Close sidebar" : "Collapse sidebar"}
         >
           <SidebarToggleIcon collapsed={false} />

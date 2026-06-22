@@ -1,22 +1,22 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 
 import { api } from "../../common/api";
 import { groupMessagesForRender, normalizeThreadId } from "../../common/utils";
 import useThreadScopedState from "../../thread/hooks/useThreadScopedState";
 import useAgentConfigDomain from "./useAgentConfigDomain";
-import useAppCommandRefs from "./useAppCommandRefs";
+import useAppRuntimeRefs from "./useAppRuntimeRefs";
 import useProjectThreadTabs from "./useProjectThreadTabs";
 import useThreadSession from "./useThreadSession";
 import useWorkspaceDomain from "./useWorkspaceDomain";
 import {
   WORKSPACE_PREVIEW_HEIGHT_STORAGE_KEY,
   WORKSPACE_PREVIEW_WIDTH_STORAGE_KEY,
+  WORKSPACE_PREVIEW_DEFAULT_HEIGHT,
+  WORKSPACE_PREVIEW_DEFAULT_WIDTH,
   WORKSPACE_PREVIEW_MIN_HEIGHT,
   WORKSPACE_PREVIEW_MAX_HEIGHT,
-  WORKSPACE_PREVIEW_DEFAULT_HEIGHT,
   WORKSPACE_PREVIEW_MIN_WIDTH,
   WORKSPACE_PREVIEW_MAX_WIDTH,
-  WORKSPACE_PREVIEW_DEFAULT_WIDTH,
 } from "./workspacePreviewConstants";
 
 function readWorkspacePreviewHeight(defaultHeight, minHeight, maxHeight) {
@@ -81,36 +81,7 @@ export function buildProjectTabStatusById(
 
 export default function useAppDomainRuntime({ me, domains }) {
   const { threads, session, ui } = domains;
-  const refs = {
-    chatRef: useRef(null),
-    inputRef: useRef(null),
-    reasoningStateRef: useRef({}),
-    activeProjectTabIdRef: useRef(""),
-    activeProjectKeyRef: useRef(""),
-    threadProjectTabIdByThreadIdRef: useRef({}),
-    pendingComposerFocusRef: useRef(false),
-    composerFocusWantedRef: useRef(false),
-    composerSelectionRef: useRef({ start: null, end: null }),
-    recentBackspaceAtRef: useRef(0),
-    paletteRef: useRef(null),
-    workspacePreviewResizeRef: useRef({
-      mode: "",
-      startX: 0,
-      startY: 0,
-      startWidth: WORKSPACE_PREVIEW_DEFAULT_WIDTH,
-      startHeight: WORKSPACE_PREVIEW_DEFAULT_HEIGHT,
-    }),
-    workspaceResizeRef: useRef({ startX: 0, startWidth: 320 }),
-    projectTabSequenceRef: useRef(0),
-    initialLoadRef: useRef(true),
-    streamedTurnIdsRef: useRef({}),
-    assistantItemCompletedByTurnRef: useRef({}),
-    inputHistoryIndexRef: useRef(-1),
-    audioCtxRef: useRef(null),
-    itemPhaseByTurnRef: useRef({}),
-    commandRefs: useAppCommandRefs(),
-    toastTimerRef: useRef<ReturnType<typeof setTimeout> | null>(null),
-  };
+  const refs = useAppRuntimeRefs();
   const showToast = useCallback((message, type = "info") => {
     if (refs.toastTimerRef.current) clearTimeout(refs.toastTimerRef.current);
     ui.setToastNotification({ message, type });

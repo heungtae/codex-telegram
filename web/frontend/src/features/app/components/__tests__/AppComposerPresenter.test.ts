@@ -39,10 +39,6 @@ function renderComposer(overrides = {}) {
       onToggleWorkspacePanel: () => {},
       onNewChat: () => {},
       interactionBusy: false,
-      StopIcon: Icon,
-      SendIcon: Icon,
-      FolderIcon: Icon,
-      NewChatIcon: Icon,
       ...overrides,
     })
   );

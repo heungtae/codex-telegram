@@ -1,4 +1,5 @@
 import { ListTodo } from "lucide-react";
+import { FolderIcon, NewChatIcon, SendIcon, StopIcon } from "../../common/components/Icons";
 import { IconButton, Textarea } from "../../common/components/ui";
 
 export default function AppComposerPresenter({
@@ -29,10 +30,6 @@ export default function AppComposerPresenter({
   onToggleWorkspacePanel,
   onNewChat,
   interactionBusy,
-  StopIcon,
-  SendIcon,
-  FolderIcon,
-  NewChatIcon,
 }) {
   return (
     <div className="composer">
@@ -80,7 +77,7 @@ export default function AppComposerPresenter({
             <IconButton
               className="composer-action composer-new-chat"
               onClick={onNewChat}
-              ariaLabel="New chat"
+              aria-label="New chat"
               title="New chat"
               disabled={interactionBusy}
             >
@@ -103,7 +100,7 @@ export default function AppComposerPresenter({
               <IconButton
                 className={`composer-action composer-workspace-toggle ${isWorkspacePanelOpen ? "active" : ""}`}
                 onClick={onToggleWorkspacePanel}
-                ariaLabel="Workspace files"
+                aria-label="Workspace files"
                 title="Workspace files"
                 active={isWorkspacePanelOpen}
               >
@@ -113,11 +110,11 @@ export default function AppComposerPresenter({
           </div>
           <div className="composer-right-group">
             {status === "running" ? (
-              <IconButton className="composer-action composer-stop" onClick={onInterrupt} ariaLabel="Stop" title="Stop">
+              <IconButton className="composer-action composer-stop" onClick={onInterrupt} aria-label="Stop" title="Stop">
                 <StopIcon />
               </IconButton>
             ) : (
-              <IconButton className="composer-action composer-send" onClick={onSendMessage} ariaLabel="Send" title="Send">
+              <IconButton className="composer-action composer-send" onClick={onSendMessage} aria-label="Send" title="Send">
                 <SendIcon />
               </IconButton>
             )}

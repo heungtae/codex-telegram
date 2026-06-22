@@ -1,17 +1,15 @@
-import React, { useEffect } from "react";
-import EnabledAgentsList from "./EnabledAgentsList";
 import GuardianRulesSummary from "./GuardianRulesSummary";
 import RunningSubagentsList from "./RunningSubagentsList";
 import SidebarGuardianSection from "./SidebarGuardianSection";
 
 export default function SidebarAgentsPanel({
-  sessionSummary,
-  openAgentSettings,
   activeSubagents,
   agentConfigError,
   activeAgentDef,
   activeAgentConfig,
   settingsBusy,
+  agentConfigLoading,
+  agentConfigSaving,
   updateAgentDraft,
   activeAgentSettings,
   guardianRuleSummary,
@@ -22,25 +20,17 @@ export default function SidebarAgentsPanel({
   saveAgentSettings,
   toggleAgent,
 }) {
-  useEffect(() => {
-    const agents = sessionSummary?.agents || [];
-    const hasGuardian = agents.some((a) => a.name === "guardian");
-    if (hasGuardian && !activeAgentSettings) {
-      openAgentSettings("guardian");
-    }
-  }, [sessionSummary, activeAgentSettings, openAgentSettings]);
-
-  const agents = sessionSummary?.agents || [];
+  void agentConfigLoading;
+  const effectiveBusy = settingsBusy || agentConfigSaving;
 
   return (
     <div className="sidebar-agents-panel">
-      {/* <EnabledAgentsList agents={agents} /> */}
       <RunningSubagentsList activeSubagents={activeSubagents} />
       {agentConfigError ? <div className="agent-error">{agentConfigError}</div> : null}
       <SidebarGuardianSection
         activeAgentDef={activeAgentDef}
         activeAgentConfig={activeAgentConfig}
-        settingsBusy={settingsBusy}
+        settingsBusy={effectiveBusy}
         updateAgentDraft={updateAgentDraft}
         activeAgentSettings={activeAgentSettings}
         loadAgentConfig={loadAgentConfig}
@@ -52,7 +42,7 @@ export default function SidebarAgentsPanel({
         guardianRuleSummary={guardianRuleSummary}
         floatingAgentSettings={floatingAgentSettings}
         toggleFloatingAgentSettings={toggleFloatingAgentSettings}
-        settingsBusy={settingsBusy}
+        settingsBusy={effectiveBusy}
       />
     </div>
   );

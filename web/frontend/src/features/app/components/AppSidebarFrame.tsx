@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 
+import { useClickOutsideAndEscape } from "../../common/hooks/useClickOutsideAndEscape";
 import { SettingsIcon, SidebarToggleIcon } from "../../common/components/Icons";
 import {
   resolveSettingsButtonAction,
@@ -81,33 +82,16 @@ export default function AppSidebarFrame({
     return () => window.removeEventListener("resize", updatePosition);
   }, [settingsOpen]);
 
-  useEffect(() => {
-    if (!settingsOpen) return;
-    const handler = (e) => {
-      if (
-        !panelRef.current?.contains(e.target) &&
-        !settingsBtnRef.current?.contains(e.target)
-      ) {
-        setSettingsOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [settingsOpen]);
-
-  useEffect(() => {
-    if (!settingsOpen) return;
-    const handler = (e) => {
-      if (e.key === "Escape") {
-        setSettingsOpen(false);
-        if (!isMobileLayout || isSidebarOpen) {
-          settingsBtnRef.current?.focus();
-        }
-      }
-    };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [isMobileLayout, isSidebarOpen, settingsOpen]);
+  useClickOutsideAndEscape(
+    panelRef,
+    () => setSettingsOpen(false),
+    settingsOpen,
+    settingsBtnRef,
+    () => {
+      setSettingsOpen(false);
+      if (!isMobileLayout || isSidebarOpen) settingsBtnRef.current?.focus();
+    },
+  );
 
   return (
     <>

@@ -10,7 +10,7 @@ import {
 import { normalizeThreadId } from "../../common/utils";
 import useComposerInputHandlers from "./useComposerInputHandlers";
 import useComposerPalette from "./useComposerPalette";
-import useComposerViewModel from "./useComposerViewModel";
+import { createComposerViewModel } from "./useComposerViewModel";
 import useMessageCommandActions from "./useMessageCommandActions";
 import { normalizeCollaborationMode } from "./useAppDomainRuntime";
 
@@ -122,7 +122,7 @@ export default function useAppComposerRuntime({ domains, domainRuntime }) {
     toggleComposerMode: commandActions.toggleComposerMode,
     sendMessage: commandActions.sendMessage,
   });
-  const composerViewModel = useComposerViewModel({
+  const composerViewModel = createComposerViewModel({
     activeToken: palette.activeToken,
     activityDetail: threadState.activityDetail,
     paletteOpen: palette.paletteOpen,

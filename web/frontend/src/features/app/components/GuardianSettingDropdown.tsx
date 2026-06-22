@@ -1,4 +1,5 @@
 import React, { useEffect, useId, useRef, useState } from "react";
+import { useClickOutsideAndEscape } from "../../common/hooks/useClickOutsideAndEscape";
 import { CheckIcon, ChevronIcon } from "../../common/components/Icons";
 import {
   getGuardianSettingLabel,
@@ -24,26 +25,13 @@ export default function GuardianSettingDropdown({
   const optionRefs = useRef([]);
   const listId = useId();
 
-  useEffect(() => {
-    if (!isOpen) return undefined;
-
-    const handlePointerDown = (event) => {
-      if (!rootRef.current?.contains(event.target)) setIsOpen(false);
-    };
-    const handleEscape = (event) => {
-      if (event.key === "Escape") {
-        setIsOpen(false);
-        triggerRef.current?.focus();
-      }
-    };
-
-    document.addEventListener("pointerdown", handlePointerDown);
-    document.addEventListener("keydown", handleEscape);
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-      document.removeEventListener("keydown", handleEscape);
-    };
-  }, [isOpen]);
+  useClickOutsideAndEscape(
+    rootRef,
+    () => setIsOpen(false),
+    isOpen,
+    undefined,
+    () => { setIsOpen(false); triggerRef.current?.focus(); },
+  );
 
   useEffect(() => {
     if (isOpen) optionRefs.current[activeIndex]?.focus();

@@ -1,8 +1,9 @@
-import React, { useCallback, useMemo, useState } from "react";
-import { basename, normalizeWorkspacePath } from "../../common/utils";
+import React, { useState } from "react";
+import { basename } from "../../common/utils";
 import { ExpandIcon, FileIcon, FolderIcon, PanelRightIcon, RefreshIcon } from "../../common/components/Icons";
 import { EmptyState } from "../../common/components/ui";
-import { buildWorkspaceDirectoryStatus, filterWorkspaceTree } from "../workspaceTreeModel";
+import useClipboard from "../hooks/useClipboard";
+import useWorkspaceFilter from "../hooks/useWorkspaceFilter";
 import WorkspaceDeletedEntries from "./WorkspaceDeletedEntries";
 import WorkspacePreviewPanel from "./WorkspacePreviewPanel";
 import WorkspaceTree from "./WorkspaceTree";
@@ -27,58 +28,11 @@ export default function WorkspacePanel({
   isWorkspaceExpanded,
   onToggleWorkspaceExpand,
 }) {
-  const [filterQuery, setFilterQuery] = useState("");
   const [isStructurePanelVisible, setIsStructurePanelVisible] = useState(true);
-  const workspaceDirectoryStatus = useMemo(
-    () => buildWorkspaceDirectoryStatus(workspaceStatusItems),
-    [workspaceStatusItems]
-  );
-  const visibleWorkspaceTree = useMemo(
-    () => filterWorkspaceTree(workspaceTree, filterQuery),
-    [workspaceTree, filterQuery]
-  );
-  const rootItems = Array.isArray(visibleWorkspaceTree[""]) ? visibleWorkspaceTree[""] : [];
+  const { filterQuery, setFilterQuery, workspaceDirectoryStatus, visibleWorkspaceTree, rootItems, deletedWorkspaceEntries } =
+    useWorkspaceFilter(workspaceTree, workspaceStatusItems);
+  const copyWorkspacePathToClipboard = useClipboard(showToast);
   const activeFileLabel = basename(workspacePreview?.path || "") || "No file";
-
-  const deletedWorkspaceEntries = useMemo(
-    () =>
-      Object.entries(workspaceStatusItems)
-        .filter(([path, value]) => {
-          const status = value as { code?: string } | null;
-          return status?.code === "D" && !workspaceTree[""]?.some((item) => item.path === path);
-        })
-        .sort((a, b) => a[0].localeCompare(b[0])),
-    [workspaceStatusItems, workspaceTree]
-  );
-
-  const copyWorkspacePathToClipboard = useCallback(
-    async (path) => {
-      const text = normalizeWorkspacePath(path);
-      if (!text) {
-        return;
-      }
-      try {
-        if (navigator?.clipboard?.writeText) {
-          await navigator.clipboard.writeText(text);
-        } else {
-          const textarea = document.createElement("textarea");
-          textarea.value = text;
-          textarea.setAttribute("readonly", "true");
-          textarea.style.position = "fixed";
-          textarea.style.left = "-9999px";
-          textarea.style.top = "-9999px";
-          document.body.appendChild(textarea);
-          textarea.select();
-          document.execCommand("copy");
-          document.body.removeChild(textarea);
-        }
-        showToast(`Copied ${text}`, "success");
-      } catch {
-        showToast("Failed to copy path.", "error");
-      }
-    },
-    [showToast]
-  );
 
   return (
     <aside

@@ -1,3 +1,4 @@
+import { MenuIcon } from "../../common/components/Icons";
 import { IconButton } from "../../common/components/ui";
 
 export default function AppMainFrame({
@@ -5,7 +6,6 @@ export default function AppMainFrame({
   isMobileLayout,
   isSidebarOpen,
   onToggleSidebarOpen,
-  MenuIcon,
 }) {
   return (
     <main className="main">
@@ -14,7 +14,7 @@ export default function AppMainFrame({
           <IconButton
             className="menu-toggle icon-only"
             onClick={() => onToggleSidebarOpen((current) => !current)}
-            ariaLabel="Toggle navigation menu"
+            aria-label="Toggle navigation menu"
             aria-expanded={isSidebarOpen}
             aria-controls="app-sidebar"
           >

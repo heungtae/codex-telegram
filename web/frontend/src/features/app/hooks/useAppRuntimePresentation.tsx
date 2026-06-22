@@ -1,12 +1,5 @@
 import AppWorkspacePanelSlot from "../components/AppWorkspacePanelSlot";
 import { AGENT_CONFIG_DEFS } from "../../common/constants";
-import {
-  FolderIcon,
-  MenuIcon,
-  NewChatIcon,
-  SendIcon,
-  StopIcon,
-} from "../../common/components/Icons";
 import { persistTurnNotificationEnabled } from "../../common/theme";
 import { getSidebarStyle } from "../state/layoutSelectors";
 
@@ -29,21 +22,18 @@ export function buildConversationViewModel<
   TWorkspace extends object,
   TConversation extends object,
   TComposer extends object,
-  TIcons extends object,
 >({
   tabs,
   workspace,
   conversation,
   composer,
-  icons,
 }: {
   tabs: TTabs;
   workspace: TWorkspace;
   conversation: TConversation;
   composer: TComposer;
-  icons: TIcons;
-}): { tabs: TTabs; workspace: TWorkspace; conversation: TConversation; composer: TComposer; icons: TIcons } {
-  return { tabs, workspace, conversation, composer, icons };
+}): { tabs: TTabs; workspace: TWorkspace; conversation: TConversation; composer: TComposer } {
+  return { tabs, workspace, conversation, composer };
 }
 
 export function createOpenInTelegramAction(
@@ -311,12 +301,6 @@ export default function useAppRuntimePresentation(args) {
       renderItems,
     },
     composer: composerViewModel,
-    icons: {
-      StopIcon,
-      SendIcon,
-      FolderIcon,
-      NewChatIcon,
-    },
   });
 
   return {
@@ -325,7 +309,6 @@ export default function useAppRuntimePresentation(args) {
       isMobileLayout: ui.isMobileLayout,
       isSidebarOpen: ui.isSidebarOpen,
       onToggleSidebarOpen: ui.setIsSidebarOpen,
-      MenuIcon,
     },
     conversation,
   };

@@ -86,11 +86,14 @@ test("AppConversationPane renders chat header, chat feed, and composer controls"
         onNewChat: () => {},
         interactionBusy: false,
       },
-      icons: {
-        StopIcon: Icon,
-        SendIcon: Icon,
-        FolderIcon: Icon,
-        NewChatIcon: Icon,
+      telegramModal: {
+        isModalOpen: false,
+        targetThread: { id: "", title: "" },
+        busy: false,
+        error: "",
+        handleContextMenu: () => {},
+        handleConfirm: () => {},
+        handleClose: () => {},
       },
     })
   );
@@ -166,11 +169,14 @@ test("AppConversationPane does not render the workspace panel shell when collaps
       onNewChat: () => {},
       interactionBusy: false,
     },
-    icons: {
-      StopIcon: Icon,
-      SendIcon: Icon,
-      FolderIcon: Icon,
-      NewChatIcon: Icon,
+    telegramModal: {
+      isModalOpen: false,
+      targetThread: { id: "", title: "" },
+      busy: false,
+      error: "",
+      handleContextMenu: () => {},
+      handleConfirm: () => {},
+      handleClose: () => {},
     },
   };
 
@@ -252,11 +258,14 @@ test("AppConversationPane suppresses preview overlay on desktop layout", () => {
       onNewChat: () => {},
       interactionBusy: false,
     },
-    icons: {
-      StopIcon: Icon,
-      SendIcon: Icon,
-      FolderIcon: Icon,
-      NewChatIcon: Icon,
+    telegramModal: {
+      isModalOpen: false,
+      targetThread: { id: "", title: "" },
+      busy: false,
+      error: "",
+      handleContextMenu: () => {},
+      handleConfirm: () => {},
+      handleClose: () => {},
     },
   };
 
@@ -337,11 +346,14 @@ test("AppConversationPane keeps preview overlay on mobile layout", () => {
       onNewChat: () => {},
       interactionBusy: false,
     },
-    icons: {
-      StopIcon: Icon,
-      SendIcon: Icon,
-      FolderIcon: Icon,
-      NewChatIcon: Icon,
+    telegramModal: {
+      isModalOpen: false,
+      targetThread: { id: "", title: "" },
+      busy: false,
+      error: "",
+      handleContextMenu: () => {},
+      handleConfirm: () => {},
+      handleClose: () => {},
     },
   };
 

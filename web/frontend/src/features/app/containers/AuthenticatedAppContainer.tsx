@@ -3,6 +3,8 @@ import AppConversationPane from "../components/AppConversationPane";
 import AppRuntimeProvider from "../context/AppRuntimeProvider";
 import useAppDomains from "../hooks/useAppDomains";
 import useAppRuntime from "../hooks/useAppRuntime";
+import useOpenInTelegram from "../hooks/useOpenInTelegram";
+import { normalizeThreadId } from "../../common/utils";
 import AppFloatingAgentSettingsContainer from "./AppFloatingAgentSettingsContainer";
 import AppOverlayContainer from "./AppOverlayContainer";
 import AppSidebarContainer from "./AppSidebarContainer";
@@ -28,6 +30,16 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
     onToggleWorkspacePanel,
   } = conversation.composer;
 
+  const activeThreadTab = conversation.tabs.threadTabs.find(
+    (tab) => normalizeThreadId(tab.id) === normalizeThreadId(conversation.tabs.activeThread)
+  );
+  const telegramModal = useOpenInTelegram(
+    activeThreadTab,
+    conversation.tabs.activeThread,
+    conversation.tabs.telegramActiveThreadId,
+    conversation.tabs.onOpenThreadInTelegram,
+  );
+
   return (
     <AppRuntimeProvider value={contextValue}>
       <AuthenticatedAppLayout
@@ -37,12 +49,11 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
         main={
           <>
             <AppFloatingAgentSettingsContainer />
-            <AppConversationPane {...conversation} />
+            <AppConversationPane {...conversation} telegramModal={telegramModal} />
           </>
         }
         isSidebarOpen={layout.isSidebarOpen}
         onToggleSidebarOpen={layout.onToggleSidebarOpen}
-        MenuIcon={layout.MenuIcon}
         rightPanel={workspacePanel}
         isWorkspacePanelOpen={isWorkspacePanelOpen}
         isCompactWorkspaceLayout={isCompactWorkspaceLayout}

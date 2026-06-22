@@ -43,7 +43,7 @@ export default function useAppUiEffects({
           setProjectSuggestions([]);
         });
     }
-  }, [activeToken?.type, activeToken?.query]);
+  }, [activeToken?.type, activeToken?.query, workspaceContextQuery]);
 
   useEffect(() => {
     if (floatingAgentSettings && floatingAgentSettings !== activeAgentSettings) {
@@ -65,15 +65,13 @@ export default function useAppUiEffects({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [isProjectModeModalOpen]);
 
-  useEffect(() => {
-    bindAppCommandRefs(commandRefs, {
-      sendMessage,
-      startThread,
-      closeThreadTab,
-      viewThread,
-      selectProject,
-      focusComposer,
-      setInputForActiveThread,
-    });
+  bindAppCommandRefs(commandRefs, {
+    sendMessage,
+    startThread,
+    closeThreadTab,
+    viewThread,
+    selectProject,
+    focusComposer,
+    setInputForActiveThread,
   });
 }

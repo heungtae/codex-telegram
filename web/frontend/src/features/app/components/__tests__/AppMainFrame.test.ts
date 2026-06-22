@@ -16,7 +16,6 @@ test("AppMainFrame renders mobile menu as UI Kit icon button", () => {
       isMobileLayout: true,
       isSidebarOpen: false,
       onToggleSidebarOpen: () => {},
-      MenuIcon,
     })
   );
 

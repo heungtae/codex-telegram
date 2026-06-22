@@ -1,7 +1,4 @@
-import AuthenticatedAppPresenter from "./AuthenticatedAppPresenter";
 import AppMainFrame from "./AppMainFrame";
-import AppMainPresenter from "./AppMainPresenter";
-import AppSidebarPresenter from "./AppSidebarPresenter";
 import { PanelRightIcon } from "../../common/components/Icons";
 
 export default function AuthenticatedAppLayout({
@@ -11,7 +8,6 @@ export default function AuthenticatedAppLayout({
   main,
   isSidebarOpen,
   onToggleSidebarOpen,
-  MenuIcon,
   rightPanel,
   isWorkspacePanelOpen,
   isCompactWorkspaceLayout,
@@ -29,20 +25,16 @@ export default function AuthenticatedAppLayout({
     .join(" ");
 
   return (
-    <AuthenticatedAppPresenter>
-      <div className={appClass}>
+    <div className={appClass}>
         {overlays}
-        <AppSidebarPresenter>{sidebar}</AppSidebarPresenter>
-        <AppMainPresenter>
-          <AppMainFrame
-            isMobileLayout={isMobileLayout}
-            isSidebarOpen={isSidebarOpen}
-            onToggleSidebarOpen={onToggleSidebarOpen}
-            MenuIcon={MenuIcon}
-          >
-            {main}
-          </AppMainFrame>
-        </AppMainPresenter>
+        {sidebar}
+        <AppMainFrame
+          isMobileLayout={isMobileLayout}
+          isSidebarOpen={isSidebarOpen}
+          onToggleSidebarOpen={onToggleSidebarOpen}
+        >
+          {main}
+        </AppMainFrame>
         {!isCompactWorkspaceLayout ? (
           <>
             {isWorkspacePanelOpen ? (
@@ -75,7 +67,6 @@ export default function AuthenticatedAppLayout({
             </div>
           </>
         ) : null}
-      </div>
-    </AuthenticatedAppPresenter>
+    </div>
   );
 }

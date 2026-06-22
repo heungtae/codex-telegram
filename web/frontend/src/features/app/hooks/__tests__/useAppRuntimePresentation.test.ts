@@ -71,11 +71,9 @@ test("buildConversationViewModel returns grouped pane sections", () => {
     workspace: { workspacePanel: "workspace" },
     conversation: { renderItems: [] },
     composer: { input: "hello" },
-    icons: { StopIcon: "stop" },
   });
 
   assert.equal(value.tabs.onSelectThread, onSelectThread);
   assert.equal(value.workspace.workspacePanel, "workspace");
   assert.equal(value.composer.input, "hello");
-  assert.equal(value.icons.StopIcon, "stop");
 });

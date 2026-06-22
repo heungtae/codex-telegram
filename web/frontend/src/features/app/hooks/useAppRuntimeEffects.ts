@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { api } from "../../common/api";
 import {
   formatPlanChecklistText,
@@ -6,9 +7,7 @@ import {
 } from "../../common/utils";
 import useAppUiEffects from "./useAppUiEffects";
 import useChatScrollEffects from "./useChatScrollEffects";
-import useComposerFocusEffects from "./useComposerFocusEffects";
 import useGlobalKeyboardShortcuts from "./useGlobalKeyboardShortcuts";
-import usePaletteEffects from "./usePaletteEffects";
 import useProjectPickerViewModel from "./useProjectPickerViewModel";
 import useResizeInteractions from "./useResizeInteractions";
 import useThreadBootstrapEffects from "./useThreadBootstrapEffects";
@@ -113,35 +112,60 @@ export default function useAppRuntimeEffects({
     resolveThreadIdFromTurn: threadState.resolveThreadIdFromTurn,
   });
   useChatScrollEffects({
-    normalizeThreadId,
-    activeThreadRef: threadState.activeThreadRef,
     messages: threadState.messages,
     renderItems: domainRuntime.renderItems,
-    debugLog: domainRuntime.debugLog,
     chatRef: refs.chatRef,
   });
-  useComposerFocusEffects({
-    status: threadState.status,
-    pendingComposerFocusRef: refs.pendingComposerFocusRef,
-    focusComposer: commandActions.focusComposer,
-    input: threadState.input,
-    autoResizeInput,
-    composerFocusWantedRef: refs.composerFocusWantedRef,
-    inputRef: refs.inputRef,
-    rememberComposerSelection: commandActions.rememberComposerSelection,
-    composerSelectionRef: refs.composerSelectionRef,
-    paletteOpen: palette.paletteOpen,
-    paletteSelectedIndex: ui.paletteSelectedIndex,
-  });
-  usePaletteEffects({
-    activeToken: palette.activeToken,
-    setPaletteSelectedIndex: ui.setPaletteSelectedIndex,
-    paletteItems: palette.paletteItems,
-    paletteSelectedIndex: ui.paletteSelectedIndex,
-    paletteOpen: palette.paletteOpen,
-    paletteRef: refs.paletteRef,
-    visiblePaletteItems: palette.visiblePaletteItems,
-  });
+  // Composer focus effects
+  useEffect(() => {
+    if (threadState.status === "running" || !refs.pendingComposerFocusRef.current) return;
+    refs.pendingComposerFocusRef.current = false;
+    commandActions.focusComposer(threadState.input.length);
+  }, [threadState.input.length, threadState.status]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    autoResizeInput();
+  }, [threadState.input]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!refs.composerFocusWantedRef.current || typeof window === "undefined") return undefined;
+    const el = refs.inputRef.current;
+    if (!el || el.disabled) return undefined;
+    if (document.activeElement === el) {
+      commandActions.rememberComposerSelection(el);
+      return undefined;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      if (!refs.composerFocusWantedRef.current) return;
+      const current = refs.inputRef.current;
+      if (!current || current.disabled || document.activeElement === current) return;
+      current.focus();
+      const { start, end } = refs.composerSelectionRef.current;
+      if (typeof start === "number" && typeof end === "number") {
+        current.selectionStart = start;
+        current.selectionEnd = end;
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [threadState.input, palette.paletteOpen, ui.paletteSelectedIndex]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Palette effects
+  useEffect(() => {
+    ui.setPaletteSelectedIndex(0);
+  }, [palette.activeToken?.type, palette.activeToken?.query]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (ui.paletteSelectedIndex < palette.paletteItems.length) return;
+    ui.setPaletteSelectedIndex(0);
+  }, [palette.paletteItems.length, ui.paletteSelectedIndex]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!palette.paletteOpen || !refs.paletteRef.current) return;
+    const container = refs.paletteRef.current;
+    const active = container.querySelector(".slash-item.active");
+    if (!active) return;
+    active.scrollIntoView({ block: "nearest" });
+  }, [palette.paletteOpen, ui.paletteSelectedIndex, palette.visiblePaletteItems.length]); // eslint-disable-line react-hooks/exhaustive-deps
   useThreadBootstrapEffects({
     loadThreads: threadActions.loadThreads,
     activeProjectKey: domainRuntime.activeProjectKey,

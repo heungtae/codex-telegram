@@ -59,16 +59,18 @@ export default function useProjectThreadTabs(args: UseProjectThreadTabsArgs) {
     if (!projectTabId || !threadId) {
       return "";
     }
-    const title = typeof thread?.title === "string" && thread.title ? thread.title : threadId;
     setThreadTabsByProjectTabId((prev) => {
       const rows = Array.isArray(prev[projectTabId]) ? prev[projectTabId] : [];
       const existing = rows.find((row) => row.id === threadId);
       if (existing) {
         return prev;
       }
+      const providedTitle = typeof thread?.title === "string" && thread.title && thread.title !== threadId
+        ? thread.title
+        : `New Thread (${rows.length + 1})`;
       return {
         ...prev,
-        [projectTabId]: [...rows, { id: threadId, title, status: "idle", hasUnreadCompletion: false }],
+        [projectTabId]: [...rows, { id: threadId, title: providedTitle, status: "idle", hasUnreadCompletion: false }],
       };
     });
     setThreadProjectTabIdByThreadId((prev) => ({ ...prev, [threadId]: projectTabId }));

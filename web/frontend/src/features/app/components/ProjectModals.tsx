@@ -2,7 +2,7 @@ import { Badge, Button, EmptyState, Input, Modal } from "../../common/components
 
 export function ProjectModeModal({ isOpen, onClose, onChooseProjectClickMode }) {
   return (
-    <Modal isOpen={isOpen} onClose={onClose} ariaLabel="Project open mode" title="Choose Tab Behavior">
+    <Modal isOpen={isOpen} onClose={onClose} ariaLabel="Project open mode" title="Choose Project Tab Behavior">
       <div className="modal-desc">
         Choose whether clicking a project opens it in a new tab or replaces the current tab.
       </div>

@@ -28,6 +28,7 @@ export default function AppSidebarContentPanel({
   onCloseThread,
   onAddThread,
   disableAddThread,
+  onOpenInExplorer,
 }) {
   const projectRows = buildProjectRows({
     projectItems,
@@ -61,6 +62,7 @@ export default function AppSidebarContentPanel({
         onSelectThread={onSelectThread}
         onCloseThread={onCloseThread}
         onAddThread={onAddThread}
+        onOpenInExplorer={onOpenInExplorer}
       />
       <SidebarThreadsPanel
         activeProjectTabId={activeProjectTabId}

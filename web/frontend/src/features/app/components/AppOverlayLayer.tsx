@@ -1,4 +1,4 @@
-import AppOverlaysPresenter from "./AppOverlaysPresenter";
+import { Toast } from "../../common/components/ui";
 import { ProjectModeModal, ProjectPickerModal } from "./ProjectModals";
 
 export default function AppOverlayLayer({
@@ -16,28 +16,24 @@ export default function AppOverlayLayer({
   toastNotification,
 }) {
   return (
-    <AppOverlaysPresenter
-      projectModeModal={
-        <ProjectModeModal
-          isOpen={isProjectModeModalOpen}
-          onClose={onCloseProjectModeModal}
-          onChooseProjectClickMode={onChooseProjectClickMode}
-        />
-      }
-      projectPickerModal={
-        <ProjectPickerModal
-          isOpen={isProjectPickerOpen}
-          projectSearchQuery={projectSearchQuery}
-          onProjectSearchQueryChange={onProjectSearchQueryChange}
-          filteredProjects={filteredProjects}
-          selectedProjectIndex={selectedProjectIndex}
-          onSelectedProjectIndexChange={onSelectedProjectIndexChange}
-          onSelectProject={onSelectProject}
-          onClose={onCloseProjectPicker}
-        />
-      }
-      shortcutModal={null}
-      toastNotification={toastNotification}
-    />
+    <>
+      <ProjectModeModal
+        isOpen={isProjectModeModalOpen}
+        onClose={onCloseProjectModeModal}
+        onChooseProjectClickMode={onChooseProjectClickMode}
+      />
+      <ProjectPickerModal
+        isOpen={isProjectPickerOpen}
+        projectSearchQuery={projectSearchQuery}
+        onProjectSearchQueryChange={onProjectSearchQueryChange}
+        filteredProjects={filteredProjects}
+        selectedProjectIndex={selectedProjectIndex}
+        onSelectedProjectIndexChange={onSelectedProjectIndexChange}
+        onSelectProject={onSelectProject}
+        onClose={onCloseProjectPicker}
+      />
+      {null}
+      {toastNotification ? <Toast message={toastNotification.message} variant={toastNotification.type || "info"} /> : null}
+    </>
   );
 }

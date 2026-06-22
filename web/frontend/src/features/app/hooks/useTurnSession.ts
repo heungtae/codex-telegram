@@ -1,4 +1,4 @@
-﻿import { useEffect } from "react";
+﻿import { useEffect, useRef } from "react";
 
 import { closeSseStream, createSseStream } from "../../../shared/events/sseStream";
 import { handleTurnCompletedWorkspaceRefresh } from "../events/turnCompletion";
@@ -17,6 +17,9 @@ import { logSseEvent, safeParseSseData } from "../events/sseEventUtils";
 import type { TurnSessionArgs } from "./useTurnSession.types";
 
 export default function useTurnSession(args: TurnSessionArgs) {
+  const setStatusForThreadRef = useRef(args.setStatusForThread);
+  setStatusForThreadRef.current = args.setStatusForThread;
+
   const {
     me,
     turnNotificationEnabled,
@@ -57,15 +60,21 @@ export default function useTurnSession(args: TurnSessionArgs) {
     resolveThreadIdFromTurn,
   } = args;
 
+  // Initial data load: runs once when the authenticated user is available.
   useEffect(() => {
-    if (!me) {
-      return;
-    }
+    if (!me) return;
     loadProjects().catch(() => {});
     loadThreads({ projectKey: activeProjectKey, projectTabId: activeProjectTabId }).catch(() => {});
     loadSkillSuggestions().catch(() => {});
     loadSessionSummary().catch(() => {});
     loadApprovals().catch(() => {});
+  }, [me]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // SSE stream: manages the real-time event connection independently of the initial load.
+  useEffect(() => {
+    if (!me) {
+      return;
+    }
 
     const es = createSseStream();
     const parseEventData = (eventType: string, ev: MessageEvent<string>) => safeParseSseData(eventType, ev, debugError);
@@ -346,9 +355,9 @@ export default function useTurnSession(args: TurnSessionArgs) {
 
     es.onerror = () => {
       debugError("[SSE] connection error");
-      setStatusForThread(activeThreadRef.current, "disconnected");
+      setStatusForThreadRef.current(activeThreadRef.current, "disconnected");
     };
 
     return () => closeSseStream(es);
-  }, [me, turnNotificationEnabled]);
+  }, [me, turnNotificationEnabled]); // eslint-disable-line react-hooks/exhaustive-deps
 }

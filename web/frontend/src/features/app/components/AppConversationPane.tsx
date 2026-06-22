@@ -1,4 +1,3 @@
-import React from "react";
 import ApprovalStack from "../../approvals/components/ApprovalStack";
 import ChatMessageFeed from "../../chat/components/ChatMessageFeed";
 import { normalizeThreadId } from "../../common/utils";
@@ -7,9 +6,8 @@ import AppComposerPresenter from "./AppComposerPresenter";
 import ChatHeader from "./ChatHeader";
 import OpenInTelegramModal from "./OpenInTelegramModal";
 import WorkspacePreviewOverlay from "./WorkspacePreviewOverlay";
-import { shouldOpenInTelegramModal } from "./openInTelegramState";
 
-export default function AppConversationPane({ tabs, workspace, conversation, composer, icons }) {
+export default function AppConversationPane({ tabs, workspace, conversation, composer, telegramModal }) {
   const {
     threadItems,
     threadTabs,
@@ -17,7 +15,6 @@ export default function AppConversationPane({ tabs, workspace, conversation, com
     telegramActiveThreadId,
     onAddThread,
     disableAddThread,
-    onOpenThreadInTelegram,
   } = tabs;
   const activeThreadTab = threadTabs.find(
     (tab) => normalizeThreadId(tab.id) === normalizeThreadId(activeThread)
@@ -34,88 +31,25 @@ export default function AppConversationPane({ tabs, workspace, conversation, com
     workspacePreviewResizeRef,
     setIsResizingWorkspacePreview,
     setWorkspacePreview,
-    resetWorkspacePreviewSize,
     workspacePanel,
   } = workspace;
   const { chatRef, approvalItems, approvalBusyId, onSubmitApproval, onCloseApprovals, renderItems } = conversation;
+  const { isCompactWorkspaceLayout, isWorkspacePanelOpen } = composer;
   const {
-    activityDetail,
-    paletteOpen,
-    paletteRef,
-    visiblePaletteItems,
-    paletteWindowStart,
-    paletteSelectedIndex,
-    activeTokenType,
-    onApplyPaletteItem,
-    collaborationMode,
-    composerLocked,
-    modeSwitchBusy,
-    onToggleComposerMode,
-    inputRef,
-    input,
-    onInputChange,
-    onInputFocus,
-    onInputBlur,
-    onInputSelect,
-    onInputKeyDown,
-    status,
-    onInterrupt,
-    onSendMessage,
-    isCompactWorkspaceLayout,
-    isWorkspacePanelOpen,
-    onToggleWorkspacePanel,
-    onNewChat,
-    interactionBusy,
-  } = composer;
-  const { StopIcon, SendIcon, FolderIcon, NewChatIcon } = icons;
-  const [isOpenInTelegramModalOpen, setIsOpenInTelegramModalOpen] = React.useState(false);
-  const [targetTelegramThread, setTargetTelegramThread] = React.useState({ id: "", title: "" });
-  const [openInTelegramBusy, setOpenInTelegramBusy] = React.useState(false);
-  const [openInTelegramError, setOpenInTelegramError] = React.useState("");
-
-  const openInTelegramModal = () => {
-    const targetThreadId = normalizeThreadId(activeThreadTab?.id || activeThread);
-    if (!shouldOpenInTelegramModal(targetThreadId, telegramActiveThreadId)) {
-      return;
-    }
-    setTargetTelegramThread({
-      id: targetThreadId,
-      title: activeThreadTab?.title || targetThreadId,
-    });
-    setOpenInTelegramError("");
-    setIsOpenInTelegramModalOpen(true);
-  };
-
-  const handleOpenInTelegramContextMenu = (event) => {
-    event.preventDefault();
-    openInTelegramModal();
-  };
-
-  const handleOpenInTelegramConfirm = async () => {
-    const targetThreadId = normalizeThreadId(targetTelegramThread.id);
-    if (!targetThreadId || openInTelegramBusy) {
-      return;
-    }
-    setOpenInTelegramBusy(true);
-    setOpenInTelegramError("");
-    try {
-      await onOpenThreadInTelegram(targetThreadId);
-      setIsOpenInTelegramModalOpen(false);
-    } catch (err) {
-      setOpenInTelegramError(err instanceof Error ? err.message : "Failed to open thread in Telegram.");
-    } finally {
-      setOpenInTelegramBusy(false);
-    }
-  };
+    isModalOpen: isOpenInTelegramModalOpen,
+    targetThread: targetTelegramThread,
+    busy: openInTelegramBusy,
+    error: openInTelegramError,
+    handleContextMenu: handleOpenInTelegramContextMenu,
+    handleConfirm: handleOpenInTelegramConfirm,
+    handleClose: handleOpenInTelegramClose,
+  } = telegramModal;
 
   return (
     <>
       <OpenInTelegramModal
         isOpen={isOpenInTelegramModalOpen}
-        onClose={() => {
-          setIsOpenInTelegramModalOpen(false);
-          setOpenInTelegramError("");
-        }}
+        onClose={handleOpenInTelegramClose}
         onConfirm={handleOpenInTelegramConfirm}
         targetThreadId={targetTelegramThread.id}
         targetThreadTitle={targetTelegramThread.title}
@@ -128,8 +62,6 @@ export default function AppConversationPane({ tabs, workspace, conversation, com
         topTabs={
           <ChatHeader
             activeThreadTitle={activeThreadTab?.title || activeThreadTab?.id || activeThread}
-            onAddThread={onAddThread}
-            disableAddThread={disableAddThread}
             onContextMenu={handleOpenInTelegramContextMenu}
           />
         }
@@ -145,7 +77,6 @@ export default function AppConversationPane({ tabs, workspace, conversation, com
                 workspacePreviewResizeRef={workspacePreviewResizeRef}
                 setIsResizingWorkspacePreview={setIsResizingWorkspacePreview}
                 setWorkspacePreview={setWorkspacePreview}
-                resetWorkspacePreviewSize={resetWorkspacePreviewSize}
               />
             ) : null}
             <div className="chat" ref={chatRef}>
@@ -157,39 +88,7 @@ export default function AppConversationPane({ tabs, workspace, conversation, com
               />
               <ChatMessageFeed renderItems={renderItems} />
             </div>
-            <AppComposerPresenter
-              activityDetail={activityDetail}
-              paletteOpen={paletteOpen}
-              paletteRef={paletteRef}
-              visiblePaletteItems={visiblePaletteItems}
-              paletteWindowStart={paletteWindowStart}
-              paletteSelectedIndex={paletteSelectedIndex}
-              activeTokenType={activeTokenType}
-              onApplyPaletteItem={onApplyPaletteItem}
-              collaborationMode={collaborationMode}
-              composerLocked={composerLocked}
-              modeSwitchBusy={modeSwitchBusy}
-              onToggleComposerMode={onToggleComposerMode}
-              inputRef={inputRef}
-              input={input}
-              onInputChange={onInputChange}
-              onInputFocus={onInputFocus}
-              onInputBlur={onInputBlur}
-              onInputSelect={onInputSelect}
-              onInputKeyDown={onInputKeyDown}
-              status={status}
-              onInterrupt={onInterrupt}
-              onSendMessage={onSendMessage}
-              isCompactWorkspaceLayout={isCompactWorkspaceLayout}
-              isWorkspacePanelOpen={isWorkspacePanelOpen}
-              onToggleWorkspacePanel={onToggleWorkspacePanel}
-              onNewChat={onNewChat}
-              interactionBusy={interactionBusy}
-              StopIcon={StopIcon}
-              SendIcon={SendIcon}
-              FolderIcon={FolderIcon}
-              NewChatIcon={NewChatIcon}
-            />
+            <AppComposerPresenter {...composer} />
           </>
         }
         isCompactWorkspaceLayout={isCompactWorkspaceLayout}
