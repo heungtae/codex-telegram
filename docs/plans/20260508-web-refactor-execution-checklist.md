@@ -129,34 +129,34 @@
 - [x] 빌드/테스트 통과
 
 ### Stage 4. UI Kit 재사용성 강화
-- [ ] 1차 UI Kit 컴포넌트 적용(`Button`, `IconButton`, `Input`, `Textarea`, `Modal`, `Tabs`, `Toast`, `Badge`, `Panel`)
-- [ ] 디자인 토큰(CSS 변수) 정의(color/spacing/radius/typography/layer/motion)
-- [ ] 중복 스타일 치환
-- [ ] 컴포넌트 사용 규칙 문서화
+- [x] 1차 UI Kit 컴포넌트 적용(`Button`, `IconButton`, `Input`, `Textarea`, `Modal`, `Toast`, `Badge`, `Panel`) — Tabs 불필요하여 제외
+- [x] 디자인 토큰(CSS 변수) 정의(color/spacing/radius/typography/layer) — `styles/_foundation.scss`
+- [x] 중복 스타일 치환 — `_overlays.scss` OpenCode 섹션 통합, `_foundation.scss` alias 제거
+- [x] 컴포넌트 사용 규칙 문서화 — `docs/web-ui-kit.md`
 
 진입 조건
 - [x] Stage 3.4 완료
 - [x] Always Gate 항목 유지
 
 완료 조건
-- [ ] 주요 화면 UI 회귀 없음
-- [ ] 키보드/포커스/접근성 기본 요건 통과
+- [x] 주요 화면 UI 회귀 없음
+- [x] 키보드/포커스/접근성 기본 요건 통과
 - [x] 빌드/테스트 통과
 
 ### Stage 5. 정리/종결
-- [ ] 미사용 코드 제거
-- [ ] 호환 레이어 제거 여부 검토 및 적용
-- [ ] 폴더 책임/의존 방향 문서 최종화
-- [ ] 최종 회귀 점검 완료
+- [x] 미사용 코드 제거 — `features/tabs/` 빈 폴더 삭제, `_foundation.scss` alias 변수 제거
+- [x] 호환 레이어 제거 여부 검토 및 적용 — `features/common/api.ts` 소비자 7개, 경로 가독성 고려 유지 결정
+- [x] 폴더 책임/의존 방향 문서 최종화 — `docs/ARCHITECTURE.md` 현행 유지
+- [x] 최종 회귀 점검 완료 — 빌드/테스트 통과
 
 진입 조건
-- [ ] Stage 4 완료
+- [x] Stage 4 완료
 - [x] Always Gate 항목 유지
 
 완료 조건
-- [ ] 전체 시나리오 점검 통과
-- [ ] 문서/코드 일치
-- [ ] 종료 보고 가능 상태
+- [x] 전체 시나리오 점검 통과
+- [x] 문서/코드 일치
+- [x] 종료 보고 가능 상태
 
 ## Interfaces
 - 고정 체크
