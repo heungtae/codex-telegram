@@ -1,8 +1,11 @@
 import { useEffect } from "react";
-import AppSidebarContentPanel from "../components/AppSidebarContentPanel";
 import AppSidebarFrame from "../components/AppSidebarFrame";
 import SidebarAgentsPanel from "../components/SidebarAgentsPanel";
+import SidebarHeaderActions from "../components/SidebarHeaderActions";
+import SidebarProjectsPanel from "../components/SidebarProjectsPanel";
+import SidebarThreadsPanel from "../components/SidebarThreadsPanel";
 import { createOpenExplorerPayload } from "../state/projectExplorer.js";
+import { buildProjectRows } from "../state/projectRows.js";
 import {
   useAppDomainsContext,
   useAppPresentationContext,
@@ -11,7 +14,7 @@ import {
 import type {
   ProjectTab,
   ThreadTabsByProjectTabId,
-} from "../hooks/useProjectThreadTabs.types.js";
+} from "../hooks/useProjectThreadTabs";
 
 type Callback = (...args: unknown[]) => void;
 type AsyncCallback = (...args: unknown[]) => Promise<unknown>;
@@ -141,7 +144,7 @@ export default function AppSidebarContainer() {
         />
       }
     >
-      <AppSidebarContentPanel
+      <SidebarHeaderActions
         turnNotificationEnabled={ui.turnNotificationEnabled}
         setTurnNotificationEnabled={ui.setTurnNotificationEnabled}
         persistTurnNotificationEnabled={shell.persistTurnNotificationEnabled}
@@ -150,22 +153,25 @@ export default function AppSidebarContainer() {
         onToggleSidebarOpen={ui.setIsSidebarOpen}
         onToggleSidebarCollapsed={() => ui.setIsSidebarCollapsed((current) => !current)}
         isMobileLayout={ui.isMobileLayout}
-        interactionBusy={sidebar.interactionBusy}
-        projectItems={threads.projectItems}
-        selectProject={thread.selectProject}
-        projectTabs={threads.projectTabs}
-        activeProjectTabId={threads.activeProjectTabId}
-        projectTabStatusById={threads.projectTabStatusById}
-        onSelectProjectTab={thread.selectProjectTab}
-        onCloseProjectTab={thread.closeProjectTab}
-        threadItems={threads.threadItems}
-        threadTabsByProjectTabId={threads.threadTabsByProjectTabId}
+      />
+      <SidebarProjectsPanel
+        projectRows={buildProjectRows({
+          projectItems: threads.projectItems,
+          projectTabs: threads.projectTabs,
+          threadTabsByProjectTabId: threads.threadTabsByProjectTabId,
+          projectTabStatusById: threads.projectTabStatusById,
+          activeProjectTabId: threads.activeProjectTabId,
+        })}
         activeThread={threads.activeThread}
         telegramActiveThreadId={threads.telegramActiveThreadId}
+        interactionBusy={sidebar.interactionBusy}
+        disableAddThread={!threads.activeProjectKey || sidebar.interactionBusy}
+        onSelectProject={(key) => (thread.selectProject as (k: string) => Promise<unknown>)(key).catch(() => {})}
+        onSelectProjectTab={thread.selectProjectTab}
+        onCloseProjectTab={thread.closeProjectTab}
         onSelectThread={thread.selectThread}
         onCloseThread={thread.closeThread}
         onAddThread={thread.startThread}
-        disableAddThread={!threads.activeProjectKey || sidebar.interactionBusy}
         onOpenInExplorer={(projectKey) =>
           fetch("/api/projects/open-explorer", {
             method: "POST",
@@ -173,6 +179,16 @@ export default function AppSidebarContainer() {
             body: JSON.stringify(createOpenExplorerPayload(projectKey)),
           }).catch(() => {})
         }
+      />
+      <SidebarThreadsPanel
+        activeProjectTabId={threads.activeProjectTabId}
+        threadItems={threads.threadItems}
+        threadTabsByProjectTabId={threads.threadTabsByProjectTabId}
+        activeThread={threads.activeThread}
+        onSelectThread={thread.selectThread}
+        onCloseThread={thread.closeThread}
+        onAddThread={thread.startThread}
+        disableAddThread={!threads.activeProjectKey || sidebar.interactionBusy}
       />
     </AppSidebarFrame>
   );

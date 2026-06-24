@@ -66,12 +66,12 @@ export function buildProjectTabStatusById(
       : [];
     if (rows.some((row) => row.status === "running")) {
       next[tabId] = "running";
-    } else if (rows.some((row) => row.hasUnreadCompletion)) {
-      next[tabId] = "unread";
     } else if (rows.some((row) => row.status === "failed")) {
       next[tabId] = "failed";
     } else if (rows.some((row) => row.status === "cancelled")) {
       next[tabId] = "cancelled";
+    } else if (rows.some((row) => row.hasUnreadCompletion)) {
+      next[tabId] = "unread";
     } else {
       next[tabId] = "idle";
     }
@@ -82,9 +82,9 @@ export function buildProjectTabStatusById(
 export default function useAppDomainRuntime({ me, domains }) {
   const { threads, session, ui } = domains;
   const refs = useAppRuntimeRefs();
-  const showToast = useCallback((message, type = "info") => {
+  const showToast = useCallback((message, type = "info", subtitle?: string) => {
     if (refs.toastTimerRef.current) clearTimeout(refs.toastTimerRef.current);
-    ui.setToastNotification({ message, type });
+    ui.setToastNotification({ message, type, subtitle });
     refs.toastTimerRef.current = setTimeout(() => {
       ui.setToastNotification(null);
       refs.toastTimerRef.current = null;
@@ -249,7 +249,10 @@ export default function useAppDomainRuntime({ me, domains }) {
     workspace.removeWorkspaceBucket(normalizedThreadId);
   };
 
-  const playTurnNotification = () => {
+  const playTurnNotification = (
+    threadId?: string,
+    outcome: "completed" | "failed" | "cancelled" = "completed"
+  ) => {
     if (!ui.turnNotificationEnabled || typeof window === "undefined") {
       return;
     }
@@ -279,7 +282,25 @@ export default function useAppDomainRuntime({ me, domains }) {
       osc.start(now);
       osc.stop(now + 0.15);
     } catch (_err) {}
-    showToast("Turn completed!", "success");
+    const messageMap = {
+      completed: "Turn completed",
+      failed: "Turn failed",
+      cancelled: "Turn cancelled",
+    };
+    let subtitle: string | undefined;
+    if (threadId) {
+      const msgsByThread = (threadState.messagesByThreadIdRef as { current: Record<string, Array<Record<string, unknown>>> }).current;
+      const threadMsgs = msgsByThread[threadId] ?? [];
+      const lastUserMsg = [...threadMsgs]
+        .reverse()
+        .find((m) => m?.role === "user" && typeof m?.text === "string" && String(m.text).trim());
+      const rawPrompt = typeof lastUserMsg?.text === "string" ? lastUserMsg.text.trim() : "";
+      subtitle = rawPrompt
+        ? rawPrompt.slice(0, 80) + (rawPrompt.length > 80 ? "…" : "")
+        : undefined;
+    }
+    const typeMap = { completed: "success", failed: "error", cancelled: "warning" };
+    showToast(messageMap[outcome], typeMap[outcome], subtitle);
   };
 
   const threadSession = useThreadSession({
@@ -300,6 +321,7 @@ export default function useAppDomainRuntime({ me, domains }) {
     activeThreadRef: threadState.activeThreadRef,
     pendingComposerFocusRef: refs.pendingComposerFocusRef,
     turnThreadIdRef: threadState.turnThreadIdRef,
+    interruptedThreadIdRef: refs.interruptedThreadIdRef,
     setThreadItems: threads.setThreadItems,
     setProjectItems: threads.setProjectItems,
     setSessionSummary: session.setSessionSummary,

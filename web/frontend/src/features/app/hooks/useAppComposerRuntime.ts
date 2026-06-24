@@ -56,6 +56,7 @@ export default function useAppComposerRuntime({ domains, domainRuntime }) {
     projectSuggestions: threads.projectSuggestions,
     skillSuggestions: threads.skillSuggestions,
     paletteSelectedIndex: ui.paletteSelectedIndex,
+    setPaletteSelectedIndex: ui.setPaletteSelectedIndex,
     paletteLimit: PALETTE_LIMIT,
   });
   const commandActions = useMessageCommandActions({
@@ -122,6 +123,12 @@ export default function useAppComposerRuntime({ domains, domainRuntime }) {
     toggleComposerMode: commandActions.toggleComposerMode,
     sendMessage: commandActions.sendMessage,
   });
+  const interrupt = async () => {
+    const activeThreadId = normalizeThreadId(threads.activeThread);
+    refs.interruptedThreadIdRef.current = activeThreadId;
+    await commandActions.interrupt();
+    domainRuntime.playTurnNotification(activeThreadId, "cancelled");
+  };
   const composerViewModel = createComposerViewModel({
     activeToken: palette.activeToken,
     activityDetail: threadState.activityDetail,
@@ -140,7 +147,7 @@ export default function useAppComposerRuntime({ domains, domainRuntime }) {
     input: threadState.input,
     ...inputHandlers,
     status: threadState.status,
-    interrupt: commandActions.interrupt,
+    interrupt,
     sendMessage: commandActions.sendMessage,
     isCompactWorkspaceLayout: ui.isCompactWorkspaceLayout,
     isWorkspacePanelOpen: ui.isWorkspacePanelOpen,

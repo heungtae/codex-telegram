@@ -124,6 +124,14 @@
   background: var(--success);
 }
 
+.thread-tab-item.state-failed .session-tab-dot {
+  background: var(--danger);
+}
+
+.thread-tab-item.state-cancelled .session-tab-dot {
+  background: var(--warning);
+}
+
 .session-tab-close {
   width: 26px;
   height: 26px;

@@ -6,11 +6,9 @@ import {
   summarizeReasoningStatus,
 } from "../../common/utils";
 import useAppUiEffects from "./useAppUiEffects";
-import useChatScrollEffects from "./useChatScrollEffects";
 import useGlobalKeyboardShortcuts from "./useGlobalKeyboardShortcuts";
 import useProjectPickerViewModel from "./useProjectPickerViewModel";
 import useResizeInteractions from "./useResizeInteractions";
-import useThreadBootstrapEffects from "./useThreadBootstrapEffects";
 import useTurnMessageMutations from "./useTurnMessageMutations";
 import useTurnSession from "./useTurnSession";
 import useViewportLayout from "./useViewportLayout";
@@ -105,17 +103,25 @@ export default function useAppRuntimeEffects({
     setMessages: threadState.setMessages,
     updateThreadTabState: projectThreadTabs.updateThreadTabState,
     playTurnNotification: domainRuntime.playTurnNotification,
+    interruptedThreadIdRef: refs.interruptedThreadIdRef,
     setApprovalBusyId: approvals.setApprovalBusyId,
     setApprovalItems: approvals.setApprovalItems,
     setCollaborationMode: session.setCollaborationMode,
     normalizeCollaborationMode,
     resolveThreadIdFromTurn: threadState.resolveThreadIdFromTurn,
   });
-  useChatScrollEffects({
-    messages: threadState.messages,
-    renderItems: domainRuntime.renderItems,
-    chatRef: refs.chatRef,
-  });
+  useEffect(() => {
+    if (!refs.chatRef.current) return;
+    refs.chatRef.current.scrollTop = refs.chatRef.current.scrollHeight;
+  }, [threadState.messages]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!refs.chatRef.current) return;
+    const panels = refs.chatRef.current.querySelectorAll(".file-change-panel-scroll");
+    panels.forEach((panel) => {
+      panel.scrollTop = panel.scrollHeight;
+    });
+  }, [domainRuntime.renderItems]); // eslint-disable-line react-hooks/exhaustive-deps
   // Composer focus effects
   useEffect(() => {
     if (threadState.status === "running" || !refs.pendingComposerFocusRef.current) return;
@@ -149,16 +155,6 @@ export default function useAppRuntimeEffects({
     return () => window.cancelAnimationFrame(frame);
   }, [threadState.input, palette.paletteOpen, ui.paletteSelectedIndex]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Palette effects
-  useEffect(() => {
-    ui.setPaletteSelectedIndex(0);
-  }, [palette.activeToken?.type, palette.activeToken?.query]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (ui.paletteSelectedIndex < palette.paletteItems.length) return;
-    ui.setPaletteSelectedIndex(0);
-  }, [palette.paletteItems.length, ui.paletteSelectedIndex]); // eslint-disable-line react-hooks/exhaustive-deps
-
   useEffect(() => {
     if (!palette.paletteOpen || !refs.paletteRef.current) return;
     const container = refs.paletteRef.current;
@@ -166,18 +162,27 @@ export default function useAppRuntimeEffects({
     if (!active) return;
     active.scrollIntoView({ block: "nearest" });
   }, [palette.paletteOpen, ui.paletteSelectedIndex, palette.visiblePaletteItems.length]); // eslint-disable-line react-hooks/exhaustive-deps
-  useThreadBootstrapEffects({
-    loadThreads: threadActions.loadThreads,
-    activeProjectKey: domainRuntime.activeProjectKey,
-    activeProjectTabId: threads.activeProjectTabId,
-    resolveCurrentThreadId: threadActions.resolveCurrentThreadId,
-    setActiveThreadForProjectTab:
-      projectThreadTabs.setActiveThreadForProjectTab,
-    restoreWorkspaceForThread: workspace.restoreWorkspaceForThread,
-    viewThread: threadActions.viewThread,
-    setMessages: threadState.setMessages,
-    loadSessionSummary: threadActions.loadSessionSummary,
-  });
+  useEffect(() => {
+    threadActions.loadThreads({ projectKey: domainRuntime.activeProjectKey, projectTabId: threads.activeProjectTabId }).catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!threads.activeProjectTabId) return;
+    const selectedThreadId = threadActions.resolveCurrentThreadId(threads.activeProjectTabId);
+    projectThreadTabs.setActiveThreadForProjectTab(threads.activeProjectTabId, selectedThreadId);
+    workspace.restoreWorkspaceForThread(selectedThreadId);
+    if (selectedThreadId) {
+      threadActions.viewThread(selectedThreadId).catch(() => {});
+    } else {
+      threadState.setMessages([]);
+    }
+    threadActions.loadSessionSummary().catch(() => {});
+    threadActions.loadThreads({
+      projectKey: domainRuntime.activeProjectKey,
+      projectTabId: threads.activeProjectTabId,
+      ensureDefaultTab: false,
+    }).catch(() => {});
+  }, [threads.activeProjectTabId]); // eslint-disable-line react-hooks/exhaustive-deps
   useViewportLayout({
     mobileBreakpoint: MOBILE_BREAKPOINT,
     workspacePanelBreakpoint: WORKSPACE_PANEL_BREAKPOINT,
@@ -226,9 +231,6 @@ export default function useAppRuntimeEffects({
     workspaceContextQuery: workspace.workspaceContextQuery,
     api,
     setProjectSuggestions: threads.setProjectSuggestions,
-    floatingAgentSettings: session.floatingAgentSettings,
-    activeAgentSettings: session.activeAgentSettings,
-    setFloatingAgentSettings: session.setFloatingAgentSettings,
     isProjectModeModalOpen: ui.isProjectModeModalOpen,
     setPendingProjectTarget: ui.setPendingProjectTarget,
     setIsProjectModeModalOpen: ui.setIsProjectModeModalOpen,

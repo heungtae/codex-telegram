@@ -15,6 +15,3 @@ export function getSidebarStyle({
   return { width: isDesktopSidebarCollapsed ? collapsedWidth : sidebarWidth };
 }
 
-export function shouldShowWorkspacePanelDesktop(isCompactWorkspaceLayout) {
-  return !isCompactWorkspaceLayout;
-}

@@ -35,6 +35,7 @@ export default function useAppRuntimeRefs() {
   const projectTabSequenceRef = useRef(0);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const interruptedThreadIdRef = useRef("");
 
   // Resize refs
   const workspaceResizeRef = useRef({ startX: 0, startWidth: 320 });
@@ -69,6 +70,7 @@ export default function useAppRuntimeRefs() {
     projectTabSequenceRef,
     audioCtxRef,
     toastTimerRef,
+    interruptedThreadIdRef,
     workspaceResizeRef,
     workspacePreviewResizeRef,
     commandRefs,

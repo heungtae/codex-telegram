@@ -6,9 +6,6 @@ export default function useAppUiEffects({
   workspaceContextQuery,
   api,
   setProjectSuggestions,
-  floatingAgentSettings,
-  activeAgentSettings,
-  setFloatingAgentSettings,
   isProjectModeModalOpen,
   setPendingProjectTarget,
   setIsProjectModeModalOpen,
@@ -44,12 +41,6 @@ export default function useAppUiEffects({
         });
     }
   }, [activeToken?.type, activeToken?.query, workspaceContextQuery]);
-
-  useEffect(() => {
-    if (floatingAgentSettings && floatingAgentSettings !== activeAgentSettings) {
-      setFloatingAgentSettings("");
-    }
-  }, [activeAgentSettings, floatingAgentSettings]);
 
   useEffect(() => {
     if (!isProjectModeModalOpen || typeof window === "undefined") {

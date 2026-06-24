@@ -1,7 +1,8 @@
-import AppWorkspacePanelSlot from "../components/AppWorkspacePanelSlot";
+import WorkspacePanel from "../../workspace/components/WorkspacePanel";
 import { AGENT_CONFIG_DEFS } from "../../common/constants";
 import { persistTurnNotificationEnabled } from "../../common/theme";
-import { getSidebarStyle } from "../state/layoutSelectors";
+import { basename } from "../../common/utils";
+import { getWorkspacePanelStyle, getSidebarStyle } from "../state/layoutSelectors";
 
 type RuntimeContextSlices = {
   domains: Record<string, unknown>;
@@ -133,16 +134,23 @@ export default function useAppRuntimePresentation(args) {
   };
   const disableAddThread = !activeProjectKey || interactionBusy;
   const onToggleWorkspaceExpand = () => ui.setIsWorkspaceExpanded((current) => !current);
+  const activeWorkspacePath = activeProjectTab?.path || session.sessionSummary?.workspace || "";
+  const workspaceRootLabel = basename(activeWorkspacePath) || "Workspace";
+  const workspacePanelStyle = getWorkspacePanelStyle(ui.isCompactWorkspaceLayout, workspace.workspacePanelWidth, ui.isWorkspaceExpanded);
+  const workspaceStatusItems =
+    workspace.workspaceStatus && typeof workspace.workspaceStatus.items === "object"
+      ? workspace.workspaceStatus.items
+      : {};
   const workspacePanel = (
-    <AppWorkspacePanelSlot
+    <WorkspacePanel
       isCompactWorkspaceLayout={ui.isCompactWorkspaceLayout}
       isWorkspacePanelOpen={ui.isWorkspacePanelOpen}
       onToggleWorkspacePanel={composerViewModel.onToggleWorkspacePanel}
-      workspacePanelWidth={workspace.workspacePanelWidth}
-      activeProjectKey={domainRuntime.activeProjectKey}
-      activeWorkspacePath={activeProjectTab?.path || session.sessionSummary?.workspace || ""}
+      workspacePanelStyle={workspacePanelStyle}
+      workspaceRootLabel={workspaceRootLabel}
       workspaceError={workspace.workspaceError}
-      workspaceStatus={workspace.workspaceStatus}
+      activeWorkspacePath={activeWorkspacePath}
+      workspaceStatusItems={workspaceStatusItems}
       workspaceTree={workspace.workspaceTree}
       expandedWorkspaceDirs={workspace.expandedWorkspaceDirs}
       workspacePreview={workspace.workspacePreview}
