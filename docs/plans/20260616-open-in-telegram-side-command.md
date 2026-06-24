@@ -1,36 +1,42 @@
-# Open in Telegram + Side Command Design
+# Open in Telegram + Side Command 설계
 
-**Goal:** Let users explicitly open a Web-visible Codex thread in the Telegram client, and define a separate side-command workspace flow for later implementation.
+## 배경
 
-**Architecture:** v1 is an explicit cross-client action: the current chat header opens a modal, the user picks a thread in the current project, and `POST /api/telegram/open-thread` makes that thread active in Telegram. Merely opening a thread in Web does not change Telegram's active thread. Side command is documented as a separate right-sidebar flow that does not merge into the main thread model.
+Web에서 보이는 Codex 스레드를 명시적 액션으로 Telegram 클라이언트에서 열 수 있게 한다. Web 스레드를 단순히 여는 것만으로는 Telegram의 활성 스레드가 변경되지 않으며, 명시적 크로스 클라이언트 액션으로만 전환이 이루어진다. Side Command는 오른쪽 사이드바 워크스페이스 플로우로 별도 구현 예정이다.
 
-**Tech Stack:** FastAPI, Python 3.11, React, existing Codex thread/session routing.
+## 요구사항 구조화
 
----
+**Open in Telegram (완료)**
+- 채팅 헤더에서 모달을 열어 현재 프로젝트의 스레드 목록 표시.
+- 선택한 스레드를 Telegram의 활성 스레드로 전환.
+- `POST /api/telegram/open-thread` API로 Telegram의 활성 스레드 바인딩 업데이트.
+- 라우트 동작, 활성 스레드 격리, 오류 전파, 모달 렌더 회귀 테스트 포함.
 
-## Open in Telegram
+**Side Command (미완료)**
+- 오른쪽 사이드바에 별도 워크스페이스 플로우를 예약.
+- 메인 스레드 모델과 분리, v1 구현 범위 외.
 
-**Affected areas:**
-- Modify: `web/routes.py`
-- Modify: `web/frontend/src/features/app/hooks/useThreadSession.ts`
-- Modify: `web/frontend/src/features/app/hooks/useThreadSession.types.ts`
-- Modify: `web/frontend/src/features/app/components/ChatHeader.tsx`
-- Modify: `web/frontend/src/features/app/components/AppConversationPane.tsx`
-- Create: `web/frontend/src/features/app/components/OpenInTelegramModal.tsx`
-- Modify: `web/frontend/src/styles/_overlays.scss`
-- Modify: `tests/test_web_server_local_command.py`
+## 제약 조건
+- Open in Telegram v1은 현재 프로젝트의 스레드만 대상으로 한다.
+- Web과 Telegram은 독립적인 활성 스레드 선택을 유지하며, 명시적 액션만이 Telegram의 활성 스레드를 변경한다.
+- 기술 스택: FastAPI, Python 3.11, React, 기존 Codex thread/session 라우팅.
 
-- Add `POST /api/telegram/open-thread` and update Telegram's active-thread binding only when this explicit action is requested.
-- Add a header-triggered Open in Telegram modal that shows the active Telegram thread and available threads in the current project.
-- Cover route behavior, active-thread isolation, error propagation, and modal rendering with regression tests.
+## 아키텍처/설계 방향
 
-## Side Command
+**Open in Telegram 구현 범위:**
+- `web/routes.py`: `POST /api/telegram/open-thread` 추가
+- `web/frontend/src/features/app/hooks/useThreadSession.ts`: Open in Telegram 핸들러 추가
+- `web/frontend/src/features/app/hooks/useThreadSession.types.ts`: 타입 확장
+- `web/frontend/src/features/app/components/ChatHeader.tsx`: 모달 진입점 추가
+- `web/frontend/src/features/app/components/AppConversationPane.tsx`: 모달 렌더 연결
+- `web/frontend/src/features/app/components/OpenInTelegramModal.tsx` (신규): 스레드 선택 UI
+- `web/frontend/src/styles/_overlays.scss`: 모달 스타일
+- `tests/test_web_server_local_command.py`: 라우트/모달 회귀 테스트
 
-- Reserve the right sidebar for a future side-command workspace flow.
-- Keep side command separate from the main thread model and outside the v1 implementation.
+**Side Command 설계 예약:**
+- 오른쪽 사이드바를 Side Command 워크스페이스 플로우 용도로 예약.
+- 메인 스레드 모델과 독립적으로 분리 설계.
 
-## Assumptions
-- Open in Telegram v1 targets threads in the current project only.
-- The current chat header is the entry point for the Open in Telegram modal.
-- Web and Telegram keep independent active-thread selections; only the explicit action changes Telegram's active thread.
-- Side command remains a later feature; its current design is documented but not implemented in this branch.
+## 작업 계획
+- [x] Open in Telegram: API, 모달 UI, Telegram 브릿지 통합
+- [ ] Side Command: 오른쪽 사이드바 워크스페이스 플로우 구현
