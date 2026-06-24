@@ -1,7 +1,6 @@
 import ApprovalStack from "../../approvals/components/ApprovalStack";
 import ChatMessageFeed from "../../chat/components/ChatMessageFeed";
 import { normalizeThreadId } from "../../common/utils";
-import AppCenterPanePresenter from "./AppCenterPanePresenter";
 import AppComposerPresenter from "./AppComposerPresenter";
 import ChatHeader from "./ChatHeader";
 import OpenInTelegramModal from "./OpenInTelegramModal";
@@ -58,43 +57,37 @@ export default function AppConversationPane({ tabs, workspace, conversation, com
         loading={openInTelegramBusy}
         errorMessage={openInTelegramError}
       />
-      <AppCenterPanePresenter
-        topTabs={
-          <ChatHeader
-            activeThreadTitle={activeThreadTab?.title || activeThreadTab?.id || activeThread}
-            onContextMenu={handleOpenInTelegramContextMenu}
-          />
-        }
-        centerPane={
-          <>
-            {isCompactWorkspaceLayout ? (
-              <WorkspacePreviewOverlay
-                workspacePreview={workspacePreview}
-                isResizingWorkspacePreview={isResizingWorkspacePreview}
-                isMobileLayout={isMobileLayout}
-                workspacePreviewWidth={workspacePreviewWidth}
-                workspacePreviewHeight={workspacePreviewHeight}
-                workspacePreviewResizeRef={workspacePreviewResizeRef}
-                setIsResizingWorkspacePreview={setIsResizingWorkspacePreview}
-                setWorkspacePreview={setWorkspacePreview}
-              />
-            ) : null}
-            <div className="chat" ref={chatRef}>
-              <ApprovalStack
-                approvalItems={approvalItems}
-                approvalBusyId={approvalBusyId}
-                onSubmitApproval={onSubmitApproval}
-                onClose={onCloseApprovals}
-              />
-              <ChatMessageFeed renderItems={renderItems} />
-            </div>
-            <AppComposerPresenter {...composer} />
-          </>
-        }
-        isCompactWorkspaceLayout={isCompactWorkspaceLayout}
-        isWorkspacePanelOpen={isWorkspacePanelOpen}
-        workspacePanel={workspacePanel}
+      <ChatHeader
+        activeThreadTitle={activeThreadTab?.title || activeThreadTab?.id || activeThread}
+        onContextMenu={handleOpenInTelegramContextMenu}
       />
+      <div className="workspace-layout">
+        <div className="center-pane">
+          {isCompactWorkspaceLayout ? (
+            <WorkspacePreviewOverlay
+              workspacePreview={workspacePreview}
+              isResizingWorkspacePreview={isResizingWorkspacePreview}
+              isMobileLayout={isMobileLayout}
+              workspacePreviewWidth={workspacePreviewWidth}
+              workspacePreviewHeight={workspacePreviewHeight}
+              workspacePreviewResizeRef={workspacePreviewResizeRef}
+              setIsResizingWorkspacePreview={setIsResizingWorkspacePreview}
+              setWorkspacePreview={setWorkspacePreview}
+            />
+          ) : null}
+          <div className="chat" ref={chatRef}>
+            <ApprovalStack
+              approvalItems={approvalItems}
+              approvalBusyId={approvalBusyId}
+              onSubmitApproval={onSubmitApproval}
+              onClose={onCloseApprovals}
+            />
+            <ChatMessageFeed renderItems={renderItems} />
+          </div>
+          <AppComposerPresenter composerViewModel={composer} />
+          {isCompactWorkspaceLayout && isWorkspacePanelOpen ? workspacePanel : null}
+        </div>
+      </div>
     </>
   );
 }
