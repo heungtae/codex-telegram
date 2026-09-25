@@ -1876,5 +1876,8 @@ Rule:
   - `git diff --check` 통과.
   - `python3 -m build`로 0.5.0 wheel/sdist 생성 통과.
   - PyPI 확인 결과 현재 최신은 0.4.16이며 0.5.0은 아직 없음.
+  - wheel/sdist의 `twine check` 통과 후 두 배포 파일을 PyPI에 업로드했고, PyPI JSON에서 0.5.0 및 파일 2개를 확인.
+  - 커밋 `25cf9ef`와 `v0.5.0` 태그를 GitHub에 push.
+  - GitHub Releases 생성은 유효한 `gh` 인증이 없어 보류.
 - Next step:
-  - 변경사항 커밋 후 PyPI 게시 및 GitHub v0.5.0 릴리스.
+  - 요청 시 GitHub 인증을 복구한 뒤 v0.5.0 Release 항목 생성.
