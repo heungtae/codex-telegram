@@ -1992,3 +1992,21 @@ Rule:
   - 관련 백엔드 테스트 모듈은 49개 중 48개 통과. 실패 1개는 Windows 탐색기 경로 구분자 기대값과 실제 호출값 차이.
 - Next step:
   - 갱신된 앱 화면에서 입력창과 Settings 버전 표시를 확인.
+
+## 2026-09-25 23:00 (local)
+- Objective:
+  - 작업 공간, 파일 트리, 채팅 입력창 수정본을 0.5.1로 배포 준비.
+- Files changed:
+  - codex_telegram/__init__.py
+  - docs/web-rearchitecture-log.md
+- Changes:
+  - 패키지의 canonical version을 0.5.1로 갱신. Settings 라벨은 인증 API가 제공하는 이 버전을 표시.
+- Validation:
+  - PyPI JSON에서 0.5.0 배포 파일 2개와 0.5.1 미등록 상태 확인.
+  - `cd web/frontend && npm run build` 통과.
+  - 변경 경로의 프런트엔드 테스트 8개, 인증 API 버전 테스트 1개 통과.
+  - `npm run lint` 통과 (0 errors, 40 warnings).
+  - 0.5.1 wheel/sdist 생성과 `twine check` 통과, 두 배포 파일에 빌드된 Web UI 포함 확인.
+  - 전체 프런트엔드 테스트의 기존 6개 실패와 백엔드 테스트 모듈의 Windows 경로 구분자 관련 1개 실패는 앞선 항목에 기록.
+- Next step:
+  - 0.5.1 커밋과 태그를 push하고 PyPI에 wheel/sdist를 업로드한 뒤 등록 상태 확인.
