@@ -2008,5 +2008,8 @@ Rule:
   - `npm run lint` 통과 (0 errors, 40 warnings).
   - 0.5.1 wheel/sdist 생성과 `twine check` 통과, 두 배포 파일에 빌드된 Web UI 포함 확인.
   - 전체 프런트엔드 테스트의 기존 6개 실패와 백엔드 테스트 모듈의 Windows 경로 구분자 관련 1개 실패는 앞선 항목에 기록.
+  - UI 수정 커밋 `334a749`와 릴리스 커밋 `eafe7ea`를 GitHub `main`에 push하고 `v0.5.1` 태그를 게시. 원격 `main`과 태그가 릴리스 커밋을 가리키는지 확인.
+  - PyPI가 하이픈을 사용한 sdist 파일명을 거절해 동일 파일을 `codex_telegram-0.5.1.tar.gz`로 업로드. PyPI JSON에서 wheel/sdist 2개와 로컬 파일의 SHA-256 일치 확인.
+  - `gh` 인증에 유효한 계정이 없어 GitHub Release 항목은 생성하지 못함.
 - Next step:
-  - 0.5.1 커밋과 태그를 push하고 PyPI에 wheel/sdist를 업로드한 뒤 등록 상태 확인.
+  - 설치된 0.5.1에서 UI를 확인하고, GitHub Release 항목이 필요하면 `gh` 인증 복구 후 생성.
