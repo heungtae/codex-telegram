@@ -24,8 +24,6 @@ import {
 
 const SIDEBAR_MIN = 260;
 const SIDEBAR_MAX = 620;
-const WORKSPACE_PANEL_MIN = 340;
-const WORKSPACE_PANEL_MAX = 900;
 const MOBILE_BREAKPOINT = 900;
 const WORKSPACE_PANEL_BREAKPOINT = 1200;
 
@@ -199,26 +197,20 @@ export default function useAppRuntimeEffects({
   useResizeInteractions({
     sidebarMin: SIDEBAR_MIN,
     sidebarMax: SIDEBAR_MAX,
-    workspacePanelMin: WORKSPACE_PANEL_MIN,
-    workspacePanelMax: WORKSPACE_PANEL_MAX,
     workspacePreviewMinWidth: WORKSPACE_PREVIEW_MIN_WIDTH,
     workspacePreviewMaxWidth: WORKSPACE_PREVIEW_MAX_WIDTH,
     workspacePreviewMinHeight: WORKSPACE_PREVIEW_MIN_HEIGHT,
     workspacePreviewMaxHeight: WORKSPACE_PREVIEW_MAX_HEIGHT,
     isResizingSidebar: ui.isResizingSidebar,
-    isResizingWorkspacePanel: workspace.isResizingWorkspacePanel,
     isResizingWorkspacePreview: workspace.isResizingWorkspacePreview,
     workspacePreview: workspace.workspacePreview,
     isProjectModeModalOpen: ui.isProjectModeModalOpen,
     shortcutModalPage: ui.shortcutModalPage,
     workspacePreviewWidth: workspace.workspacePreviewWidth,
     workspacePreviewHeight: workspace.workspacePreviewHeight,
-    workspaceResizeRef: refs.workspaceResizeRef,
     workspacePreviewResizeRef: refs.workspacePreviewResizeRef,
     setSidebarWidth: ui.setSidebarWidth,
     setIsResizingSidebar: ui.setIsResizingSidebar,
-    setWorkspacePanelWidth: workspace.setWorkspacePanelWidth,
-    setIsResizingWorkspacePanel: workspace.setIsResizingWorkspacePanel,
     setWorkspacePreviewWidth: workspace.setWorkspacePreviewWidth,
     setWorkspacePreviewHeight: workspace.setWorkspacePreviewHeight,
     setIsResizingWorkspacePreview: workspace.setIsResizingWorkspacePreview,

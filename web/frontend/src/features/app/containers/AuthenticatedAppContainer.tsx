@@ -21,8 +21,11 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
   const {
     workspacePanel,
     isWorkspaceExpanded,
+    workspacePanelWidth,
     isResizingWorkspacePanel,
     onStartWorkspacePanelResize,
+    onMoveWorkspacePanelResize,
+    onEndWorkspacePanelResize,
   } = conversation.workspace;
   const {
     isWorkspacePanelOpen,
@@ -58,8 +61,11 @@ function AuthenticatedAppContainer({ me, theme, onToggleTheme }) {
         isWorkspacePanelOpen={isWorkspacePanelOpen}
         isCompactWorkspaceLayout={isCompactWorkspaceLayout}
         isWorkspaceExpanded={isWorkspaceExpanded}
+        workspacePanelWidth={workspacePanelWidth}
         isResizingWorkspacePanel={isResizingWorkspacePanel}
         onStartWorkspacePanelResize={onStartWorkspacePanelResize}
+        onMoveWorkspacePanelResize={onMoveWorkspacePanelResize}
+        onEndWorkspacePanelResize={onEndWorkspacePanelResize}
         onToggleWorkspacePanel={onToggleWorkspacePanel}
       />
     </AppRuntimeProvider>

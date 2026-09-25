@@ -13,9 +13,12 @@ export default function WorkspaceTree({
   copyWorkspacePathToClipboard,
   path = "",
   depth = 0,
+  fallbackItems = [],
 }) {
   const normalizedPath = normalizeWorkspacePath(path);
-  const items = Array.isArray(workspaceTree[normalizedPath]) ? workspaceTree[normalizedPath] : [];
+  const items = Array.isArray(workspaceTree[normalizedPath])
+    ? workspaceTree[normalizedPath]
+    : Array.isArray(fallbackItems) ? fallbackItems : [];
   if (!items.length && normalizedPath) {
     return null;
   }
@@ -72,7 +75,8 @@ export default function WorkspaceTree({
               openWorkspaceFile={openWorkspaceFile}
               copyWorkspacePathToClipboard={copyWorkspacePathToClipboard}
               path={compactEntry.leafPath}
-              depth={depth + compactEntry.segments.length}
+              depth={depth + 1}
+              fallbackItems={compactEntry.leafChildren}
             />
           ) : null}
         </div>

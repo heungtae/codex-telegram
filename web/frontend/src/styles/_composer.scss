@@ -214,13 +214,14 @@
 
 /* OpenCode composer treatment */
 .composer {
-  background: var(--panel);
-  padding: 0;
+  background: var(--bg);
+  padding: 10px 0 12px;
   box-shadow: none;
 }
 
 .composer-inner {
-  background: transparent;
+  background: var(--bg-soft);
+  border-radius: var(--radius-modal);
   box-shadow: none;
   flex-direction: column;
   align-items: stretch;
@@ -230,7 +231,7 @@
 .composer-input-shell {
   background: transparent;
   border: none;
-  border-radius: 0;
+  border-radius: var(--radius-modal) var(--radius-modal) 0 0;
   box-shadow: none;
   padding: 10px 12px 4px;
 }
@@ -246,6 +247,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 4px 8px 8px;
+  border-radius: 0 0 var(--radius-modal) var(--radius-modal);
 }
 
 .composer-right-group {

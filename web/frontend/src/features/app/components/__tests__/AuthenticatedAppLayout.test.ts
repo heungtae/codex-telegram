@@ -22,8 +22,11 @@ test("AuthenticatedAppLayout preserves overlay, sidebar, and main slots", () => 
       isWorkspacePanelOpen: false,
       isCompactWorkspaceLayout: true,
       isWorkspaceExpanded: false,
+      workspacePanelWidth: 520,
       isResizingWorkspacePanel: false,
       onStartWorkspacePanelResize: () => {},
+      onMoveWorkspacePanelResize: () => {},
+      onEndWorkspacePanelResize: () => {},
       onToggleWorkspacePanel: () => {},
     })
   );
@@ -32,4 +35,30 @@ test("AuthenticatedAppLayout preserves overlay, sidebar, and main slots", () => 
   assert.match(html, /Overlay Slot/);
   assert.match(html, /Sidebar Slot/);
   assert.match(html, /Main Slot/);
+});
+
+test("AuthenticatedAppLayout sizes the open workspace sidebar for resizing", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(AuthenticatedAppLayout, {
+      isMobileLayout: false,
+      overlays: null,
+      sidebar: null,
+      main: null,
+      isSidebarOpen: false,
+      onToggleSidebarOpen: () => {},
+      rightPanel: React.createElement("div", null, "Workspace"),
+      isWorkspacePanelOpen: true,
+      isCompactWorkspaceLayout: false,
+      isWorkspaceExpanded: false,
+      workspacePanelWidth: 640,
+      isResizingWorkspacePanel: true,
+      onStartWorkspacePanelResize: () => {},
+      onMoveWorkspacePanelResize: () => {},
+      onEndWorkspacePanelResize: () => {},
+      onToggleWorkspacePanel: () => {},
+    })
+  );
+
+  assert.match(html, /class="workspace-right-resizer active"/);
+  assert.match(html, /class="workspace-right-sidebar open" style="width:640px"/);
 });

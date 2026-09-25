@@ -3,6 +3,7 @@ import { AGENT_CONFIG_DEFS } from "../../common/constants";
 import { persistTurnNotificationEnabled } from "../../common/theme";
 import { basename } from "../../common/utils";
 import { getWorkspacePanelStyle, getSidebarStyle } from "../state/layoutSelectors";
+import { resizedWorkspacePanelWidth } from "../state/workspacePanelSizing";
 
 type RuntimeContextSlices = {
   domains: Record<string, unknown>;
@@ -54,6 +55,7 @@ export function resolveTelegramActiveThreadId(sessionSummary: unknown): string {
 
 export default function useAppRuntimePresentation(args) {
   const {
+    appVersion,
     theme,
     onToggleTheme,
     domains,
@@ -244,6 +246,7 @@ export default function useAppRuntimePresentation(args) {
     },
     presentation: {
       shell: {
+        appVersion,
         theme,
         onToggleTheme,
         persistTurnNotificationEnabled,
@@ -291,14 +294,24 @@ export default function useAppRuntimePresentation(args) {
       setWorkspacePreview: workspace.setWorkspacePreview,
       workspacePanel,
       isWorkspaceExpanded: ui.isWorkspaceExpanded,
+      workspacePanelWidth: workspace.workspacePanelWidth,
       isResizingWorkspacePanel: workspace.isResizingWorkspacePanel,
       onStartWorkspacePanelResize: (event) => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        event.currentTarget.setPointerCapture(event.pointerId);
         refs.workspaceResizeRef.current = {
           startX: event.clientX,
           startWidth: workspace.workspacePanelWidth,
         };
         workspace.setIsResizingWorkspacePanel(true);
       },
+      onMoveWorkspacePanelResize: (event) => {
+        if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+        const { startX, startWidth } = refs.workspaceResizeRef.current;
+        workspace.setWorkspacePanelWidth(resizedWorkspacePanelWidth(startWidth, startX, event.clientX));
+      },
+      onEndWorkspacePanelResize: () => workspace.setIsResizingWorkspacePanel(false),
     },
     conversation: {
       chatRef: refs.chatRef,

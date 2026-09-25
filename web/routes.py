@@ -12,6 +12,7 @@ from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 
 from codex import CodexError
+from codex_telegram import __version__
 from codex.collaboration_mode import codex_mode_name
 from models import state
 from models.user import user_manager
@@ -205,6 +206,7 @@ def register_auth_routes(app: FastAPI) -> None:
         return {
             "username": session.username,
             "user_id": session.user_id,
+            "app_version": __version__,
             "logging_level": logging_level,
             "debug_logging": logging_level == "DEBUG",
             "threads_list_limit": threads_list_limit,
@@ -225,6 +227,7 @@ def register_auth_routes(app: FastAPI) -> None:
         return {
             "username": session.username,
             "user_id": session.user_id,
+            "app_version": __version__,
             "logging_level": logging_level,
             "debug_logging": logging_level == "DEBUG",
             "threads_list_limit": threads_list_limit,

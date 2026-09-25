@@ -12,8 +12,11 @@ export default function AuthenticatedAppLayout({
   isWorkspacePanelOpen,
   isCompactWorkspaceLayout,
   isWorkspaceExpanded,
+  workspacePanelWidth,
   isResizingWorkspacePanel,
   onStartWorkspacePanelResize,
+  onMoveWorkspacePanelResize,
+  onEndWorkspacePanelResize,
   onToggleWorkspacePanel,
 }) {
   const appClass = [
@@ -49,7 +52,11 @@ export default function AuthenticatedAppLayout({
             {isWorkspacePanelOpen ? (
               <div
                 className={`workspace-right-resizer${isResizingWorkspacePanel ? " active" : ""}`}
-                onMouseDown={onStartWorkspacePanelResize}
+                onPointerDown={onStartWorkspacePanelResize}
+                onPointerMove={onMoveWorkspacePanelResize}
+                onPointerUp={onEndWorkspacePanelResize}
+                onPointerCancel={onEndWorkspacePanelResize}
+                onLostPointerCapture={onEndWorkspacePanelResize}
                 role="separator"
                 aria-orientation="vertical"
                 aria-label="Resize workspace files panel"
@@ -57,6 +64,7 @@ export default function AuthenticatedAppLayout({
             ) : null}
             <div
               className={`workspace-right-sidebar${isWorkspacePanelOpen ? " open" : " closed"}`}
+              style={isWorkspacePanelOpen && !isWorkspaceExpanded ? { width: workspacePanelWidth } : undefined}
             >
               {isWorkspacePanelOpen ? (
                 rightPanel

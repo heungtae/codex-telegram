@@ -69,6 +69,7 @@ test("AppSidebarContainer consumes runtime slices and renders sidebar content", 
           },
           presentation: {
             shell: {
+              appVersion: "0.5.0",
               theme: "dark",
               onToggleTheme: () => {},
               persistTurnNotificationEnabled: () => {},
@@ -92,5 +93,6 @@ test("AppSidebarContainer consumes runtime slices and renders sidebar content", 
   assert.match(html, /Project A/);
   assert.match(html, /Open Thread/);
   assert.match(html, /Codex Bridge/);
+  assert.match(html, /Settings\(ver\.0\.5\.0\)/);
   assert.doesNotMatch(html, /Other Project Thread/);
 });

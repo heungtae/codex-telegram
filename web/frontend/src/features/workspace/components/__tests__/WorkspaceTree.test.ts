@@ -36,4 +36,36 @@ test("WorkspaceTree renders compact directories, children, selection, and status
   assert.match(html, /workspace-tree-item directory expanded/);
   assert.match(html, /workspace-tree-item file selected status-a/);
   assert.match(html, /app\.ts/);
+  assert.match(html, /class="workspace-tree-item file selected status-a" style="padding-left:28px"/);
+});
+
+test("WorkspaceTree opens compact directories from nested response children", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(WorkspaceTree, {
+      workspaceTree: {
+        "": [{
+          path: "src",
+          name: "src",
+          type: "directory",
+          children: [{
+            path: "src/main",
+            name: "main",
+            type: "directory",
+            children: [{ path: "src/main/App.java", name: "App.java", type: "file" }],
+          }],
+        }],
+      },
+      workspaceDirectoryStatus: {},
+      workspaceStatusItems: {},
+      expandedWorkspaceDirs: { "src/main": true },
+      workspacePreview: null,
+      toggleWorkspaceDirectory: () => {},
+      openWorkspaceFile: () => Promise.resolve(),
+      copyWorkspacePathToClipboard: () => Promise.resolve(),
+    })
+  );
+
+  assert.match(html, /src\/main/);
+  assert.match(html, /App\.java/);
+  assert.match(html, /class="workspace-tree-item file [^"]*" style="padding-left:28px"/);
 });

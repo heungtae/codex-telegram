@@ -10,8 +10,8 @@ test("getWorkspacePanelStyle returns undefined in compact layout", () => {
   assert.equal(getWorkspacePanelStyle(true, 320), undefined);
 });
 
-test("getWorkspacePanelStyle returns width style in desktop layout", () => {
-  assert.deepEqual(getWorkspacePanelStyle(false, 400), { width: 400 });
+test("getWorkspacePanelStyle fills the desktop sidebar", () => {
+  assert.deepEqual(getWorkspacePanelStyle(false, 400), { width: "100%" });
 });
 
 test("getWorkspacePanelStyle returns undefined when workspace is expanded", () => {

@@ -14,6 +14,7 @@ export default function AppSidebarFrame({
   isDesktopSidebarCollapsed,
   sidebarStyle,
   isResizingSidebar,
+  appVersion = "",
   onToggleSidebarOpen,
   onToggleSidebarCollapsed,
   onStartSidebarResize,
@@ -129,7 +130,7 @@ export default function AppSidebarFrame({
           >
             <SettingsIcon />
             {!isDesktopSidebarCollapsed ? (
-              <span className="sidebar-settings-label">Settings</span>
+              <span className="sidebar-settings-label">Settings{appVersion ? `(ver.${appVersion})` : ""}</span>
             ) : null}
           </button>
         </div>

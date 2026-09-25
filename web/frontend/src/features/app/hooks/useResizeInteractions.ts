@@ -2,26 +2,20 @@
 type UseResizeInteractionsArgs = {
   sidebarMin: number;
   sidebarMax: number;
-  workspacePanelMin: number;
-  workspacePanelMax: number;
   workspacePreviewMinWidth: number;
   workspacePreviewMaxWidth: number;
   workspacePreviewMinHeight: number;
   workspacePreviewMaxHeight: number;
   isResizingSidebar: boolean;
-  isResizingWorkspacePanel: boolean;
   isResizingWorkspacePreview: boolean;
   workspacePreview: unknown;
   isProjectModeModalOpen: boolean;
   shortcutModalPage: string;
   workspacePreviewWidth: number;
   workspacePreviewHeight: number;
-  workspaceResizeRef: { current: { startX: number; startWidth: number } };
   workspacePreviewResizeRef: { current: { mode: string; startX: number; startY: number; startWidth: number; startHeight: number } };
   setSidebarWidth: (width: number) => void;
   setIsResizingSidebar: (next: boolean) => void;
-  setWorkspacePanelWidth: (width: number) => void;
-  setIsResizingWorkspacePanel: (next: boolean) => void;
   setWorkspacePreviewWidth: (width: number) => void;
   setWorkspacePreviewHeight: (height: number) => void;
   setIsResizingWorkspacePreview: (next: boolean) => void;
@@ -34,26 +28,20 @@ export default function useResizeInteractions(args: UseResizeInteractionsArgs) {
   const {
     sidebarMin,
     sidebarMax,
-    workspacePanelMin,
-    workspacePanelMax,
     workspacePreviewMinWidth,
     workspacePreviewMaxWidth,
     workspacePreviewMinHeight,
     workspacePreviewMaxHeight,
     isResizingSidebar,
-    isResizingWorkspacePanel,
     isResizingWorkspacePreview,
     workspacePreview,
     isProjectModeModalOpen,
     shortcutModalPage,
     workspacePreviewWidth,
     workspacePreviewHeight,
-    workspaceResizeRef,
     workspacePreviewResizeRef,
     setSidebarWidth,
     setIsResizingSidebar,
-    setWorkspacePanelWidth,
-    setIsResizingWorkspacePanel,
     setWorkspacePreviewWidth,
     setWorkspacePreviewHeight,
     setIsResizingWorkspacePreview,
@@ -78,24 +66,6 @@ export default function useResizeInteractions(args: UseResizeInteractionsArgs) {
       window.removeEventListener("mouseup", onUp);
     };
   }, [isResizingSidebar]);
-
-  useEffect(() => {
-    if (!isResizingWorkspacePanel) {
-      return;
-    }
-    const onMove = (event: MouseEvent) => {
-      const delta = workspaceResizeRef.current.startX - event.clientX;
-      const next = workspaceResizeRef.current.startWidth + delta;
-      setWorkspacePanelWidth(Math.max(workspacePanelMin, Math.min(workspacePanelMax, next)));
-    };
-    const onUp = () => setIsResizingWorkspacePanel(false);
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-  }, [isResizingWorkspacePanel]);
 
   useEffect(() => {
     if (!isResizingWorkspacePreview || typeof window === "undefined") {

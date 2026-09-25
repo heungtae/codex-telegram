@@ -711,9 +711,13 @@
 }
 
 .workspace-right-resizer {
-  width: 6px;
-  flex-shrink: 0;
+  width: 12px;
+  flex: 0 0 12px;
+  margin: 0 -6px;
+  position: relative;
+  z-index: 5;
   cursor: col-resize;
+  touch-action: none;
   background: transparent;
   border-left: 1px solid transparent;
 }

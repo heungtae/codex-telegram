@@ -24,6 +24,7 @@ export default function useAppRuntime({
   });
 
   return useAppRuntimePresentation({
+    appVersion: me?.app_version,
     theme,
     onToggleTheme,
     domains,

@@ -28,9 +28,8 @@ export function getWorkspaceTreeChildren(item, workspaceTree) {
     return [];
   }
   const itemPath = normalizeWorkspacePath(item.path);
-  const cachedChildren = Array.isArray(workspaceTree[itemPath]) ? workspaceTree[itemPath] : [];
-  if (cachedChildren.length) {
-    return cachedChildren;
+  if (Array.isArray(workspaceTree[itemPath])) {
+    return workspaceTree[itemPath];
   }
   return Array.isArray(item.children) ? item.children : [];
 }
@@ -87,6 +86,10 @@ export function collectCompactWorkspaceEntry({
 
   while (currentItem && currentItem.type === "directory") {
     segments.push(currentItem);
+    const currentPath = normalizeWorkspacePath(currentItem.path);
+    if (Object.prototype.hasOwnProperty.call(expandedWorkspaceDirs, currentPath)) {
+      break;
+    }
     if (!Array.isArray(currentChildren) || currentChildren.length !== 1) {
       break;
     }

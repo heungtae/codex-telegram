@@ -1900,3 +1900,95 @@ Rule:
   - 자동화 테스트는 실행하지 않음.
 - Next step:
   - 병합 커밋을 완료.
+
+## 2026-09-25 22:05 (local)
+- Objective:
+  - 오른쪽 작업 공간 크기 조절과 압축된 폴더 경로 아래의 과도한 들여쓰기를 수정.
+- Files changed:
+  - web/frontend/src/features/app/components/AuthenticatedAppLayout.tsx
+  - web/frontend/src/features/app/containers/AuthenticatedAppContainer.tsx
+  - web/frontend/src/features/app/hooks/useAppRuntimePresentation.tsx
+  - web/frontend/src/features/app/state/layoutSelectors.ts
+  - web/frontend/src/features/workspace/components/WorkspaceTree.tsx
+  - 관련 컴포넌트 및 선택자 테스트
+  - docs/web-rearchitecture-log.md
+- Changes:
+  - 오른쪽 사이드바의 너비를 리사이즈 상태와 직접 연결하고 내부 패널은 사이드바 너비를 채우도록 변경.
+  - 왼쪽 마우스 버튼 드래그 시 텍스트 선택을 막고 리사이즈를 시작하도록 변경.
+  - 압축된 폴더 행의 자식 깊이를 표시된 한 단계만 증가하도록 변경.
+- Validation:
+  - 관련 프런트엔드 테스트 3개 통과.
+  - `npm run build` 통과, `npm run lint` 0 errors/41 warnings.
+  - 전체 프런트엔드 테스트는 66개 중 60개 통과. 실패 6개는 이번 수정 경로와 무관한 기존 컴포넌트/이벤트 테스트의 누락된 참조 또는 현재 출력과 다른 기대값이며 이번 변경 대상 테스트 3개는 모두 통과.
+- Next step:
+  - 빌드된 UI에서 오른쪽 구분선을 드래그해 너비 변경과 압축 폴더 아래 정렬을 확인.
+
+## 2026-09-25 22:16 (local)
+- Objective:
+  - 이전 수정 후에도 크기 조절과 폴더 열기가 되지 않는다는 보고를 재조사하고 수정.
+- Files changed:
+  - web/frontend/src/features/app/components/AuthenticatedAppLayout.tsx
+  - web/frontend/src/features/app/containers/AuthenticatedAppContainer.tsx
+  - web/frontend/src/features/app/hooks/useAppRuntimePresentation.tsx
+  - web/frontend/src/features/app/hooks/useAppRuntimeEffects.ts
+  - web/frontend/src/features/app/hooks/useResizeInteractions.ts
+  - web/frontend/src/features/app/state/workspacePanelSizing.ts
+  - web/frontend/src/features/workspace/components/WorkspaceTree.tsx
+  - web/frontend/src/features/workspace/workspaceTreeModel.ts
+  - web/frontend/src/styles/_agents.scss
+  - 관련 회귀 테스트와 docs/web-rearchitecture-log.md
+- Changes:
+  - 구분선 양쪽으로 잡는 영역을 넓히고 포인터 캡처로 드래그 중 이동을 직접 처리.
+  - 펼친 압축 폴더의 중첩 `children`을 즉시 표시하고, 한 번 조작한 폴더 경로가 추가 로딩 뒤 다른 경로로 바뀌지 않도록 고정.
+- Validation:
+  - 중첩 `children`이 보이지 않는 현상을 새 회귀 테스트에서 재현한 뒤 수정 후 통과 확인.
+  - 폴더 경로 유지, 들여쓰기, 너비 계산의 대상 테스트 통과.
+  - `npm run build` 통과, `npm run lint` 0 errors/40 warnings.
+  - 전체 프런트엔드 테스트는 67개 중 61개 통과. 기존의 무관한 6개 실패는 그대로 남아 있음.
+  - `npx tsc -p . --noEmit`은 기존의 여러 타입 오류로 실패. 이번 변경 파일의 타입 오류는 없음.
+- Next step:
+  - 갱신된 앱 화면에서 포인터 드래그와 폴더 열기 동작을 확인.
+
+## 2026-09-25 22:26 (local)
+- Objective:
+  - 파일 미리보기와 프로젝트 트리 사이의 너비를 사용자가 조절할 수 있게 함.
+- Files changed:
+  - web/frontend/src/features/workspace/components/WorkspacePanel.tsx
+  - web/frontend/src/features/workspace/workspaceSplitSizing.ts
+  - web/frontend/src/styles/_workspace.scss
+  - 관련 프런트엔드 테스트
+  - docs/web-rearchitecture-log.md
+- Changes:
+  - 두 영역 사이에 세로 분할선을 추가하고 포인터 드래그와 좌우 방향키로 트리 너비를 조절.
+  - 각 영역의 최소 너비와 트리 최대 너비를 적용하고, 외부 패널 크기 변화에 맞춰 트리 너비를 조정.
+- Validation:
+  - 분할선 렌더링과 너비 경계값에 대한 대상 테스트 2개 통과.
+  - `npm run build` 통과, `npm run lint` 0 errors/40 warnings.
+  - 전체 프런트엔드 테스트는 69개 중 63개 통과. 기존의 무관한 6개 실패는 그대로 남아 있음.
+- Next step:
+  - 빌드된 UI에서 두 영역 사이 분할선의 드래그와 방향키 동작을 확인.
+
+## 2026-09-25 22:34 (local)
+- Objective:
+  - 채팅 메시지 입력 상자를 둥근 직사각형으로 복구하고 Settings 옆에 앱 버전 표시.
+- Files changed:
+  - web/frontend/src/styles/_composer.scss
+  - web/frontend/src/styles/_themes.scss
+  - web/frontend/src/features/app/components/AppSidebarFrame.tsx
+  - web/frontend/src/features/app/containers/AppSidebarContainer.tsx
+  - web/frontend/src/features/app/hooks/useAppRuntime.tsx
+  - web/frontend/src/features/app/hooks/useAppRuntimePresentation.tsx
+  - web/routes.py
+  - 관련 프런트엔드 및 API 테스트
+  - docs/web-rearchitecture-log.md
+- Changes:
+  - 채팅 입력창의 바깥 배경을 화면 배경에 맞추고, 안쪽 입력 상자에 둥근 테두리와 별도 배경을 적용.
+  - 로그인 및 세션 조회 응답에 패키지 버전을 포함해 Settings 라벨에 `Settings(ver.0.5.0)`으로 표시.
+- Validation:
+  - Settings 라벨과 인증 API 버전 응답의 대상 테스트 통과.
+  - `npm run build` 통과, `npm run lint` 0 errors/40 warnings.
+  - 빌드된 CSS를 사용한 Headless Chrome 미리보기에서 둥근 입력 상자 확인.
+  - 전체 프런트엔드 테스트는 69개 중 63개 통과. 기존의 무관한 6개 실패는 그대로 남아 있음.
+  - 관련 백엔드 테스트 모듈은 49개 중 48개 통과. 실패 1개는 Windows 탐색기 경로 구분자 기대값과 실제 호출값 차이.
+- Next step:
+  - 갱신된 앱 화면에서 입력창과 Settings 버전 표시를 확인.

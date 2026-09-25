@@ -31,7 +31,7 @@
   }
 
   .composer {
-    background: #292525;
+    background: var(--bg);
     border-color: var(--border);
     color: var(--text);
   }
@@ -77,14 +77,14 @@
   }
 
   .composer-inner {
-    background: transparent;
+    background: var(--bg-soft);
   }
 
   .composer-input-shell,
   .composer-bottom-bar,
   .composer .ui-textarea,
   .composer textarea {
-    background: #292525;
+    background: transparent;
   }
 
   .ui-textarea:focus,

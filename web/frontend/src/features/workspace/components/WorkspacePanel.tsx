@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { basename } from "../../common/utils";
 import { ExpandIcon, FileIcon, FolderIcon, PanelRightIcon, RefreshIcon } from "../../common/components/Icons";
 import { EmptyState } from "../../common/components/ui";
@@ -7,6 +7,11 @@ import useWorkspaceFilter from "../hooks/useWorkspaceFilter";
 import WorkspaceDeletedEntries from "./WorkspaceDeletedEntries";
 import WorkspacePreviewPanel from "./WorkspacePreviewPanel";
 import WorkspaceTree from "./WorkspaceTree";
+import {
+  clampWorkspaceTreeWidth,
+  maxWorkspaceTreeWidth,
+  WORKSPACE_SPLIT_MIN_PANE_WIDTH,
+} from "../workspaceSplitSizing";
 
 export default function WorkspacePanel({
   isCompactWorkspaceLayout,
@@ -29,6 +34,33 @@ export default function WorkspacePanel({
   onToggleWorkspaceExpand,
 }) {
   const [isStructurePanelVisible, setIsStructurePanelVisible] = useState(true);
+  const [structurePanelWidth, setStructurePanelWidth] = useState(240);
+  const [sidebarBodyWidth, setSidebarBodyWidth] = useState(520);
+  const [isResizingStructure, setIsResizingStructure] = useState(false);
+  const sidebarBodyRef = useRef<HTMLDivElement>(null);
+  const structurePanelRef = useRef<HTMLElement>(null);
+  const structureResizeRef = useRef({ startX: 0, startWidth: 240 });
+  useEffect(() => {
+    const body = sidebarBodyRef.current;
+    if (!body) return;
+    const updateWidth = () => {
+      const width = body.clientWidth;
+      if (width <= 0) return;
+      setSidebarBodyWidth(width);
+      setStructurePanelWidth((current) => clampWorkspaceTreeWidth(current, width));
+    };
+    updateWidth();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(body);
+    return () => observer.disconnect();
+  }, []);
+  const resizeStructurePanel = (width: number) => {
+    const containerWidth = sidebarBodyRef.current?.clientWidth || 0;
+    if (containerWidth > 0) {
+      setStructurePanelWidth(clampWorkspaceTreeWidth(width, containerWidth));
+    }
+  };
   const { filterQuery, setFilterQuery, workspaceDirectoryStatus, visibleWorkspaceTree, rootItems, deletedWorkspaceEntries } =
     useWorkspaceFilter(workspaceTree, workspaceStatusItems);
   const copyWorkspacePathToClipboard = useClipboard(showToast);
@@ -105,7 +137,7 @@ export default function WorkspacePanel({
           </button>
         </div>
       </div>
-      <div className="workspace-sidebar-body">
+      <div className="workspace-sidebar-body" ref={sidebarBodyRef}>
         <section className="workspace-file-viewer workspace-preview-pane" aria-label="Current file preview">
           {workspacePreview ? (
             <WorkspacePreviewPanel
@@ -120,7 +152,47 @@ export default function WorkspacePanel({
           )}
         </section>
         {isStructurePanelVisible ? (
-        <section className="workspace-structure-panel" aria-label="Project structure">
+        <>
+        <div
+          className={`workspace-structure-resizer${isResizingStructure ? " active" : ""}`}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize file preview and project structure"
+          aria-valuemin={WORKSPACE_SPLIT_MIN_PANE_WIDTH}
+          aria-valuemax={maxWorkspaceTreeWidth(sidebarBodyWidth)}
+          aria-valuenow={Math.round(structurePanelWidth)}
+          tabIndex={0}
+          onPointerDown={(event) => {
+            if (event.button !== 0 || !structurePanelRef.current) return;
+            event.preventDefault();
+            structureResizeRef.current = {
+              startX: event.clientX,
+              startWidth: structurePanelRef.current.getBoundingClientRect().width,
+            };
+            event.currentTarget.setPointerCapture(event.pointerId);
+            setIsResizingStructure(true);
+          }}
+          onPointerMove={(event) => {
+            if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+            const { startX, startWidth } = structureResizeRef.current;
+            resizeStructurePanel(startWidth + startX - event.clientX);
+          }}
+          onPointerUp={() => setIsResizingStructure(false)}
+          onPointerCancel={() => setIsResizingStructure(false)}
+          onLostPointerCapture={() => setIsResizingStructure(false)}
+          onKeyDown={(event) => {
+            if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+            event.preventDefault();
+            const currentWidth = structurePanelRef.current?.getBoundingClientRect().width || structurePanelWidth;
+            resizeStructurePanel(currentWidth + (event.key === "ArrowLeft" ? 20 : -20));
+          }}
+        />
+        <section
+          className="workspace-structure-panel"
+          aria-label="Project structure"
+          ref={structurePanelRef}
+          style={{ width: structurePanelWidth }}
+        >
           <div className="workspace-filter-wrap">
             <input
               className="workspace-filter-input"
@@ -162,6 +234,7 @@ export default function WorkspacePanel({
             </div>
           ) : null}
         </section>
+        </>
         ) : null}
       </div>
     </aside>

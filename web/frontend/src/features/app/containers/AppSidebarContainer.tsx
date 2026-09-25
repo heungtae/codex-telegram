@@ -85,6 +85,7 @@ type SidebarRuntime = {
 
 type SidebarPresentation = {
   shell: {
+    appVersion?: string;
     theme: unknown;
     onToggleTheme: Callback;
     persistTurnNotificationEnabled: Callback;
@@ -120,6 +121,7 @@ export default function AppSidebarContainer() {
       isDesktopSidebarCollapsed={sidebar.isDesktopSidebarCollapsed}
       sidebarStyle={sidebar.sidebarStyle}
       isResizingSidebar={ui.isResizingSidebar}
+      appVersion={shell.appVersion}
       onToggleSidebarOpen={ui.setIsSidebarOpen}
       onToggleSidebarCollapsed={() => ui.setIsSidebarCollapsed((current) => !current)}
       onStartSidebarResize={() => ui.setIsResizingSidebar(true)}

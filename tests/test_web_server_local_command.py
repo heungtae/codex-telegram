@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, call, patch
 from fastapi import HTTPException
 
 from codex import CodexError
+from codex_telegram import __version__
 from codex.command_router.context import RouterContext
 from codex.command_router.projects import ProjectCommands
 from codex.command_router.threads import ThreadCommands
@@ -46,6 +47,19 @@ class WebServerLocalCommandTests(unittest.TestCase):
         state.codex_client = self.original_codex_client
         state.command_router = self.original_command_router
         state.telegram_app = self.original_telegram_app
+
+    def test_auth_me_exposes_application_version(self):
+        app = create_web_app()
+        endpoint = next(
+            route.endpoint
+            for route in app.routes
+            if getattr(route, "path", None) == "/api/auth/me"
+        )
+        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+
+        body = asyncio.run(endpoint(request))
+
+        self.assertEqual(body["app_version"], __version__)
 
     def test_chat_messages_bang_command_bypasses_turn_start(self):
         app = create_web_app()
