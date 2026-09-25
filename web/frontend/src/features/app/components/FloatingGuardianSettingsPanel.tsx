@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { CloseIcon, RefreshIcon, SaveIcon } from "../../common/components/Icons";
 import { FormField, Textarea } from "../../common/components/ui";
 
@@ -13,12 +14,27 @@ export default function FloatingGuardianSettingsPanel({
   saveAgentSettings,
   setAgentConfigError,
 }) {
+  const [panelStyle, setPanelStyle] = useState<React.CSSProperties>({});
+
+  useEffect(() => {
+    if (!visible) return;
+    const popover = document.querySelector(".sidebar-settings-popover") as HTMLElement | null;
+    if (popover) {
+      const rect = popover.getBoundingClientRect();
+      setPanelStyle({
+        position: "fixed",
+        bottom: window.innerHeight - rect.bottom,
+        left: rect.right + 16,
+      });
+    }
+  }, [visible]);
+
   if (!visible) {
     return null;
   }
 
   return (
-    <div className="agent-floating-settings" onMouseDown={(e) => e.stopPropagation()}>
+    <div className="agent-floating-settings" style={panelStyle} onMouseDown={(e) => e.stopPropagation()}>
       <div className="agent-floating-settings-card">
         <div className="agent-settings-head">
           <strong>Guardian Rules TOML</strong>

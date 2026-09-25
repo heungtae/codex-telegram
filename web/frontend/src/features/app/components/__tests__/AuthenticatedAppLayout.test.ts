@@ -18,7 +18,13 @@ test("AuthenticatedAppLayout preserves overlay, sidebar, and main slots", () => 
       main: React.createElement("section", null, "Main Slot"),
       isSidebarOpen: true,
       onToggleSidebarOpen: () => {},
-      MenuIcon: Icon,
+      rightPanel: null,
+      isWorkspacePanelOpen: false,
+      isCompactWorkspaceLayout: true,
+      isWorkspaceExpanded: false,
+      isResizingWorkspacePanel: false,
+      onStartWorkspacePanelResize: () => {},
+      onToggleWorkspacePanel: () => {},
     })
   );
 

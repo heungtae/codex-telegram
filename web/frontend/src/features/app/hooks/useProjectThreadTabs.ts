@@ -1,5 +1,38 @@
 import { buildProjectTabId, normalizeThreadId } from "../../common/utils";
-import type { UseProjectThreadTabsArgs } from "./useProjectThreadTabs.types";
+export type ProjectTab = {
+  id: string;
+  key: string;
+  name: string;
+  path: string;
+};
+
+export type ThreadTabRow = {
+  id: string;
+  title: string;
+  status: string;
+  hasUnreadCompletion: boolean;
+};
+
+export type ThreadTabsByProjectTabId = Record<string, ThreadTabRow[]>;
+export type ThreadProjectTabMap = Record<string, string>;
+
+type UseProjectThreadTabsArgs = {
+  projectTabs: ProjectTab[];
+  setProjectTabs: (updater: (prev: ProjectTab[]) => ProjectTab[]) => void;
+  projectTabSequenceRef: { current: number };
+  setThreadTabsByProjectTabId: (updater: (prev: ThreadTabsByProjectTabId) => ThreadTabsByProjectTabId) => void;
+  setThreadProjectTabIdByThreadId: (updater: (prev: ThreadProjectTabMap) => ThreadProjectTabMap) => void;
+  ensureWorkspaceBucket: (threadId: string) => void;
+  setActiveThreadTabIdByProjectTabId: (updater: (prev: Record<string, string>) => Record<string, string>) => void;
+  activeProjectTabId: string;
+  setActiveThread: (threadId: string) => void;
+  threadProjectTabIdByThreadIdRef: { current: ThreadProjectTabMap };
+  threadTabsByProjectTabId: ThreadTabsByProjectTabId;
+  removeWorkspaceBucket: (threadId: string) => void;
+  activeThreadTabIdByProjectTabId: Record<string, string>;
+  setActiveProjectTabId: (tabId: string) => void;
+  setMessages: (messages: unknown[]) => void;
+};
 
 export default function useProjectThreadTabs(args: UseProjectThreadTabsArgs) {
   const {
@@ -59,16 +92,18 @@ export default function useProjectThreadTabs(args: UseProjectThreadTabsArgs) {
     if (!projectTabId || !threadId) {
       return "";
     }
-    const title = typeof thread?.title === "string" && thread.title ? thread.title : threadId;
     setThreadTabsByProjectTabId((prev) => {
       const rows = Array.isArray(prev[projectTabId]) ? prev[projectTabId] : [];
       const existing = rows.find((row) => row.id === threadId);
       if (existing) {
         return prev;
       }
+      const providedTitle = typeof thread?.title === "string" && thread.title && thread.title !== threadId
+        ? thread.title
+        : `New Thread (${rows.length + 1})`;
       return {
         ...prev,
-        [projectTabId]: [...rows, { id: threadId, title, status: "idle", hasUnreadCompletion: false }],
+        [projectTabId]: [...rows, { id: threadId, title: providedTitle, status: "idle", hasUnreadCompletion: false }],
       };
     });
     setThreadProjectTabIdByThreadId((prev) => ({ ...prev, [threadId]: projectTabId }));
@@ -133,11 +168,41 @@ export default function useProjectThreadTabs(args: UseProjectThreadTabsArgs) {
     }
   };
 
+  const collapseProjectTab = (projectTabId: string) => {
+    if (!projectTabId) {
+      return;
+    }
+    const existingTabs = projectTabs;
+    const index = existingTabs.findIndex((tab) => tab.id === projectTabId);
+    const fallback = index > 0 ? existingTabs[index - 1] : existingTabs[index + 1];
+    setThreadTabsByProjectTabId((prev) => ({ ...prev, [projectTabId]: [] }));
+    setActiveThreadTabIdByProjectTabId((prev) => ({ ...prev, [projectTabId]: "" }));
+    const ownedThreads = Array.isArray(threadTabsByProjectTabId[projectTabId])
+      ? threadTabsByProjectTabId[projectTabId].map((row) => normalizeThreadId(row.id)).filter(Boolean)
+      : [];
+    ownedThreads.forEach((threadId) => removeWorkspaceBucket(threadId));
+    setThreadProjectTabIdByThreadId((prev) => {
+      const next = { ...prev };
+      Object.entries(next).forEach(([threadId, tabId]) => {
+        if (tabId === projectTabId) {
+          delete next[threadId];
+        }
+      });
+      return next;
+    });
+    if (activeProjectTabId === projectTabId) {
+      setActiveProjectTabId(fallback?.id || "");
+      setActiveThread(fallback ? normalizeThreadId(activeThreadTabIdByProjectTabId[fallback.id]) : "");
+      setMessages([]);
+    }
+  };
+
   return {
     upsertProjectTab,
     setActiveThreadForProjectTab,
     openThreadInProjectTab,
     updateThreadTabState,
     closeProjectTab,
+    collapseProjectTab,
   };
 }

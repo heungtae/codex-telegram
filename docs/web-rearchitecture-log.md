@@ -1881,3 +1881,22 @@ Rule:
   - GitHub Releases 생성은 유효한 `gh` 인증이 없어 보류.
 - Next step:
   - 요청 시 GitHub 인증을 복구한 뒤 v0.5.0 Release 항목 생성.
+
+## 2026-09-25 21:52 (local)
+- Objective:
+  - `feat/frontend-rearchitecture`를 `main`에 병합하고 충돌을 정리.
+- Files changed:
+  - web/frontend/**
+  - app_runtime/**, bot/**, codex/**, models/**, web/**
+  - tests/**, docs/plans/**
+  - docs/web-rearchitecture-log.md
+- Changes:
+  - 프런트엔드 충돌은 리팩터링 브랜치 버전을 선택하고, 진행 기록은 `main` 버전을 보존.
+  - 백엔드, Telegram/Web 동기화, 관련 테스트와 문서 변경은 병합 결과에 포함.
+- Validation:
+  - 75개 충돌 경로 해결, 미해결 경로 없음.
+  - `git diff --check` 통과.
+  - `cd web/frontend && npm ci` 및 `npm run build` 통과.
+  - 자동화 테스트는 실행하지 않음.
+- Next step:
+  - 병합 커밋을 완료.

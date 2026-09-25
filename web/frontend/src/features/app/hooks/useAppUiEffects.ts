@@ -6,9 +6,6 @@ export default function useAppUiEffects({
   workspaceContextQuery,
   api,
   setProjectSuggestions,
-  floatingAgentSettings,
-  activeAgentSettings,
-  setFloatingAgentSettings,
   isProjectModeModalOpen,
   setPendingProjectTarget,
   setIsProjectModeModalOpen,
@@ -43,13 +40,7 @@ export default function useAppUiEffects({
           setProjectSuggestions([]);
         });
     }
-  }, [activeToken?.type, activeToken?.query]);
-
-  useEffect(() => {
-    if (floatingAgentSettings && floatingAgentSettings !== activeAgentSettings) {
-      setFloatingAgentSettings("");
-    }
-  }, [activeAgentSettings, floatingAgentSettings]);
+  }, [activeToken?.type, activeToken?.query, workspaceContextQuery]);
 
   useEffect(() => {
     if (!isProjectModeModalOpen || typeof window === "undefined") {
@@ -65,15 +56,13 @@ export default function useAppUiEffects({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [isProjectModeModalOpen]);
 
-  useEffect(() => {
-    bindAppCommandRefs(commandRefs, {
-      sendMessage,
-      startThread,
-      closeThreadTab,
-      viewThread,
-      selectProject,
-      focusComposer,
-      setInputForActiveThread,
-    });
+  bindAppCommandRefs(commandRefs, {
+    sendMessage,
+    startThread,
+    closeThreadTab,
+    viewThread,
+    selectProject,
+    focusComposer,
+    setInputForActiveThread,
   });
 }

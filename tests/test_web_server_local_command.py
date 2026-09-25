@@ -9,6 +9,9 @@ from unittest.mock import AsyncMock, call, patch
 from fastapi import HTTPException
 
 from codex import CodexError
+from codex.command_router.context import RouterContext
+from codex.command_router.projects import ProjectCommands
+from codex.command_router.threads import ThreadCommands
 from models import state
 from models.user import user_manager
 from web.runtime import event_hub, session_manager
@@ -19,6 +22,7 @@ class WebServerLocalCommandTests(unittest.TestCase):
     def setUp(self):
         self.original_codex_client = state.codex_client
         self.original_command_router = state.command_router
+        self.original_telegram_app = getattr(state, "telegram_app", None)
         user_manager._users.clear()
         user_manager._thread_owners.clear()
         user_manager._thread_subscribers.clear()
@@ -29,6 +33,7 @@ class WebServerLocalCommandTests(unittest.TestCase):
         event_hub._active_subagents.clear()
         state.codex_ready.set()
         state.codex_client = SimpleNamespace(call=AsyncMock())
+        state.telegram_app = None
         state.command_router = SimpleNamespace(
             route=AsyncMock(),
             projects=SimpleNamespace(resolve_effective_project=lambda user_id: {"path": "/tmp/web-workspace", "key": "default"}),
@@ -40,6 +45,7 @@ class WebServerLocalCommandTests(unittest.TestCase):
         event_hub._active_subagents.clear()
         state.codex_client = self.original_codex_client
         state.command_router = self.original_command_router
+        state.telegram_app = self.original_telegram_app
 
     def test_chat_messages_bang_command_bypasses_turn_start(self):
         app = create_web_app()
@@ -262,6 +268,48 @@ class WebServerLocalCommandTests(unittest.TestCase):
         self.assertIn("active_subagents", body)
         self.assertEqual([], body["active_subagents"])
 
+    def test_session_summary_exposes_active_telegram_thread(self):
+        app = create_web_app()
+        endpoint = next(
+            route.endpoint
+            for route in app.routes
+            if getattr(route, "path", None) == "/api/session/summary"
+        )
+        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+        telegram_user_id = 8145902314
+        user_manager.set_active_thread(telegram_user_id, "thread-telegram")
+
+        with patch(
+            "models.telegram_bridge.get",
+            side_effect=lambda key, default=None: (
+                [telegram_user_id] if key == "users.allowed_ids" else default
+            ),
+        ), patch("web.server.get_guardian_settings", return_value={"enabled": False}):
+            body = asyncio.run(endpoint(request))
+
+        self.assertEqual("thread-telegram", body["telegram_active_thread_id"])
+
+    def test_session_summary_returns_null_without_single_telegram_user(self):
+        app = create_web_app()
+        endpoint = next(
+            route.endpoint
+            for route in app.routes
+            if getattr(route, "path", None) == "/api/session/summary"
+        )
+        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+
+        for allowed_ids in ([], [1, 2], ["invalid"]):
+            with self.subTest(allowed_ids=allowed_ids):
+                with patch(
+                    "models.telegram_bridge.get",
+                    side_effect=lambda key, default=None: (
+                        allowed_ids if key == "users.allowed_ids" else default
+                    ),
+                ), patch("web.server.get_guardian_settings", return_value={"enabled": False}):
+                    body = asyncio.run(endpoint(request))
+
+                self.assertIsNone(body["telegram_active_thread_id"])
+
     def test_session_summary_includes_active_subagents_payload(self):
         app = create_web_app()
         endpoint = next(
@@ -446,8 +494,308 @@ class WebServerLocalCommandTests(unittest.TestCase):
         self.assertEqual("Other", body["project_name"])
         self.assertEqual("/tmp/other-workspace", body["workspace"])
         self.assertEqual("default", state_user.selected_project_key)
+        self.assertEqual("thread-other-1", state_user.active_thread_id)
         self.assertEqual(self.session.user_id, user_manager.find_user_id_by_thread("thread-other-1"))
         self.assertEqual("other", user_manager.get_thread_project("thread-other-1"))
+
+    def test_projects_open_thread_subscribes_single_allowed_telegram_user(self):
+        app = create_web_app()
+        endpoint = next(
+            route.endpoint
+            for route in app.routes
+            if getattr(route, "path", None) == "/api/projects/open-thread"
+        )
+        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+        telegram_user_id = 8145902314
+        state.command_router.projects = SimpleNamespace(
+            resolve_effective_project=lambda user_id: {"path": "/tmp/default-workspace", "key": "default"},
+            load_project_profiles=lambda: (
+                [{"key": "other", "name": "Other", "path": "/tmp/other-workspace"}],
+                "other",
+            ),
+        )
+        state.codex_client.call = AsyncMock(return_value={"thread": {"id": "thread-other-1"}})
+
+        with patch("models.telegram_bridge.get", side_effect=lambda key, default=None: [telegram_user_id] if key == "users.allowed_ids" else default):
+            body = asyncio.run(endpoint({"project_key": "other"}, request))
+
+        self.assertEqual("thread-other-1", body["thread_id"])
+        self.assertEqual(
+            {self.session.user_id},
+            user_manager.find_user_ids_by_thread("thread-other-1"),
+        )
+
+    def test_threads_start_does_not_change_telegram_active_thread(self):
+        app = create_web_app()
+        endpoint = next(
+            route.endpoint
+            for route in app.routes
+            if getattr(route, "path", None) == "/api/threads/start"
+        )
+        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+        telegram_user_id = 8145902314
+        state.command_router.route = AsyncMock(
+            return_value=SimpleNamespace(
+                kind="text",
+                text="Thread started: thread-web-1",
+                meta={"thread_id": "thread-web-1"},
+            )
+        )
+
+        with patch("models.telegram_bridge.get", side_effect=lambda key, default=None: [telegram_user_id] if key == "users.allowed_ids" else default):
+            body = asyncio.run(endpoint(request))
+
+        self.assertEqual("thread-web-1", body["meta"]["thread_id"])
+        self.assertEqual(
+            {self.session.user_id},
+            user_manager.find_user_ids_by_thread("thread-web-1"),
+        )
+
+    def test_telegram_start_subscribes_active_web_session_and_notifies_thread_refresh(self):
+        telegram_user_id = 8145902314
+        user_manager.bind_thread_subscriber(telegram_user_id, "thread-stale")
+        web_queue = asyncio.run(event_hub.subscribe(self.session.user_id))
+        command = ThreadCommands(
+            RouterContext(
+                codex=SimpleNamespace(call=AsyncMock(return_value={"thread": {"id": "thread-tg-1"}})),
+                logger=SimpleNamespace(),
+            )
+        )
+        try:
+            with patch("models.telegram_bridge.get", side_effect=lambda key, default=None: [telegram_user_id] if key == "users.allowed_ids" else default):
+                result = asyncio.run(command.start([], telegram_user_id, {"key": "default", "name": "Default", "path": "/tmp/default-workspace"}))
+
+            self.assertEqual("text", result.kind)
+            self.assertEqual("thread-tg-1", result.meta["thread_id"])
+            self.assertEqual(
+                {self.session.user_id, telegram_user_id},
+                user_manager.find_user_ids_by_thread("thread-tg-1"),
+            )
+            self.assertNotIn(telegram_user_id, user_manager.find_user_ids_by_thread("thread-stale"))
+            event = asyncio.run(asyncio.wait_for(web_queue.get(), timeout=0.2))
+            self.assertEqual("threads_changed", event["type"])
+            self.assertEqual("thread-tg-1", event["thread_id"])
+            self.assertEqual("default", event["project_key"])
+        finally:
+            asyncio.run(event_hub.unsubscribe(self.session.user_id, web_queue))
+
+    def test_telegram_project_select_subscribes_active_web_session_and_notifies_thread_refresh(self):
+        telegram_user_id = 8145902314
+        user_manager.bind_thread_subscriber(telegram_user_id, "thread-stale")
+        web_queue = asyncio.run(event_hub.subscribe(self.session.user_id))
+        command = ProjectCommands(
+            RouterContext(
+                codex=SimpleNamespace(call=AsyncMock(return_value={"thread": {"id": "thread-project-1"}})),
+                logger=SimpleNamespace(exception=lambda *args, **kwargs: None),
+            )
+        )
+        try:
+            with patch(
+                "codex.command_router.projects.get",
+                side_effect=lambda key, default=None: (
+                    {"default": {"name": "Default", "path": "/tmp/default-workspace"}}
+                    if key == "projects"
+                    else ("default" if key == "project" else default)
+                ),
+            ), patch(
+                "models.telegram_bridge.get",
+                side_effect=lambda key, default=None: [telegram_user_id] if key == "users.allowed_ids" else default,
+            ):
+                result = asyncio.run(command.project_select(["default"], telegram_user_id))
+
+            self.assertEqual("text", result.kind)
+            self.assertEqual("thread-project-1", result.meta["thread_id"])
+            self.assertEqual(
+                {self.session.user_id, telegram_user_id},
+                user_manager.find_user_ids_by_thread("thread-project-1"),
+            )
+            self.assertNotIn(telegram_user_id, user_manager.find_user_ids_by_thread("thread-stale"))
+            event = asyncio.run(asyncio.wait_for(web_queue.get(), timeout=0.2))
+            self.assertEqual("threads_changed", event["type"])
+            self.assertEqual("thread-project-1", event["thread_id"])
+            self.assertEqual("default", event["project_key"])
+        finally:
+            asyncio.run(event_hub.unsubscribe(self.session.user_id, web_queue))
+
+    def test_open_thread_in_telegram_rebinds_allowed_user_to_requested_thread(self):
+        app = create_web_app()
+        endpoint = next(
+            route.endpoint
+            for route in app.routes
+            if getattr(route, "path", None) == "/api/telegram/open-thread"
+        )
+        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+        telegram_user_id = 8145902314
+        web_user = user_manager.get(self.session.user_id)
+        web_user.active_thread_id = "web-thread"
+        telegram_user = user_manager.get(telegram_user_id)
+        telegram_user.active_thread_id = "thread-old"
+        telegram_user.selected_project_key = "default"
+        telegram_user.selected_project_name = "Default"
+        telegram_user.selected_project_path = "/tmp/default-workspace"
+        user_manager.bind_thread_project("thread-old", "default")
+        user_manager.bind_thread_project("thread-new", "default")
+        state.command_router.route = AsyncMock(
+            return_value=SimpleNamespace(
+                kind="text",
+                text="Thread resumed: thread-new",
+                meta={"thread_id": "thread-new"},
+            )
+        )
+
+        with patch("models.telegram_bridge.get", side_effect=lambda key, default=None: [telegram_user_id] if key == "users.allowed_ids" else default):
+            body = asyncio.run(endpoint({"thread_id": "thread-new", "project_key": "default"}, request))
+
+        self.assertTrue(body["ok"])
+        self.assertEqual("thread-new", body["thread_id"])
+        self.assertEqual("default", body["project_key"])
+        self.assertEqual("web-thread", user_manager.get(self.session.user_id).active_thread_id)
+        self.assertEqual("thread-new", user_manager.get(telegram_user_id).active_thread_id)
+        self.assertEqual("default", user_manager.get_thread_project("thread-new"))
+        state.command_router.route.assert_awaited_once_with("/resume", ["thread-new"], telegram_user_id)
+
+    def test_open_thread_in_telegram_sends_active_thread_preview(self):
+        app = create_web_app()
+        endpoint = next(
+            route.endpoint
+            for route in app.routes
+            if getattr(route, "path", None) == "/api/telegram/open-thread"
+        )
+        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+        telegram_user_id = 8145902314
+        bot = SimpleNamespace(send_message=AsyncMock())
+        state.telegram_app = SimpleNamespace(bot=bot)
+        user_manager.bind_thread_project("thread-new", "default")
+        state.command_router.route = AsyncMock(
+            return_value=SimpleNamespace(
+                kind="text",
+                text="Thread resumed: thread-new",
+                meta={"thread_id": "thread-new"},
+            )
+        )
+        state.codex_client.call = AsyncMock(
+            return_value={
+                "thread": {"id": "thread-new", "title": "Existing discussion"},
+                "turns": [
+                    {
+                        "id": "turn-1",
+                        "input": [{"type": "text", "text": "What changed?"}],
+                        "output": [{"type": "message", "text": "It is synced."}],
+                    }
+                ],
+            }
+        )
+
+        with patch("models.telegram_bridge.get", side_effect=lambda key, default=None: [telegram_user_id] if key == "users.allowed_ids" else default):
+            body = asyncio.run(endpoint({"thread_id": "thread-new", "project_key": "default"}, request))
+
+        self.assertTrue(body["ok"])
+        self.assertEqual("ok", body["notify_status"])
+        bot.send_message.assert_awaited_once()
+        sent_text = bot.send_message.await_args.kwargs["text"]
+        self.assertIn("Telegram active thread changed", sent_text)
+        self.assertIn("Existing discussion", sent_text)
+        self.assertIn("What changed?", sent_text)
+        self.assertIn("It is synced.", sent_text)
+
+    def test_open_thread_in_telegram_removes_allowed_user_from_other_thread_turns(self):
+        app = create_web_app()
+        endpoint = next(
+            route.endpoint
+            for route in app.routes
+            if getattr(route, "path", None) == "/api/telegram/open-thread"
+        )
+        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+        telegram_user_id = 8145902314
+        user_manager.bind_thread_subscriber(telegram_user_id, "thread-stale")
+        user_manager.bind_turn_subscriber(telegram_user_id, "turn-old", "thread-old")
+        user_manager.bind_turn_subscriber(telegram_user_id, "turn-new", "thread-new")
+        user_manager.bind_thread_project("thread-stale", "default")
+        user_manager.bind_thread_project("thread-old", "default")
+        user_manager.bind_thread_project("thread-new", "default")
+        state.command_router.route = AsyncMock(
+            return_value=SimpleNamespace(
+                kind="text",
+                text="Thread resumed: thread-new",
+                meta={"thread_id": "thread-new"},
+            )
+        )
+
+        with patch("models.telegram_bridge.get", side_effect=lambda key, default=None: [telegram_user_id] if key == "users.allowed_ids" else default):
+            body = asyncio.run(endpoint({"thread_id": "thread-new", "project_key": "default"}, request))
+
+        self.assertTrue(body["ok"])
+        self.assertNotIn(telegram_user_id, user_manager.find_user_ids_by_thread("thread-stale"))
+        self.assertNotIn(telegram_user_id, user_manager.find_user_ids_by_thread("thread-old"))
+        self.assertIn(telegram_user_id, user_manager.find_user_ids_by_thread("thread-new"))
+        self.assertNotIn(telegram_user_id, user_manager.find_user_ids_by_turn("turn-old"))
+        self.assertIn(telegram_user_id, user_manager.find_user_ids_by_turn("turn-new"))
+
+    def test_open_thread_in_telegram_keeps_local_active_thread_when_resume_fails(self):
+        app = create_web_app()
+        endpoint = next(
+            route.endpoint
+            for route in app.routes
+            if getattr(route, "path", None) == "/api/telegram/open-thread"
+        )
+        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+        telegram_user_id = 8145902314
+        telegram_user = user_manager.get(telegram_user_id)
+        telegram_user.active_thread_id = "thread-old"
+        user_manager.bind_thread_project("thread-new", "default")
+        state.command_router.route = AsyncMock(side_effect=RuntimeError("app-server unavailable"))
+
+        with patch("models.telegram_bridge.get", side_effect=lambda key, default=None: [telegram_user_id] if key == "users.allowed_ids" else default):
+            body = asyncio.run(endpoint({"thread_id": "thread-new", "project_key": "default"}, request))
+
+        self.assertTrue(body["ok"])
+        self.assertEqual("thread-new", body["thread_id"])
+        self.assertEqual("failed", body["resume_status"])
+        self.assertEqual("thread-new", user_manager.get(telegram_user_id).active_thread_id)
+        state.command_router.route.assert_awaited_once_with("/resume", ["thread-new"], telegram_user_id)
+
+    def test_open_thread_in_telegram_requires_single_allowed_telegram_user(self):
+        app = create_web_app()
+        endpoint = next(
+            route.endpoint
+            for route in app.routes
+            if getattr(route, "path", None) == "/api/telegram/open-thread"
+        )
+        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+
+        for allowed_ids in ([], [1, 2]):
+            with self.subTest(allowed_ids=allowed_ids):
+                with patch("models.telegram_bridge.get", side_effect=lambda key, default=None: allowed_ids if key == "users.allowed_ids" else default):
+                    with self.assertRaises(HTTPException) as ctx:
+                        asyncio.run(endpoint({"thread_id": "thread-new", "project_key": "default"}, request))
+
+                self.assertEqual(400, ctx.exception.status_code)
+                self.assertIn("exactly one Telegram user", ctx.exception.detail)
+                state.command_router.route.assert_not_awaited()
+
+    def test_chat_messages_binds_web_turn_to_allowed_telegram_user_when_thread_is_active(self):
+        app = create_web_app()
+        endpoint = next(
+            route.endpoint
+            for route in app.routes
+            if getattr(route, "path", None) == "/api/chat/messages"
+        )
+        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+        telegram_user_id = 8145902314
+        user_manager.set_active_thread(telegram_user_id, "thread-1")
+        state_user = user_manager.get(self.session.user_id)
+        state_user.active_thread_id = "thread-1"
+        state_user.set_collaboration_mode_mask(
+            {"name": "build", "mode": "default", "model": "gpt-5.3-codex", "reasoning_effort": "medium"}
+        )
+        state.codex_client.call.return_value = {"turn": {"id": "turn-1"}}
+
+        with patch("models.telegram_bridge.get", side_effect=lambda key, default=None: [telegram_user_id] if key == "users.allowed_ids" else default):
+            body = asyncio.run(endpoint({"text": "hello"}, request))
+
+        self.assertTrue(body["ok"])
+        self.assertEqual({self.session.user_id, telegram_user_id}, user_manager.find_user_ids_by_turn("turn-1"))
+        self.assertEqual("thread-1", user_manager.get_turn_thread("turn-1"))
 
     def test_read_thread_preserves_plan_items_as_plan_messages(self):
         app = create_web_app()

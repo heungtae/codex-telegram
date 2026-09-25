@@ -91,3 +91,13 @@ UI는 기능 단위 컴포넌트 중심으로 분해한다.
 - 도메인 책임이 hook 단위로 분리된다.
 - UI 컴포넌트가 view-model 소비 구조로 정리된다.
 - 핵심 시나리오 회귀 없이 품질 게이트를 통과한다.
+
+## Web Frontend Layout
+
+20260612 UI 재설계를 통해 확정된 레이아웃.
+
+- **Left sidebar**: Projects (TOML 프로필 + 열린 세션별 채팅), Threads (단일 접이식 목록), 하단 설정 팝오버
+- **Center**: `ChatHeader` (활성 채팅 제목 + 새 채팅 버튼), 메시지 영역, Composer
+- **Right**: Workspace 패널 (파일 트리, 프리뷰) — 크기 조절 가능, 토글 가능
+- TopTabs 제거, 프로젝트/스레드 탐색이 왼쪽 사이드바로 통합
+- API/SSE/서버 데이터 형식은 변경 없음

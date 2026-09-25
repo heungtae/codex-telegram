@@ -1,14 +1,8 @@
-import AppWorkspacePanelSlot from "../components/AppWorkspacePanelSlot";
+import WorkspacePanel from "../../workspace/components/WorkspacePanel";
 import { AGENT_CONFIG_DEFS } from "../../common/constants";
-import {
-  FolderIcon,
-  MenuIcon,
-  NewChatIcon,
-  SendIcon,
-  StopIcon,
-} from "../../common/components/Icons";
 import { persistTurnNotificationEnabled } from "../../common/theme";
-import { getSidebarStyle } from "../state/layoutSelectors";
+import { basename } from "../../common/utils";
+import { getWorkspacePanelStyle, getSidebarStyle } from "../state/layoutSelectors";
 
 type RuntimeContextSlices = {
   domains: Record<string, unknown>;
@@ -29,21 +23,33 @@ export function buildConversationViewModel<
   TWorkspace extends object,
   TConversation extends object,
   TComposer extends object,
-  TIcons extends object,
 >({
   tabs,
   workspace,
   conversation,
   composer,
-  icons,
 }: {
   tabs: TTabs;
   workspace: TWorkspace;
   conversation: TConversation;
   composer: TComposer;
-  icons: TIcons;
-}): { tabs: TTabs; workspace: TWorkspace; conversation: TConversation; composer: TComposer; icons: TIcons } {
-  return { tabs, workspace, conversation, composer, icons };
+}): { tabs: TTabs; workspace: TWorkspace; conversation: TConversation; composer: TComposer } {
+  return { tabs, workspace, conversation, composer };
+}
+
+export function createOpenInTelegramAction(
+  openThreadInTelegram: (threadId: string) => Promise<void>
+) {
+  return (threadId: string) => openThreadInTelegram(threadId);
+}
+
+export function resolveTelegramActiveThreadId(sessionSummary: unknown): string {
+  if (!sessionSummary || typeof sessionSummary !== "object") {
+    return "";
+  }
+  const value = (sessionSummary as { telegram_active_thread_id?: unknown })
+    .telegram_active_thread_id;
+  return typeof value === "string" ? value.trim() : "";
 }
 
 export default function useAppRuntimePresentation(args) {
@@ -71,7 +77,7 @@ export default function useAppRuntimePresentation(args) {
     showToast,
   } = domainRuntime;
   const { composerViewModel } = composerRuntime;
-  const { resetWorkspacePreviewSize, projectPicker } = effectsRuntime;
+  const { projectPicker } = effectsRuntime;
 
   const activeAgentDef = session.activeAgentSettings
     ? AGENT_CONFIG_DEFS[session.activeAgentSettings]
@@ -89,9 +95,14 @@ export default function useAppRuntimePresentation(args) {
         })
       : null;
   const settingsBusy = !!session.agentConfigLoading || !!session.agentConfigSaving;
+  const telegramActiveThreadId = resolveTelegramActiveThreadId(session.sessionSummary);
   const activeThreadTabs = threads.threadTabsByProjectTabId[threads.activeProjectTabId] || [];
   const selectProjectTab = (tabId) => {
     threads.setActiveProjectTabId(tabId);
+    const restoredThreadId = threads.activeThreadTabIdByProjectTabId[tabId];
+    if (restoredThreadId) {
+      threadActions.viewThread(restoredThreadId, tabId);
+    }
     if (ui.isMobileLayout) {
       ui.setIsSidebarOpen(false);
     }
@@ -99,6 +110,9 @@ export default function useAppRuntimePresentation(args) {
   const closeThreadTab = (threadId) =>
     threadActions.closeThreadTab(threads.activeProjectTabId, threadId);
   const addThread = () => threadActions.startThread().catch(() => {});
+  const openThreadInTelegram = createOpenInTelegramAction(
+    threadActions.openThreadInTelegram
+  );
   const selectThread = (projectTabId, threadId) => {
     if (projectTabId !== threads.activeProjectTabId) {
       threads.setActiveProjectTabId(projectTabId);
@@ -120,16 +134,23 @@ export default function useAppRuntimePresentation(args) {
   };
   const disableAddThread = !activeProjectKey || interactionBusy;
   const onToggleWorkspaceExpand = () => ui.setIsWorkspaceExpanded((current) => !current);
+  const activeWorkspacePath = activeProjectTab?.path || session.sessionSummary?.workspace || "";
+  const workspaceRootLabel = basename(activeWorkspacePath) || "Workspace";
+  const workspacePanelStyle = getWorkspacePanelStyle(ui.isCompactWorkspaceLayout, workspace.workspacePanelWidth, ui.isWorkspaceExpanded);
+  const workspaceStatusItems =
+    workspace.workspaceStatus && typeof workspace.workspaceStatus.items === "object"
+      ? workspace.workspaceStatus.items
+      : {};
   const workspacePanel = (
-    <AppWorkspacePanelSlot
+    <WorkspacePanel
       isCompactWorkspaceLayout={ui.isCompactWorkspaceLayout}
       isWorkspacePanelOpen={ui.isWorkspacePanelOpen}
       onToggleWorkspacePanel={composerViewModel.onToggleWorkspacePanel}
-      workspacePanelWidth={workspace.workspacePanelWidth}
-      activeProjectKey={domainRuntime.activeProjectKey}
-      activeWorkspacePath={activeProjectTab?.path || session.sessionSummary?.workspace || ""}
+      workspacePanelStyle={workspacePanelStyle}
+      workspaceRootLabel={workspaceRootLabel}
       workspaceError={workspace.workspaceError}
-      workspaceStatus={workspace.workspaceStatus}
+      activeWorkspacePath={activeWorkspacePath}
+      workspaceStatusItems={workspaceStatusItems}
       workspaceTree={workspace.workspaceTree}
       expandedWorkspaceDirs={workspace.expandedWorkspaceDirs}
       workspacePreview={workspace.workspacePreview}
@@ -193,6 +214,7 @@ export default function useAppRuntimePresentation(args) {
         projectTabStatusById,
         threadTabsByProjectTabId: threads.threadTabsByProjectTabId,
         activeThread: threads.activeThread,
+        telegramActiveThreadId,
       },
     },
     runtime: {
@@ -208,7 +230,7 @@ export default function useAppRuntimePresentation(args) {
       thread: {
         selectProject: threadActions.selectProject,
         selectProjectTab,
-        closeProjectTab: threadActions.closeProjectTab,
+        closeProjectTab: threadActions.collapseProjectTab,
         selectThread,
         closeThread,
         startThread,
@@ -247,12 +269,15 @@ export default function useAppRuntimePresentation(args) {
       activeProjectTabId: threads.activeProjectTabId,
       projectTabStatusById,
       onSelectProjectTab: selectProjectTab,
-      onCloseProjectTab: threadActions.closeProjectTab,
+      onCloseProjectTab: threadActions.collapseProjectTab,
+      threadItems: threads.threadItems,
       threadTabs: activeThreadTabs,
       activeThread: threads.activeThread,
+      telegramActiveThreadId,
       onSelectThread: threadActions.viewThread,
       onCloseThread: closeThreadTab,
       onAddThread: addThread,
+      onOpenThreadInTelegram: openThreadInTelegram,
       disableAddThread,
     },
     workspace: {
@@ -264,7 +289,6 @@ export default function useAppRuntimePresentation(args) {
       workspacePreviewResizeRef: refs.workspacePreviewResizeRef,
       setIsResizingWorkspacePreview: workspace.setIsResizingWorkspacePreview,
       setWorkspacePreview: workspace.setWorkspacePreview,
-      resetWorkspacePreviewSize,
       workspacePanel,
       isWorkspaceExpanded: ui.isWorkspaceExpanded,
       isResizingWorkspacePanel: workspace.isResizingWorkspacePanel,
@@ -285,12 +309,6 @@ export default function useAppRuntimePresentation(args) {
       renderItems,
     },
     composer: composerViewModel,
-    icons: {
-      StopIcon,
-      SendIcon,
-      FolderIcon,
-      NewChatIcon,
-    },
   });
 
   return {
@@ -299,7 +317,6 @@ export default function useAppRuntimePresentation(args) {
       isMobileLayout: ui.isMobileLayout,
       isSidebarOpen: ui.isSidebarOpen,
       onToggleSidebarOpen: ui.setIsSidebarOpen,
-      MenuIcon,
     },
     conversation,
   };

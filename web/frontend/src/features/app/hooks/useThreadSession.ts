@@ -1,6 +1,136 @@
 import { normalizeThreadId } from "../../common/utils";
 import { resolveProjectTabThreadId } from "../state/projectTabThreads";
-import type { ThreadSessionArgs } from "./useThreadSession.types";
+import { replaceThreadInTab, upsertThreadTab, removeThreadsOwnedByTab } from "../state/threadTabOps";
+type ThreadSessionArgs = {
+  api: (path: string, options?: Record<string, unknown>) => Promise<Record<string, unknown>>;
+  me: Record<string, unknown> | null;
+  activeProjectKey: string;
+  activeProjectTabId: string;
+  activeThread: string;
+  isMobileLayout: boolean;
+  interactionBusy: boolean;
+  projectTabs: Array<Record<string, unknown>>;
+  projectItems: Array<Record<string, unknown>>;
+  threadItems: Array<Record<string, unknown>>;
+  threadTabsByProjectTabId: Record<string, Array<Record<string, unknown>>>;
+  activeThreadTabIdByProjectTabId: Record<string, string>;
+  threadProjectTabIdByThreadId: Record<string, string>;
+  initialLoadRef: { current: boolean };
+  activeThreadRef: { current: string };
+  pendingComposerFocusRef: { current: boolean };
+  turnThreadIdRef: { current: Record<string, string> };
+  setThreadItems: (items: Array<Record<string, unknown>>) => void;
+  setProjectItems: (items: Array<Record<string, unknown>>) => void;
+  setSessionSummary: (summary: Record<string, unknown>) => void;
+  setProjectTabs: (updater: (prev: Array<Record<string, unknown>>) => Array<Record<string, unknown>>) => void;
+  setThreadTabsByProjectTabId: (updater: (prev: Record<string, Array<Record<string, unknown>>>) => Record<string, Array<Record<string, unknown>>>) => void;
+  setThreadProjectTabIdByThreadId: (updater: (prev: Record<string, string>) => Record<string, string>) => void;
+  setActiveThreadTabIdByProjectTabId: (updater: (prev: Record<string, string>) => Record<string, string>) => void;
+  setActiveProjectTabId: (tabId: string) => void;
+  setActiveThread: (threadId: string) => void;
+  setMessagesByThreadId: (updater: (prev: Record<string, Array<Record<string, unknown>>>) => Record<string, Array<Record<string, unknown>>>) => void;
+  setMessages: (updater: Array<Record<string, unknown>> | ((prev: Array<Record<string, unknown>>) => Array<Record<string, unknown>>)) => void;
+  setStatus: (next: string | ((current: string) => string)) => void;
+  setStatusForThread: (threadId: string, next: string) => void;
+  setStatusForActiveThread: (next: string) => void;
+  setCollaborationMode: (mode: string) => void;
+  setIsSidebarOpen: (open: boolean) => void;
+  setPendingProjectTarget: (target: string) => void;
+  setIsProjectModeModalOpen: (open: boolean) => void;
+  appendMessageToThread: (threadId: string, message: Record<string, unknown>) => void;
+  restoreThreadMessages: (threadId: string) => boolean;
+  updateThreadUi: (threadId: string, patch: Record<string, unknown>) => void;
+  syncThreadMessagesFromServerImpl?: (threadId: string, options?: { applyToVisible?: boolean }) => Promise<void>;
+  upsertProjectTab: (project: Record<string, unknown>, options?: { forceNew?: boolean }) => string;
+  openThreadInProjectTab: (projectTabId: string, thread: Record<string, unknown>) => string;
+  setActiveThreadForProjectTab: (projectTabId: string, threadId: string) => void;
+  updateThreadTabState: (threadId: string, patch: Record<string, unknown>) => void;
+  ensureWorkspaceBucket: (threadId: string) => void;
+  removeWorkspaceBucket: (threadId: string) => void;
+  normalizeCollaborationMode: (raw: unknown) => "build" | "plan";
+};
+
+type OpenInTelegramDeps = {
+  threadId: string;
+  activeProjectKey: string;
+  activeProjectTabId: string;
+  api: ThreadSessionArgs["api"];
+  loadSessionSummary: () => Promise<void>;
+  loadThreads: (options: { projectKey?: string; projectTabId?: string; revealThreadId?: string }) => Promise<void>;
+  viewThread?: (threadId: string, projectTabId?: string) => Promise<void>;
+};
+
+export function upsertThreadSummary(items: Array<Record<string, unknown>>, threadId: string): Array<Record<string, unknown>> {
+  const normalizedThreadId = normalizeThreadId(threadId);
+  if (!normalizedThreadId) {
+    return items;
+  }
+  if (items.some((item) => normalizeThreadId(String(item?.id ?? "")) === normalizedThreadId)) {
+    return items;
+  }
+  return [{ id: normalizedThreadId, title: normalizedThreadId }, ...items];
+}
+
+export function normalizeThreadMessages(
+  result: Record<string, unknown>,
+  normalizedThreadId: string,
+): Array<Record<string, unknown>> {
+  const messages = Array.isArray(result?.messages) ? result.messages : [];
+  if (messages.length > 0) {
+    return messages
+      .filter((item) => item && typeof item === "object" && typeof (item as Record<string, unknown>).text === "string" && String((item as Record<string, unknown>).text).trim())
+      .map((item) => {
+        const row = item as Record<string, unknown>;
+        return {
+          role: row.role === "user" ? "user" : row.role === "assistant" ? "assistant" : "system",
+          text: String(row.text ?? ""),
+          variant: row.variant === "subagent" ? "subagent" : "",
+          kind: row.kind === "plan" ? "plan" : "",
+          threadId: normalizeThreadId(String(row.thread_id ?? "")) || normalizedThreadId,
+          turnId: typeof row.turn_id === "string" ? row.turn_id : "",
+          streaming: false,
+        };
+      });
+  }
+  return [
+    {
+      role: "assistant",
+      text: String(result?.text ?? ""),
+      threadId: normalizeThreadId(String(result?.thread_id ?? "")) || normalizedThreadId,
+      turnId: typeof result?.turn_id === "string" ? result.turn_id : "",
+      streaming: false,
+    },
+  ];
+}
+
+export async function openThreadInTelegramForProject({
+  threadId,
+  activeProjectKey,
+  activeProjectTabId,
+  api,
+  loadSessionSummary,
+  loadThreads,
+  viewThread,
+}: OpenInTelegramDeps) {
+  const normalizedThreadId = normalizeThreadId(threadId);
+  if (!normalizedThreadId) {
+    return;
+  }
+  await api("/api/telegram/open-thread", {
+    method: "POST",
+    body: JSON.stringify({
+      thread_id: normalizedThreadId,
+      project_key: activeProjectKey || "",
+    }),
+  });
+  await loadSessionSummary();
+  await loadThreads({
+    projectKey: activeProjectKey,
+    projectTabId: activeProjectTabId,
+    revealThreadId: normalizedThreadId,
+  });
+  await viewThread?.(normalizedThreadId, activeProjectTabId);
+}
 
 export default function useThreadSession(args: ThreadSessionArgs) {
   const {
@@ -61,35 +191,6 @@ export default function useThreadSession(args: ThreadSessionArgs) {
     });
   };
 
-  const normalizeThreadMessages = (result: Record<string, unknown>, normalizedThreadId: string) => {
-    const messages = Array.isArray(result?.messages) ? result.messages : [];
-    const list = messages.length > 0
-      ? messages
-        .filter((item) => item && typeof item === "object" && typeof (item as Record<string, unknown>).text === "string" && String((item as Record<string, unknown>).text).trim())
-        .map((item) => {
-          const row = item as Record<string, unknown>;
-          return {
-            role: row.role === "user" ? "user" : row.role === "assistant" ? "assistant" : "system",
-            text: String(row.text ?? ""),
-            variant: row.variant === "subagent" ? "subagent" : "",
-            kind: row.kind === "plan" ? "plan" : "",
-            threadId: normalizeThreadId(String(row.thread_id ?? "")) || normalizedThreadId,
-            turnId: typeof row.turn_id === "string" ? row.turn_id : "",
-            streaming: false,
-          };
-        })
-      : [
-        {
-          role: "assistant",
-          text: String(result?.text ?? ""),
-          threadId: normalizeThreadId(String(result?.thread_id ?? "")) || normalizedThreadId,
-          turnId: typeof result?.turn_id === "string" ? result.turn_id : "",
-          streaming: false,
-        },
-      ];
-    return list;
-  };
-
   const syncThreadMessagesFromServer = async (
     threadId: string,
     options: { applyToVisible?: boolean } = {}
@@ -120,7 +221,7 @@ export default function useThreadSession(args: ThreadSessionArgs) {
         id: normalizedThreadId,
         title: typeof threadInfo?.title === "string" ? threadInfo.title : normalizedThreadId,
       });
-      updateThreadTabState(normalizedThreadId, { hasUnreadCompletion: false });
+      updateThreadTabState(normalizedThreadId, { hasUnreadCompletion: false, status: "idle" });
     }
     const restored = restoreThreadMessages(normalizedThreadId);
     if (!restored) {
@@ -136,18 +237,42 @@ export default function useThreadSession(args: ThreadSessionArgs) {
     }
   };
 
+  const openThreadInTelegram = async (threadId: string) => {
+    await openThreadInTelegramForProject({
+      threadId,
+      activeProjectKey,
+      activeProjectTabId,
+      api,
+      loadSessionSummary,
+      loadThreads,
+      viewThread,
+    });
+  };
+
   const loadThreads = async (
     options: {
       projectKey?: string;
       projectTabId?: string;
       ensureDefaultTab?: boolean;
       resetThreadTabs?: boolean;
+      revealThreadId?: string;
     } = {}
   ) => {
     const projectKey = typeof options.projectKey === "string" ? options.projectKey : (activeProjectKey || "");
-    const projectTabId = typeof options.projectTabId === "string" ? options.projectTabId : (activeProjectTabId || "");
+    let projectTabId = typeof options.projectTabId === "string" ? options.projectTabId : (activeProjectTabId || "");
     const ensureDefaultTab = !!options.ensureDefaultTab;
     const resetThreadTabs = !!options.resetThreadTabs;
+    const revealThreadId = normalizeThreadId(options.revealThreadId);
+    if (revealThreadId && projectKey) {
+      const existingProjectTab = projectTabs.find((tab) => tab?.key === projectKey);
+      const existingProjectTabId = typeof existingProjectTab?.id === "string" ? existingProjectTab.id : "";
+      if (existingProjectTabId) {
+        projectTabId = existingProjectTabId;
+      } else {
+        const project = projectItems.find((item) => item?.key === projectKey) || { key: projectKey, name: projectKey, path: "" };
+        projectTabId = upsertProjectTab(project);
+      }
+    }
     const configuredThreadsLimit = Number.parseInt(String(me?.threads_list_limit ?? "20"), 10);
     const threadsLimit = Number.isFinite(configuredThreadsLimit)
       ? Math.max(1, Math.min(100, configuredThreadsLimit))
@@ -157,9 +282,38 @@ export default function useThreadSession(args: ThreadSessionArgs) {
       query.set("project_key", projectKey);
     }
     const summaries = await api(`/api/threads/summaries?${query.toString()}`);
-    const items = Array.isArray(summaries.items) ? summaries.items : [];
-    if (!projectTabId || projectTabId === activeProjectTabId) {
+    const rawItems = Array.isArray(summaries.items) ? summaries.items : [];
+    const items = revealThreadId ? upsertThreadSummary(rawItems, revealThreadId) : rawItems;
+    if (typeof console !== "undefined" && typeof console.debug === "function") {
+      console.debug("[threads] refreshed", {
+        projectKey,
+        projectTabId,
+        count: items.length,
+        revealThreadId,
+      });
+    }
+    if (!projectTabId || projectTabId === activeProjectTabId || revealThreadId) {
       setThreadItems(items);
+    }
+    if (projectTabId && revealThreadId) {
+      const revealedThread = items.find((item) => normalizeThreadId(String(item?.id ?? "")) === revealThreadId) || {
+        id: revealThreadId,
+        title: revealThreadId,
+      };
+      setThreadTabsByProjectTabId((prev) => {
+        const title = typeof revealedThread?.title === "string" && revealedThread.title
+          ? revealedThread.title
+          : revealThreadId;
+        return upsertThreadTab(prev, projectTabId, revealThreadId, title);
+      });
+      setThreadProjectTabIdByThreadId((prev) => ({ ...prev, [revealThreadId]: projectTabId }));
+      ensureWorkspaceBucket(revealThreadId);
+      setActiveProjectTabId(projectTabId);
+      setActiveThreadTabIdByProjectTabId((prev) => ({ ...prev, [projectTabId]: revealThreadId }));
+      setActiveThread(revealThreadId);
+      setMessages([]);
+      setStatus("idle");
+      pendingComposerFocusRef.current = true;
     }
     if (ensureDefaultTab && projectTabId) {
       const opened = resetThreadTabs
@@ -178,7 +332,7 @@ export default function useThreadSession(args: ThreadSessionArgs) {
           });
           const createdThreadId = normalizeThreadId(String(created?.thread_id ?? ""));
           if (createdThreadId) {
-            openThreadInProjectTab(projectTabId, { id: createdThreadId, title: createdThreadId });
+            openThreadInProjectTab(projectTabId, { id: createdThreadId });
             if (projectTabId === activeProjectTabId) {
               viewThread(createdThreadId).catch(() => {});
             }
@@ -286,25 +440,9 @@ export default function useThreadSession(args: ThreadSessionArgs) {
           activeThreadTabIdByProjectTabId[resolvedProjectTabId] || activeThread
         );
         if (replaceCurrentTab && currentThreadTabId) {
-          setThreadTabsByProjectTabId((prev) => {
-            const rows = Array.isArray(prev[resolvedProjectTabId]) ? prev[resolvedProjectTabId] : [];
-            const index = rows.findIndex((row) => normalizeThreadId(String(row.id ?? "")) === currentThreadTabId);
-            if (index < 0) {
-              return {
-                ...prev,
-                [resolvedProjectTabId]: [...rows, { id: nextThreadId, title: nextThreadId, status: "idle", hasUnreadCompletion: false }],
-              };
-            }
-            const nextRows = [...rows];
-            nextRows[index] = {
-              ...nextRows[index],
-              id: nextThreadId,
-              title: nextThreadId,
-              status: "idle",
-              hasUnreadCompletion: false,
-            };
-            return { ...prev, [resolvedProjectTabId]: nextRows };
-          });
+          setThreadTabsByProjectTabId((prev) =>
+            replaceThreadInTab(prev, resolvedProjectTabId, currentThreadTabId, nextThreadId)
+          );
           setThreadProjectTabIdByThreadId((prev) => {
             const next = { ...prev };
             delete next[currentThreadTabId];
@@ -315,7 +453,7 @@ export default function useThreadSession(args: ThreadSessionArgs) {
           ensureWorkspaceBucket(nextThreadId);
           setActiveThreadForProjectTab(resolvedProjectTabId, nextThreadId);
         } else {
-          openThreadInProjectTab(resolvedProjectTabId, { id: nextThreadId, title: nextThreadId });
+          openThreadInProjectTab(resolvedProjectTabId, { id: nextThreadId });
         }
       }
     } else {
@@ -386,15 +524,9 @@ export default function useThreadSession(args: ThreadSessionArgs) {
           ? threadTabsByProjectTabId[activeProjectTabId].map((row) => normalizeThreadId(String(row.id ?? ""))).filter(Boolean)
           : [];
         ownedThreads.forEach((threadId) => removeWorkspaceBucket(threadId));
-        setThreadProjectTabIdByThreadId((prev) => {
-          const next = { ...prev };
-          Object.entries(next).forEach(([threadId, tabId]) => {
-            if (tabId === activeProjectTabId) {
-              delete next[threadId];
-            }
-          });
-          return next;
-        });
+        setThreadProjectTabIdByThreadId((prev) =>
+          removeThreadsOwnedByTab(prev, activeProjectTabId)
+        );
       } else {
         projectTabId = upsertProjectTab(
           selectedProject || { key: normalizedTarget, name: normalizedTarget, path: "" },
@@ -484,6 +616,7 @@ export default function useThreadSession(args: ThreadSessionArgs) {
     resolveCurrentThreadId,
     syncThreadMessagesFromServer,
     startThread,
+    openThreadInTelegram,
     selectProject,
     viewThread,
     runCommand,

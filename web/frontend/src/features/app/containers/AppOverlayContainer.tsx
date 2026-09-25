@@ -1,4 +1,5 @@
-import AppOverlayLayer from "../components/AppOverlayLayer";
+import { Toast } from "../../common/components/ui";
+import { ProjectModeModal, ProjectPickerModal } from "../components/ProjectModals";
 import {
   useAppDomainsContext,
   useAppPresentationContext,
@@ -14,7 +15,8 @@ type OverlayDomains = {
     shortcutModalPage: string;
     projectSearchQuery: string;
     selectedProjectIndex: number;
-    toastNotification: unknown;
+    toastNotification: { message: unknown; type?: string; subtitle?: string } | null;
+    setToastNotification: Callback;
     setProjectSearchQuery: Callback;
     setSelectedProjectIndex: Callback;
   };
@@ -41,19 +43,30 @@ export default function AppOverlayContainer() {
   const { projectPicker: projectPickerView } = useAppPresentationContext<OverlayPresentation>();
 
   return (
-    <AppOverlayLayer
-      isProjectModeModalOpen={ui.isProjectModeModalOpen}
-      onCloseProjectModeModal={projectPicker.closeProjectModeModal}
-      onChooseProjectClickMode={projectPicker.chooseProjectClickMode}
-      isProjectPickerOpen={ui.shortcutModalPage === "project"}
-      projectSearchQuery={ui.projectSearchQuery}
-      onProjectSearchQueryChange={ui.setProjectSearchQuery}
-      filteredProjects={projectPickerView.filteredProjects}
-      selectedProjectIndex={ui.selectedProjectIndex}
-      onSelectedProjectIndexChange={ui.setSelectedProjectIndex}
-      onSelectProject={(projectKey) => projectPicker.selectProjectFromPicker(projectKey).catch(() => {})}
-      onCloseProjectPicker={projectPicker.closeProjectPickerModal}
-      toastNotification={ui.toastNotification}
-    />
+    <>
+      <ProjectModeModal
+        isOpen={ui.isProjectModeModalOpen}
+        onClose={projectPicker.closeProjectModeModal}
+        onChooseProjectClickMode={projectPicker.chooseProjectClickMode}
+      />
+      <ProjectPickerModal
+        isOpen={ui.shortcutModalPage === "project"}
+        projectSearchQuery={ui.projectSearchQuery}
+        onProjectSearchQueryChange={ui.setProjectSearchQuery}
+        filteredProjects={projectPickerView.filteredProjects}
+        selectedProjectIndex={ui.selectedProjectIndex}
+        onSelectedProjectIndexChange={ui.setSelectedProjectIndex}
+        onSelectProject={(projectKey) => projectPicker.selectProjectFromPicker(projectKey).catch(() => {})}
+        onClose={projectPicker.closeProjectPickerModal}
+      />
+      {ui.toastNotification ? (
+        <Toast
+          message={ui.toastNotification.message}
+          variant={(ui.toastNotification.type as "info" | "success" | "error" | "warning") || "info"}
+          subtitle={ui.toastNotification.subtitle}
+          onClose={() => ui.setToastNotification(null)}
+        />
+      ) : null}
+    </>
   );
 }

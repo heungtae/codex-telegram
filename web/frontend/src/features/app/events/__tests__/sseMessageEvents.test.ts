@@ -1,7 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { handleAppEvent, handleFileChangeEvent, handleSystemMessageEvent, handleWebSearchItemEvent } from "../sseMessageEvents.js";
+import {
+  handleAppEvent,
+  handleFileChangeEvent,
+  handleSystemMessageEvent,
+  handleThreadsChangedEvent,
+  handleWebSearchItemEvent,
+} from "../sseMessageEvents.js";
 
 function createDeps(overrides: { prevMessages?: Array<Record<string, unknown>> } & Record<string, unknown> = {}) {
   const calls = [];
@@ -13,9 +19,14 @@ function createDeps(overrides: { prevMessages?: Array<Record<string, unknown>> }
     loadSessionSummary: async () => {
       calls.push(["loadSessionSummary"]);
     },
+    loadThreads: async (options) => {
+      calls.push(["loadThreads", options]);
+    },
     loadWorkspaceStatus: async () => {
       calls.push(["loadWorkspaceStatus"]);
     },
+    activeProjectKeyRef: { current: "default" },
+    activeProjectTabIdRef: { current: "tab-default" },
     streamedTurnIdsRef: { current: {} },
     resolveThreadIdFromTurn: (threadId, turnId) => threadId || `resolved:${turnId}`,
     itemPhaseByTurnRef: { current: {} },
@@ -64,6 +75,31 @@ test("handleWebSearchItemEvent appends web search system message", () => {
 
   assert.equal(calls[0][2].kind, "web_search");
   assert.equal(calls[0][2].text, "codex");
+});
+
+test("handleThreadsChangedEvent refreshes session and current project threads", async () => {
+  const { deps, calls } = createDeps();
+
+  await handleThreadsChangedEvent({ thread_id: "thread-tg-1", project_key: "default" }, deps);
+
+  assert.deepEqual(calls, [
+    ["loadSessionSummary"],
+    ["loadThreads", { projectKey: "default", projectTabId: "tab-default", revealThreadId: "thread-tg-1" }],
+  ]);
+});
+
+test("handleThreadsChangedEvent uses event project key when it differs from the active project", async () => {
+  const { deps, calls } = createDeps({
+    activeProjectKeyRef: { current: "current" },
+    activeProjectTabIdRef: { current: "tab-current" },
+  });
+
+  await handleThreadsChangedEvent({ thread_id: "thread-tg-2", project_key: "default" }, deps);
+
+  assert.deepEqual(calls, [
+    ["loadSessionSummary"],
+    ["loadThreads", { projectKey: "default", revealThreadId: "thread-tg-2" }],
+  ]);
 });
 
 test("handleAppEvent appends assistant fallback for completed message when not already streamed", () => {

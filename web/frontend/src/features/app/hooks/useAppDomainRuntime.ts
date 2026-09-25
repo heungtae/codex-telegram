@@ -1,22 +1,22 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 
 import { api } from "../../common/api";
 import { groupMessagesForRender, normalizeThreadId } from "../../common/utils";
 import useThreadScopedState from "../../thread/hooks/useThreadScopedState";
 import useAgentConfigDomain from "./useAgentConfigDomain";
-import useAppCommandRefs from "./useAppCommandRefs";
+import useAppRuntimeRefs from "./useAppRuntimeRefs";
 import useProjectThreadTabs from "./useProjectThreadTabs";
 import useThreadSession from "./useThreadSession";
 import useWorkspaceDomain from "./useWorkspaceDomain";
 import {
   WORKSPACE_PREVIEW_HEIGHT_STORAGE_KEY,
   WORKSPACE_PREVIEW_WIDTH_STORAGE_KEY,
+  WORKSPACE_PREVIEW_DEFAULT_HEIGHT,
+  WORKSPACE_PREVIEW_DEFAULT_WIDTH,
   WORKSPACE_PREVIEW_MIN_HEIGHT,
   WORKSPACE_PREVIEW_MAX_HEIGHT,
-  WORKSPACE_PREVIEW_DEFAULT_HEIGHT,
   WORKSPACE_PREVIEW_MIN_WIDTH,
   WORKSPACE_PREVIEW_MAX_WIDTH,
-  WORKSPACE_PREVIEW_DEFAULT_WIDTH,
 } from "./workspacePreviewConstants";
 
 function readWorkspacePreviewHeight(defaultHeight, minHeight, maxHeight) {
@@ -66,12 +66,12 @@ export function buildProjectTabStatusById(
       : [];
     if (rows.some((row) => row.status === "running")) {
       next[tabId] = "running";
-    } else if (rows.some((row) => row.hasUnreadCompletion)) {
-      next[tabId] = "unread";
     } else if (rows.some((row) => row.status === "failed")) {
       next[tabId] = "failed";
     } else if (rows.some((row) => row.status === "cancelled")) {
       next[tabId] = "cancelled";
+    } else if (rows.some((row) => row.hasUnreadCompletion)) {
+      next[tabId] = "unread";
     } else {
       next[tabId] = "idle";
     }
@@ -81,39 +81,10 @@ export function buildProjectTabStatusById(
 
 export default function useAppDomainRuntime({ me, domains }) {
   const { threads, session, ui } = domains;
-  const refs = {
-    chatRef: useRef(null),
-    inputRef: useRef(null),
-    reasoningStateRef: useRef({}),
-    activeProjectTabIdRef: useRef(""),
-    activeProjectKeyRef: useRef(""),
-    threadProjectTabIdByThreadIdRef: useRef({}),
-    pendingComposerFocusRef: useRef(false),
-    composerFocusWantedRef: useRef(false),
-    composerSelectionRef: useRef({ start: null, end: null }),
-    recentBackspaceAtRef: useRef(0),
-    paletteRef: useRef(null),
-    workspacePreviewResizeRef: useRef({
-      mode: "",
-      startX: 0,
-      startY: 0,
-      startWidth: WORKSPACE_PREVIEW_DEFAULT_WIDTH,
-      startHeight: WORKSPACE_PREVIEW_DEFAULT_HEIGHT,
-    }),
-    workspaceResizeRef: useRef({ startX: 0, startWidth: 320 }),
-    projectTabSequenceRef: useRef(0),
-    initialLoadRef: useRef(true),
-    streamedTurnIdsRef: useRef({}),
-    assistantItemCompletedByTurnRef: useRef({}),
-    inputHistoryIndexRef: useRef(-1),
-    audioCtxRef: useRef(null),
-    itemPhaseByTurnRef: useRef({}),
-    commandRefs: useAppCommandRefs(),
-    toastTimerRef: useRef<ReturnType<typeof setTimeout> | null>(null),
-  };
-  const showToast = useCallback((message, type = "info") => {
+  const refs = useAppRuntimeRefs();
+  const showToast = useCallback((message, type = "info", subtitle?: string) => {
     if (refs.toastTimerRef.current) clearTimeout(refs.toastTimerRef.current);
-    ui.setToastNotification({ message, type });
+    ui.setToastNotification({ message, type, subtitle });
     refs.toastTimerRef.current = setTimeout(() => {
       ui.setToastNotification(null);
       refs.toastTimerRef.current = null;
@@ -278,7 +249,10 @@ export default function useAppDomainRuntime({ me, domains }) {
     workspace.removeWorkspaceBucket(normalizedThreadId);
   };
 
-  const playTurnNotification = () => {
+  const playTurnNotification = (
+    threadId?: string,
+    outcome: "completed" | "failed" | "cancelled" = "completed"
+  ) => {
     if (!ui.turnNotificationEnabled || typeof window === "undefined") {
       return;
     }
@@ -308,7 +282,25 @@ export default function useAppDomainRuntime({ me, domains }) {
       osc.start(now);
       osc.stop(now + 0.15);
     } catch (_err) {}
-    showToast("Turn completed!", "success");
+    const messageMap = {
+      completed: "Turn completed",
+      failed: "Turn failed",
+      cancelled: "Turn cancelled",
+    };
+    let subtitle: string | undefined;
+    if (threadId) {
+      const msgsByThread = (threadState.messagesByThreadIdRef as { current: Record<string, Array<Record<string, unknown>>> }).current;
+      const threadMsgs = msgsByThread[threadId] ?? [];
+      const lastUserMsg = [...threadMsgs]
+        .reverse()
+        .find((m) => m?.role === "user" && typeof m?.text === "string" && String(m.text).trim());
+      const rawPrompt = typeof lastUserMsg?.text === "string" ? lastUserMsg.text.trim() : "";
+      subtitle = rawPrompt
+        ? rawPrompt.slice(0, 80) + (rawPrompt.length > 80 ? "…" : "")
+        : undefined;
+    }
+    const typeMap = { completed: "success", failed: "error", cancelled: "warning" };
+    showToast(messageMap[outcome], typeMap[outcome], subtitle);
   };
 
   const threadSession = useThreadSession({
@@ -329,6 +321,7 @@ export default function useAppDomainRuntime({ me, domains }) {
     activeThreadRef: threadState.activeThreadRef,
     pendingComposerFocusRef: refs.pendingComposerFocusRef,
     turnThreadIdRef: threadState.turnThreadIdRef,
+    interruptedThreadIdRef: refs.interruptedThreadIdRef,
     setThreadItems: threads.setThreadItems,
     setProjectItems: threads.setProjectItems,
     setSessionSummary: session.setSessionSummary,
@@ -411,6 +404,7 @@ export default function useAppDomainRuntime({ me, domains }) {
     threadActions: {
       ...threadSession,
       closeProjectTab: projectThreadTabs.closeProjectTab,
+      collapseProjectTab: projectThreadTabs.collapseProjectTab,
       closeThreadTab,
       chooseProjectClickMode,
     },

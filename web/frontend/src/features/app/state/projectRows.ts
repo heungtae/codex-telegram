@@ -1,4 +1,4 @@
-import type { ProjectTab, ThreadTabRow } from "../hooks/useProjectThreadTabs.types.js";
+import type { ProjectTab, ThreadTabRow } from "../hooks/useProjectThreadTabs";
 
 export type ThreadTabViewModel = {
   id: string;

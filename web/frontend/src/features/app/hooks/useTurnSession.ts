@@ -1,4 +1,4 @@
-﻿import { useEffect } from "react";
+﻿import { useEffect, useRef } from "react";
 
 import { closeSseStream, createSseStream } from "../../../shared/events/sseStream";
 import { handleTurnCompletedWorkspaceRefresh } from "../events/turnCompletion";
@@ -10,12 +10,66 @@ import {
   handleFileChangeEvent,
   handleImageGenerationItemEvent,
   handleSystemMessageEvent,
+  handleThreadsChangedEvent,
   handleWebSearchItemEvent,
 } from "../events/sseMessageEvents";
 import { logSseEvent, safeParseSseData } from "../events/sseEventUtils";
-import type { TurnSessionArgs } from "./useTurnSession.types";
+type TurnSessionArgs = {
+  me: Record<string, unknown> | null;
+  turnNotificationEnabled: boolean;
+  loadProjects: () => Promise<void>;
+  loadThreads: (options?: {
+    projectKey?: string;
+    projectTabId?: string;
+    ensureDefaultTab?: boolean;
+    resetThreadTabs?: boolean;
+    revealThreadId?: string;
+  }) => Promise<void>;
+  loadSkillSuggestions: () => Promise<void>;
+  loadSessionSummary: () => Promise<void>;
+  loadApprovals: () => Promise<void>;
+  loadWorkspaceStatus: () => Promise<void>;
+  refreshWorkspaceBrowser: () => Promise<void>;
+  activeProjectKey: string;
+  activeProjectTabId: string;
+  activeThreadRef: { current: string };
+  activeProjectKeyRef: { current: string };
+  activeProjectTabIdRef: { current: string };
+  streamedTurnIdsRef: { current: Record<string, boolean> };
+  assistantItemCompletedByTurnRef: { current: Record<string, boolean> };
+  itemPhaseByTurnRef: { current: Record<string, Record<string, string>> };
+  turnThreadIdRef: { current: Record<string, string> };
+  reasoningStateRef: { current: Record<string, unknown> };
+  debugLog: (...args: unknown[]) => void;
+  debugError: (...args: unknown[]) => void;
+  appendMessageToThread: (threadId: string, message: Record<string, unknown>) => void;
+  applyMessageMutationForThread: (
+    threadId: string,
+    mutate: (prev: Array<Record<string, unknown>>) => Array<Record<string, unknown>>
+  ) => void;
+  appendReasoningStatus: (payload: Record<string, unknown>) => void;
+  completeReasoning: (payload: Record<string, unknown>) => void;
+  upsertPlanMessage: (mode: "append" | "final", payload: Record<string, unknown>) => void;
+  upsertPlanChecklist: (payload: Record<string, unknown>) => void;
+  setStatusForThread: (threadId: string, next: string) => void;
+  setActivityDetailForThread: (threadId: string, detail: string) => void;
+  setMessages: (
+    updater: Array<Record<string, unknown>> | ((prev: Array<Record<string, unknown>>) => Array<Record<string, unknown>>)
+  ) => void;
+  updateThreadTabState: (threadId: string, patch: Record<string, unknown>) => void;
+  playTurnNotification: (threadId?: string, outcome?: "completed" | "failed" | "cancelled") => void;
+  interruptedThreadIdRef: { current: string };
+  setApprovalBusyId: (value: number | null) => void;
+  setApprovalItems: (items: Array<Record<string, unknown>>) => void;
+  setCollaborationMode: (mode: string) => void;
+  normalizeCollaborationMode: (raw: unknown) => "build" | "plan";
+  resolveThreadIdFromTurn: (candidateThreadId: unknown, turnId?: string) => string;
+};
 
 export default function useTurnSession(args: TurnSessionArgs) {
+  const setStatusForThreadRef = useRef(args.setStatusForThread);
+  setStatusForThreadRef.current = args.setStatusForThread;
+
   const {
     me,
     turnNotificationEnabled,
@@ -49,6 +103,7 @@ export default function useTurnSession(args: TurnSessionArgs) {
     setMessages,
     updateThreadTabState,
     playTurnNotification,
+    interruptedThreadIdRef,
     setApprovalBusyId,
     setApprovalItems,
     setCollaborationMode,
@@ -56,15 +111,21 @@ export default function useTurnSession(args: TurnSessionArgs) {
     resolveThreadIdFromTurn,
   } = args;
 
+  // Initial data load: runs once when the authenticated user is available.
   useEffect(() => {
-    if (!me) {
-      return;
-    }
+    if (!me) return;
     loadProjects().catch(() => {});
     loadThreads({ projectKey: activeProjectKey, projectTabId: activeProjectTabId }).catch(() => {});
     loadSkillSuggestions().catch(() => {});
     loadSessionSummary().catch(() => {});
     loadApprovals().catch(() => {});
+  }, [me]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // SSE stream: manages the real-time event connection independently of the initial load.
+  useEffect(() => {
+    if (!me) {
+      return;
+    }
 
     const es = createSseStream();
     const parseEventData = (eventType: string, ev: MessageEvent<string>) => safeParseSseData(eventType, ev, debugError);
@@ -207,6 +268,7 @@ export default function useTurnSession(args: TurnSessionArgs) {
         loadSessionSummary,
         updateThreadTabState,
         playTurnNotification,
+        interruptedThreadIdRef,
         setStatusForThread,
         setActivityDetailForThread,
         setMessages,
@@ -309,6 +371,20 @@ export default function useTurnSession(args: TurnSessionArgs) {
       loadSessionSummary().catch(() => {});
     });
 
+    es.addEventListener("threads_changed", (ev) => {
+      const data = parseEventData("threads_changed", ev as MessageEvent<string>);
+      if (!data) {
+        return;
+      }
+      logEvent("threads_changed", data);
+      handleThreadsChangedEvent(data, {
+        loadSessionSummary,
+        loadThreads,
+        activeProjectKeyRef,
+        activeProjectTabIdRef,
+      }).catch(() => {});
+    });
+
     es.addEventListener("app_event", (ev) => {
       const data = parseEventData("app_event", ev as MessageEvent<string>);
       if (!data) {
@@ -319,7 +395,10 @@ export default function useTurnSession(args: TurnSessionArgs) {
         appendMessageToThread,
         applyMessageMutationForThread,
         loadSessionSummary,
+        loadThreads,
         loadWorkspaceStatus,
+        activeProjectKeyRef,
+        activeProjectTabIdRef,
         streamedTurnIdsRef,
         resolveThreadIdFromTurn,
         itemPhaseByTurnRef,
@@ -328,9 +407,9 @@ export default function useTurnSession(args: TurnSessionArgs) {
 
     es.onerror = () => {
       debugError("[SSE] connection error");
-      setStatusForThread(activeThreadRef.current, "disconnected");
+      setStatusForThreadRef.current(activeThreadRef.current, "disconnected");
     };
 
     return () => closeSseStream(es);
-  }, [me, turnNotificationEnabled]);
+  }, [me, turnNotificationEnabled]); // eslint-disable-line react-hooks/exhaustive-deps
 }

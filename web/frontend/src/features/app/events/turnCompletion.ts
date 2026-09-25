@@ -9,6 +9,7 @@ export function handleTurnCompletedWorkspaceRefresh({
   loadSessionSummary,
   updateThreadTabState,
   playTurnNotification,
+  interruptedThreadIdRef,
   setStatusForThread,
   setActivityDetailForThread,
   setMessages,
@@ -25,13 +26,20 @@ export function handleTurnCompletedWorkspaceRefresh({
   if (turnId) {
     delete turnThreadIdRef.current[turnId];
   }
-  const shouldNotify = completedThreadId && completedThreadId !== activeThreadId;
+  const wasInterrupted =
+    interruptedThreadIdRef &&
+    completedThreadId &&
+    interruptedThreadIdRef.current === completedThreadId;
+  if (wasInterrupted) {
+    interruptedThreadIdRef.current = "";
+  }
+  const shouldNotify = !wasInterrupted && completedThreadId && completedThreadId !== activeThreadId;
   updateThreadTabState(completedThreadId, {
-    status: "completed",
+    status: wasInterrupted ? "cancelled" : "completed",
     hasUnreadCompletion: completedThreadId ? shouldNotify : true,
   });
   if (shouldNotify) {
-    playTurnNotification();
+    playTurnNotification(completedThreadId, "completed");
   }
   setStatusForThread(completedThreadId, "idle");
   setActivityDetailForThread(completedThreadId, "");

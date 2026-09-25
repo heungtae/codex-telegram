@@ -9,7 +9,10 @@ type MessageEventDeps = {
     mutate: (prev: Array<Record<string, unknown>>) => Array<Record<string, unknown>>
   ) => void;
   loadSessionSummary: () => Promise<void>;
+  loadThreads: (options?: { projectKey?: string; projectTabId?: string; revealThreadId?: string }) => Promise<void>;
   loadWorkspaceStatus: () => Promise<void>;
+  activeProjectKeyRef: { current: string };
+  activeProjectTabIdRef: { current: string };
   streamedTurnIdsRef: { current: Record<string, boolean> };
   resolveThreadIdFromTurn: (candidateThreadId: unknown, turnId?: string) => string;
   itemPhaseByTurnRef: { current: Record<string, Record<string, string>> };
@@ -110,6 +113,26 @@ export function handleFileChangeEvent(
   });
   deps.loadWorkspaceStatus().catch(() => {});
   deps.loadSessionSummary().catch(() => {});
+}
+
+export async function handleThreadsChangedEvent(
+  data: Record<string, unknown>,
+  deps: Pick<MessageEventDeps, "loadSessionSummary" | "loadThreads" | "activeProjectKeyRef" | "activeProjectTabIdRef">
+) {
+  const revealThreadId = normalizeThreadId(data.thread_id);
+  const eventProjectKey = typeof data.project_key === "string" && data.project_key.trim()
+    ? data.project_key.trim()
+    : "";
+  const projectKey = eventProjectKey || deps.activeProjectKeyRef.current;
+  const projectTabId = projectKey === deps.activeProjectKeyRef.current
+    ? deps.activeProjectTabIdRef.current
+    : undefined;
+  await deps.loadSessionSummary();
+  await deps.loadThreads({
+    projectKey,
+    ...(projectTabId ? { projectTabId } : {}),
+    ...(revealThreadId ? { revealThreadId } : {}),
+  });
 }
 
 export function handleAppEvent(data: Record<string, unknown>, deps: MessageEventDeps) {

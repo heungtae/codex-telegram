@@ -11,7 +11,7 @@ test("IconButton renders accessible icon-only button state", () => {
       IconButton,
       {
         active: true,
-        ariaLabel: "Close tab",
+        "aria-label": "Close tab",
         className: "project-tab-close",
         disabled: true,
         title: "Close project tab",

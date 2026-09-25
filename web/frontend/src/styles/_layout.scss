@@ -1,0 +1,229 @@
+﻿.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: 14px;
+  position: relative;
+}
+
+.workspace-layout {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  gap: 14px;
+  align-items: stretch;
+}
+
+.center-pane {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.workspace-panel {
+  width: 520px;
+  min-width: 340px;
+  max-width: 900px;
+  min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: linear-gradient(180deg, rgba(13, 22, 35, 0.96) 0%, rgba(10, 18, 30, 0.98) 100%);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+
+.workspace-panel-shell {
+  position: relative;
+  flex: 0 0 auto;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  align-self: stretch;
+}
+
+
+.workspace-panel-rail {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--panel);
+  box-shadow: var(--shadow-sm);
+}
+
+.workspace-panel-rail-toggle {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.workspace-panel-rail-toggle svg {
+  width: 18px;
+  height: 18px;
+}
+
+.chat-header {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 10px 0 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.chat-header-title {
+  min-width: 0;
+  margin: 0;
+  color: var(--text);
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: context-menu;
+}
+
+.chat-header-add,
+.session-tab-close,
+.session-tab-add {
+  flex: 0 0 auto;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+
+.chat-header-add:hover:not(:disabled),
+.session-tab-close:hover:not(:disabled),
+.session-tab-add:hover:not(:disabled) {
+  border-color: var(--border);
+  background: var(--bg-soft);
+  color: var(--text);
+}
+
+.project-session-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+/* OpenCode product-shell treatment */
+.app,
+.main,
+.workspace-layout,
+.center-pane {
+  background: var(--bg);
+}
+
+.sidebar {
+  background: var(--panel);
+  border-color: var(--border);
+  box-shadow: none;
+}
+
+.brand {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.panel,
+.agent-settings-card,
+.agent-settings-summary {
+  background: transparent;
+  border-color: var(--border);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.panel h3,
+.panel-head h3,
+.agent-settings-summary-title {
+  font-size: var(--font-size-body);
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+
+.thread-item,
+.project-item,
+.agent-item,
+.project-pill,
+.panel-toggle,
+.agent-settings-btn,
+.agent-settings-inline-btn,
+.notify-toggle,
+.theme-toggle {
+  background: transparent;
+  border-color: var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+  color: var(--text);
+}
+
+.thread-item:hover,
+.project-item:hover,
+.agent-item.clickable:hover:not(:disabled),
+.panel-toggle:hover:not(:disabled),
+.agent-settings-btn:hover:not(:disabled),
+.agent-settings-inline-btn:hover:not(:disabled) {
+  background: var(--bg-soft);
+  border-color: var(--border-strong);
+  transform: none;
+}
+
+.notify-toggle:hover,
+.theme-toggle:hover {
+  background: var(--bg-soft);
+  border-color: var(--border-strong);
+  border-radius: var(--radius-card);
+  transform: none;
+}
+
+.thread-item.active,
+.panel-toggle.active,
+.agent-settings-inline-btn.active,
+.notify-toggle.on {
+  background: var(--panel-soft);
+  border-color: var(--text);
+  color: var(--text);
+}
+
+.agent-item.on,
+.agent-status-chip.on {
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+  border-color: var(--success);
+  color: var(--text);
+}
+
+.agent-item.off,
+.agent-status-chip.off {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--muted);
+}

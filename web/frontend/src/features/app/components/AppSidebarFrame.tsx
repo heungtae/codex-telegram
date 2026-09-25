@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 
+import { useClickOutsideAndEscape } from "../../common/hooks/useClickOutsideAndEscape";
 import { SettingsIcon, SidebarToggleIcon } from "../../common/components/Icons";
 import {
   resolveSettingsButtonAction,
@@ -81,33 +82,16 @@ export default function AppSidebarFrame({
     return () => window.removeEventListener("resize", updatePosition);
   }, [settingsOpen]);
 
-  useEffect(() => {
-    if (!settingsOpen) return;
-    const handler = (e) => {
-      if (
-        !panelRef.current?.contains(e.target) &&
-        !settingsBtnRef.current?.contains(e.target)
-      ) {
-        setSettingsOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [settingsOpen]);
-
-  useEffect(() => {
-    if (!settingsOpen) return;
-    const handler = (e) => {
-      if (e.key === "Escape") {
-        setSettingsOpen(false);
-        if (!isMobileLayout || isSidebarOpen) {
-          settingsBtnRef.current?.focus();
-        }
-      }
-    };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [isMobileLayout, isSidebarOpen, settingsOpen]);
+  useClickOutsideAndEscape(
+    panelRef,
+    () => setSettingsOpen(false),
+    settingsOpen,
+    settingsBtnRef,
+    () => {
+      setSettingsOpen(false);
+      if (!isMobileLayout || isSidebarOpen) settingsBtnRef.current?.focus();
+    },
+  );
 
   return (
     <>
@@ -119,10 +103,6 @@ export default function AppSidebarFrame({
       >
         {isDesktopSidebarCollapsed ? (
           <div className="sidebar-collapsed-header">
-            <div className="sidebar-collapsed-logo-wrap">
-              <img className="sidebar-logo-light" src="/assets/assets/codex-telegram-icon-black.svg" alt="" aria-hidden="true" />
-              <img className="sidebar-logo-dark" src="/assets/assets/codex-telegram-icon-ivory.svg" alt="" aria-hidden="true" />
-            </div>
             <button
               type="button"
               className="sidebar-toggle-btn sidebar-expand-btn"

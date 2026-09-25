@@ -1,13 +1,13 @@
 import type { HTMLAttributes, ReactNode } from "react";
+import { cn } from "./cn";
 
 type PanelProps = HTMLAttributes<HTMLDivElement> & {
   children?: ReactNode;
 };
 
 export default function Panel({ children, className = "", ...props }: PanelProps) {
-  const classes = ["ui-panel", "panel", className].filter(Boolean).join(" ");
   return (
-    <div className={classes} {...props}>
+    <div className={cn("ui-panel", "panel", className)} {...props}>
       {children}
     </div>
   );

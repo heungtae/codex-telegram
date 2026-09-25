@@ -8,11 +8,9 @@ import SidebarAgentsPanel from "../SidebarAgentsPanel";
 test("SidebarAgentsPanel renders agents, active subagents, guardian settings, then rules", () => {
   const html = renderToStaticMarkup(
     React.createElement(SidebarAgentsPanel, {
-      sessionSummary: { agents: [{ name: "guardian", enabled: true }] },
       toggleAgent: () => {},
       agentConfigLoading: false,
       agentConfigSaving: false,
-      openAgentSettings: () => {},
       activeSubagents: [{ thread_id: "sub-thread", name: "reviewer", status: "active" }],
       agentConfigError: "",
       activeAgentDef: {

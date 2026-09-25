@@ -1,38 +1,37 @@
+import { ListTodo } from "lucide-react";
+import { FolderIcon, NewChatIcon, SendIcon, StopIcon } from "../../common/components/Icons";
 import { IconButton, Textarea } from "../../common/components/ui";
 
-export default function AppComposerPresenter({
-  activityDetail,
-  paletteOpen,
-  paletteRef,
-  visiblePaletteItems,
-  paletteWindowStart,
-  paletteSelectedIndex,
-  activeTokenType,
-  onApplyPaletteItem,
-  collaborationMode,
-  composerLocked,
-  modeSwitchBusy,
-  onToggleComposerMode,
-  inputRef,
-  input,
-  onInputChange,
-  onInputFocus,
-  onInputBlur,
-  onInputSelect,
-  onInputKeyDown,
-  status,
-  onInterrupt,
-  onSendMessage,
-  isCompactWorkspaceLayout,
-  isWorkspacePanelOpen,
-  onToggleWorkspacePanel,
-  onNewChat,
-  interactionBusy,
-  StopIcon,
-  SendIcon,
-  FolderIcon,
-  NewChatIcon,
-}) {
+export default function AppComposerPresenter({ composerViewModel }) {
+  const {
+    activityDetail,
+    paletteOpen,
+    paletteRef,
+    visiblePaletteItems,
+    paletteWindowStart,
+    paletteSelectedIndex,
+    activeTokenType,
+    onApplyPaletteItem,
+    collaborationMode,
+    composerLocked,
+    modeSwitchBusy,
+    onToggleComposerMode,
+    inputRef,
+    input,
+    onInputChange,
+    onInputFocus,
+    onInputBlur,
+    onInputSelect,
+    onInputKeyDown,
+    status,
+    onInterrupt,
+    onSendMessage,
+    isCompactWorkspaceLayout,
+    isWorkspacePanelOpen,
+    onToggleWorkspacePanel,
+    onNewChat,
+    interactionBusy,
+  } = composerViewModel;
   return (
     <div className="composer">
       {activityDetail ? <div className="activity-indicator composer-activity-indicator">{activityDetail}</div> : null}
@@ -79,7 +78,7 @@ export default function AppComposerPresenter({
             <IconButton
               className="composer-action composer-new-chat"
               onClick={onNewChat}
-              ariaLabel="New chat"
+              aria-label="New chat"
               title="New chat"
               disabled={interactionBusy}
             >
@@ -94,6 +93,7 @@ export default function AppComposerPresenter({
                 title="Plan mode active. Click to toggle."
                 aria-label="Plan mode active. Click to toggle."
               >
+                <ListTodo size={13} />
                 PLAN
               </button>
             ) : null}
@@ -101,7 +101,7 @@ export default function AppComposerPresenter({
               <IconButton
                 className={`composer-action composer-workspace-toggle ${isWorkspacePanelOpen ? "active" : ""}`}
                 onClick={onToggleWorkspacePanel}
-                ariaLabel="Workspace files"
+                aria-label="Workspace files"
                 title="Workspace files"
                 active={isWorkspacePanelOpen}
               >
@@ -111,11 +111,11 @@ export default function AppComposerPresenter({
           </div>
           <div className="composer-right-group">
             {status === "running" ? (
-              <IconButton className="composer-action composer-stop" onClick={onInterrupt} ariaLabel="Stop" title="Stop">
+              <IconButton className="composer-action composer-stop" onClick={onInterrupt} aria-label="Stop" title="Stop">
                 <StopIcon />
               </IconButton>
             ) : (
-              <IconButton className="composer-action composer-send" onClick={onSendMessage} ariaLabel="Send" title="Send">
+              <IconButton className="composer-action composer-send" onClick={onSendMessage} aria-label="Send" title="Send">
                 <SendIcon />
               </IconButton>
             )}

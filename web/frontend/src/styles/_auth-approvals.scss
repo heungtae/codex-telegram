@@ -1,4 +1,4 @@
-.login {
+﻿.login {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   min-height: 100vh;
@@ -57,11 +57,11 @@
 }
 
 .login-copy p:not(.login-tagline) {
-  font-size: 12px;
+  font-size: var(--font-size-sm);
 }
 
 .login-tagline {
-  font-size: 14px;
+  font-size: var(--font-size-md);
   font-weight: 600;
   color: var(--text);
   margin-bottom: 4px !important;
@@ -100,7 +100,7 @@
 }
 
 .approval-title {
-  font-size: 13px;
+  font-size: var(--font-size-body);
   font-weight: 700;
   margin-bottom: 6px;
 }
@@ -119,7 +119,7 @@
 .login-card {
   background: var(--panel);
   border: 1px solid var(--border-strong);
-  border-radius: 8px;
+  border-radius: var(--radius-card);
   box-shadow: none;
 }
 
@@ -149,7 +149,7 @@
   background: var(--panel);
 }
 
-.primary {
+.login-actions .primary {
   background: var(--text);
   border-color: var(--text);
   border-radius: var(--radius-sm);
@@ -157,13 +157,13 @@
   color: var(--bg);
 }
 
-.primary:hover {
+.login-actions .primary:hover {
   background: var(--brand-strong);
   box-shadow: none;
   transform: none;
 }
 
-.secondary {
+.approval-actions .secondary {
   background: transparent;
   border-color: var(--border);
   border-radius: var(--radius-sm);
@@ -171,7 +171,7 @@
   color: var(--text);
 }
 
-.danger {
+.approval-actions .danger {
   background: transparent;
   border-color: var(--danger);
   border-radius: var(--radius-sm);

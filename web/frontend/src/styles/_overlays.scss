@@ -1,94 +1,95 @@
+/* Modals */
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(6, 14, 26, 0.45);
+  background: color-mix(in srgb, var(--text) 36%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1200;
   padding: 16px;
+  backdrop-filter: none;
 }
 
 .modal-card {
-  width: min(520px, calc(100vw - 32px));
-  border: 1px solid var(--border);
-  border-radius: 0;
+  width: fit-content;
+  min-width: min(420px, calc(100vw - 32px));
+  max-width: min(680px, calc(100vw - 32px));
   background: var(--panel);
-  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-strong);
+  border-radius: 20px;
+  box-shadow: none;
   padding: 16px;
+  color: var(--text);
 }
 
 .ui-modal-backdrop {
   z-index: var(--layer-modal);
+  background: color-mix(in srgb, var(--text) 36%, transparent);
+  backdrop-filter: none;
 }
 
 .ui-modal-card {
-  border-color: var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 20px;
+  box-shadow: none;
+  color: var(--text);
 }
 
+/* UI Buttons */
 .ui-button {
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   padding: 12px 14px;
   cursor: pointer;
-  transition: transform 0.12s ease, box-shadow 0.16s ease, background 0.16s ease, border-color 0.16s ease;
+  box-shadow: none;
+  font-family: inherit;
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
 }
 
 .ui-button:disabled {
   cursor: not-allowed;
   opacity: 0.58;
-  transform: none;
-  box-shadow: none;
 }
 
 .ui-button-primary {
-  border: none;
+  border: 1px solid var(--brand);
   background: var(--brand);
-  color: #fff;
-  box-shadow: 0 8px 18px rgba(11, 140, 130, 0.24);
+  color: var(--bg);
 }
 
 .ui-button-primary:hover:not(:disabled) {
   background: var(--brand-strong);
-  transform: translateY(-1px);
-  box-shadow: 0 12px 22px rgba(6, 110, 103, 0.28);
+  border-color: var(--brand-strong);
 }
 
-.ui-button-secondary {
-  border: 1px solid var(--color-border);
-  background: var(--color-surface-muted);
-  color: var(--color-text);
-}
-
-.ui-button-secondary:hover:not(:disabled) {
-  border-color: var(--accent);
-  background: var(--color-surface);
-}
-
+.ui-button-secondary,
 .ui-button-ghost {
-  border: 1px solid transparent;
+  border: 1px solid var(--border);
   background: transparent;
-  color: var(--color-text-muted);
+  color: var(--text);
 }
 
+.ui-button-secondary:hover:not(:disabled),
 .ui-button-ghost:hover:not(:disabled) {
-  border-color: var(--color-border);
-  background: var(--color-surface-muted);
-  color: var(--color-text);
+  background: var(--bg-soft);
+  border-color: var(--border-strong);
 }
 
+/* UI Inputs */
 .ui-input,
 .ui-textarea,
-.ui-select {
+.ui-select,
+.project-picker-input {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-muted);
-  color: var(--color-text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-soft);
+  color: var(--text);
   font-size: var(--font-size-md);
   outline: none;
+  box-shadow: none;
 }
 
 .ui-textarea {
@@ -97,7 +98,15 @@
 
 .ui-textarea:focus,
 .ui-select:focus {
-  border-color: var(--accent);
+  background: var(--panel);
+  border-color: var(--text);
+  box-shadow: none;
+}
+
+.ui-input:focus,
+.project-picker-input:focus {
+  background: var(--panel);
+  box-shadow: none;
 }
 
 .ui-input:disabled,
@@ -107,7 +116,9 @@
   cursor: not-allowed;
 }
 
-.ui-badge {
+/* UI Badge */
+.ui-badge,
+.project-picker-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -115,28 +126,31 @@
   padding: 2px 6px;
   font-size: 10px;
   line-height: 1.2;
+  font-family: inherit;
 }
 
 .ui-badge-neutral {
-  background: var(--color-surface-muted);
-  color: var(--color-text-muted);
+  background: var(--panel-soft);
+  color: var(--muted);
 }
 
 .ui-badge-accent {
-  background: var(--brand);
-  color: #fff;
+  background: var(--text);
+  color: var(--bg);
 }
 
+/* UI Icon Button */
 .ui-icon-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
+  border: 0;
+  border-radius: var(--radius-sm);
   background: transparent;
-  color: inherit;
+  color: var(--muted);
   cursor: pointer;
-  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease, opacity 0.16s ease;
+  font-family: inherit;
+  transition: background 0.16s ease, color 0.16s ease, opacity 0.16s ease;
 }
 
 .ui-icon-button:disabled {
@@ -144,8 +158,55 @@
   opacity: 0.5;
 }
 
+.ui-icon-button:hover:not(:disabled) {
+  background: var(--panel-soft);
+}
+
+.ui-icon-button:active:not(:disabled) {
+  color: var(--icon-btn-active-color);
+  background: transparent;
+}
+
 .ui-icon-button.is-active {
-  border-color: rgba(72, 180, 111, 0.45);
+  color: var(--text);
+}
+
+/* Modal internals */
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+}
+
+.modal-header-title {
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--brand);
+}
+
+.modal-close-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+  padding: 0 4px;
+}
+
+.modal-close-btn:hover {
+  color: var(--text);
+}
+
+.modal-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 0 20px;
+}
+
+.modal-body {
+  padding: 20px;
 }
 
 .modal-title {
@@ -161,25 +222,34 @@
 
 .modal-actions {
   display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: 12px;
+  flex-wrap: nowrap;
 }
 
+.modal-actions .ui-button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  height: 44px;
+  border-radius: var(--radius-modal);
+}
+
+/* Project picker */
 .project-picker-modal {
   width: min(480px, calc(100vw - 32px));
   padding: 0;
   max-height: 70vh;
   display: flex;
   flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 20px;
+  box-shadow: none;
+  color: var(--text);
 }
 
 .project-picker-search {
   padding: 12px;
   border-bottom: 1px solid var(--border);
-}
-
-.project-picker-input {
-  width: 100%;
 }
 
 .project-picker-list {
@@ -201,6 +271,7 @@
   padding: 10px 12px;
   background: transparent;
   border: none;
+  border-radius: 0;
   cursor: pointer;
   text-align: left;
   transition: background 0.1s;
@@ -209,11 +280,7 @@
 .project-picker-item:hover,
 .project-picker-item.selected {
   background: var(--bg-soft);
-}
-
-.project-picker-item.selected {
-  background: var(--accent);
-  color: white;
+  color: var(--text);
 }
 
 .project-picker-name {
@@ -222,16 +289,8 @@
 }
 
 .project-picker-key {
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   color: var(--muted);
-}
-
-.project-picker-item.selected .project-picker-key {
-  color: rgba(255, 255, 255, 0.7);
-}
-
-.project-picker-badge {
-  flex: 0 0 auto;
 }
 
 .project-picker-footer {
@@ -239,16 +298,87 @@
   border-top: 1px solid var(--border);
   display: flex;
   gap: 16px;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   color: var(--muted);
 }
 
+/* Open in Telegram modal */
+.open-in-telegram-modal {
+  width: min(420px, calc(100vw - 32px));
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.open-in-telegram-existing {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+  background: var(--bg-soft);
+  color: var(--muted);
+  font-size: var(--font-size-sm);
+  margin-bottom: 14px;
+}
+
+.open-in-telegram-existing-label {
+  font-weight: 600;
+}
+
+.open-in-telegram-existing-value {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-height: 0;
+  color: var(--text);
+}
+
+.open-in-telegram-existing-id {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-family: ui-monospace, monospace;
+}
+
+.open-in-telegram-existing-title,
+.open-in-telegram-target {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.open-in-telegram-target {
+  color: var(--text);
+  font-size: var(--font-size-body);
+  font-weight: 600;
+  margin-bottom: 14px;
+}
+
+.open-in-telegram-error {
+  color: var(--danger);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+
+.open-in-telegram-actions {
+  justify-content: flex-end;
+}
+
+/* Shortcut modal */
 .shortcut-modal {
   width: min(600px, calc(100vw - 32px));
   max-height: 80vh;
   display: flex;
   flex-direction: column;
   padding: 0;
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 20px;
+  box-shadow: none;
+  color: var(--text);
 }
 
 .shortcut-modal-header {
@@ -267,16 +397,19 @@
 
 .shortcut-modal-close {
   background: transparent;
-  border: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   font-size: 24px;
   cursor: pointer;
-  color: var(--muted);
-  padding: 0;
+  color: var(--text);
+  padding: 0 4px;
   line-height: 1;
+  font-family: inherit;
 }
 
 .shortcut-modal-close:hover {
-  color: var(--text);
+  background: var(--bg-soft);
+  border-color: var(--border-strong);
 }
 
 .shortcut-modal-content {
@@ -289,7 +422,7 @@
 
 .shortcut-section h3 {
   margin: 0 0 10px;
-  font-size: 13px;
+  font-size: var(--font-size-body);
   font-weight: 600;
   color: var(--brand);
   text-transform: uppercase;
@@ -307,17 +440,19 @@
   align-items: center;
   justify-content: space-between;
   padding: 6px 0;
+  background: transparent;
+  border-radius: 0;
 }
 
 .shortcut-desc {
-  font-size: 14px;
+  font-size: var(--font-size-md);
   color: var(--text);
 }
 
 .shortcut-modal-footer {
   padding: 12px 20px;
   border-top: 1px solid var(--border);
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   color: var(--muted);
   text-align: center;
 }
@@ -325,128 +460,12 @@
 kbd {
   display: inline-block;
   padding: 3px 7px;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   font-family: inherit;
   color: var(--text);
-  background: var(--bg-soft);
+  background: var(--panel-soft);
   border: 1px solid var(--border);
-  border-radius: 4px;
-  box-shadow: 0 1px 0 var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: none;
   margin: 0 2px;
-}
-
-/* OpenCode shared controls and overlays */
-.modal-backdrop,
-.ui-modal-backdrop {
-  background: color-mix(in srgb, var(--text) 36%, transparent);
-  backdrop-filter: none;
-}
-
-.modal-card,
-.ui-modal-card,
-.shortcut-modal,
-.project-picker-modal {
-  background: var(--panel);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  box-shadow: none;
-  color: var(--text);
-}
-
-.ui-button,
-.ui-icon-button,
-.shortcut-modal-close {
-  border-radius: var(--radius-sm);
-  box-shadow: none;
-  font-family: inherit;
-}
-
-.ui-button-primary {
-  background: var(--brand);
-  border-color: var(--brand);
-  color: var(--bg);
-}
-
-.ui-button-primary:hover:not(:disabled) {
-  background: var(--brand-strong);
-  border-color: var(--brand-strong);
-}
-
-.ui-button-secondary,
-.ui-button-ghost,
-.ui-icon-button,
-.shortcut-modal-close {
-  background: transparent;
-  border-color: var(--border);
-  color: var(--text);
-}
-
-.ui-button-secondary:hover:not(:disabled),
-.ui-button-ghost:hover:not(:disabled),
-.ui-icon-button:hover:not(:disabled),
-.shortcut-modal-close:hover {
-  background: var(--bg-soft);
-  border-color: var(--border-strong);
-}
-
-.ui-input,
-.ui-textarea,
-.ui-select,
-.project-picker-input {
-  background: var(--bg-soft);
-  border-color: var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--text);
-  box-shadow: none;
-}
-
-.ui-textarea:focus,
-.ui-select:focus {
-  background: var(--panel);
-  border-color: var(--text);
-  box-shadow: none;
-}
-
-.ui-input:focus,
-.project-picker-input:focus {
-  background: var(--panel);
-  box-shadow: none;
-}
-
-.ui-badge,
-.project-picker-badge {
-  border-radius: var(--radius-sm);
-  font-family: inherit;
-}
-
-.ui-badge-neutral {
-  background: var(--panel-soft);
-  border-color: var(--border);
-  color: var(--muted);
-}
-
-.ui-badge-accent {
-  background: var(--text);
-  border-color: var(--text);
-  color: var(--bg);
-}
-
-.project-picker-item,
-.shortcut-item {
-  background: transparent;
-  border-color: var(--border);
-  border-radius: 0;
-}
-
-.project-picker-item:hover,
-.project-picker-item.selected {
-  background: var(--bg-soft);
-  border-color: var(--border-strong);
-}
-
-kbd {
-  background: var(--panel-soft);
-  border-color: var(--border);
-  border-radius: var(--radius-sm);
-  box-shadow: none;
 }

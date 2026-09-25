@@ -85,6 +85,18 @@ class WebSessionManager:
                 return None
             return session
 
+    async def active_user_ids(self) -> list[int]:
+        now = time.time()
+        async with self._lock:
+            expired_tokens = [
+                token
+                for token, session in self._sessions.items()
+                if session.expires_at <= now
+            ]
+            for token in expired_tokens:
+                self._sessions.pop(token, None)
+            return sorted({session.user_id for session in self._sessions.values()})
+
     async def delete(self, token: str | None) -> None:
         if not token:
             return

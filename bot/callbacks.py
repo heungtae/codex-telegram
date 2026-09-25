@@ -14,6 +14,10 @@ from models import state
 from models.user import user_manager
 from codex.commands import CommandResult
 from web.runtime import event_hub
+from web.telegram_thread_selection import (
+    format_telegram_active_thread_changed_message,
+    preview_from_read_text,
+)
 
 logger = logging.getLogger("codex-telegram.bot")
 GUARDIAN_WEB_ONLY_TEXT = "Guardian settings and rules can be edited in Web UI only."
@@ -227,6 +231,12 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if command == "start":
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
                 result = await run_callback_command("/start", user_id)
+                logger.info(
+                    "Telegram callback /start result user_id=%s kind=%s thread_id=%s",
+                    user_id,
+                    result.kind,
+                    result.meta.get("thread_id"),
+                )
                 await context.bot.send_message(chat_id=chat_id, text=result.text, reply_markup=_main_menu_markup(user_id))
             elif command == "menu":
                 logger.info("Executing callback action user_id=%s data=%s", user_id, data)
@@ -400,7 +410,24 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             thread_id = data[7:]
             logger.info("Executing callback action user_id=%s data=%s", user_id, data)
             result = await state.command_router.route("/resume", [thread_id], user_id)
-            await edit_with_log(query, context, result.text, user_id, reply_markup=_main_menu_markup(user_id))
+            if result.kind == "error":
+                await edit_with_log(
+                    query,
+                    context,
+                    result.text,
+                    user_id,
+                    reply_markup=_main_menu_markup(user_id),
+                )
+                return
+            resolved_thread_id = result.meta.get("thread_id") or thread_id
+            read_result = await state.command_router.route("/read", [resolved_thread_id], user_id)
+            preview = preview_from_read_text(resolved_thread_id, read_result.text)
+            message = format_telegram_active_thread_changed_message(
+                preview,
+                project_key=user_manager.get_thread_project(resolved_thread_id),
+                resume_status="ok",
+            )
+            await edit_with_log(query, context, message, user_id, reply_markup=_main_menu_markup(user_id))
         
         elif data.startswith("fork:"):
             thread_id = data[5:]

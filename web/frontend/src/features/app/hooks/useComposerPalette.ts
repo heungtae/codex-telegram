@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 
 export default function useComposerPalette({
   input,
@@ -6,6 +6,7 @@ export default function useComposerPalette({
   projectSuggestions,
   skillSuggestions,
   paletteSelectedIndex,
+  setPaletteSelectedIndex,
   paletteLimit,
 }) {
   const activeToken = useMemo(() => {
@@ -57,6 +58,15 @@ export default function useComposerPalette({
     }
     return skillSuggestions.filter((name) => name.toLowerCase().includes(query));
   }, [activeToken, projectSuggestions, skillSuggestions, slashCommands]);
+
+  useEffect(() => {
+    setPaletteSelectedIndex(0);
+  }, [activeToken?.type, activeToken?.query]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (paletteSelectedIndex < paletteItems.length) return;
+    setPaletteSelectedIndex(0);
+  }, [paletteItems.length, paletteSelectedIndex]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const paletteOpen = paletteItems.length > 0;
   const paletteWindowStart = useMemo(

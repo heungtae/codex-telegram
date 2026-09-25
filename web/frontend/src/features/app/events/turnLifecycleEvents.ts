@@ -13,7 +13,7 @@ type TurnLifecycleDeps = {
   setCollaborationMode: (mode: string) => void;
   normalizeCollaborationMode: (raw: unknown) => "build" | "plan";
   resolveThreadIdFromTurn: (candidateThreadId: unknown, turnId?: string) => string;
-  playTurnNotification: () => void;
+  playTurnNotification: (threadId?: string, outcome?: "completed" | "failed" | "cancelled") => void;
   appendMessageToThread: (threadId: string, message: Record<string, unknown>) => void;
   loadProjects: () => Promise<void>;
   loadSessionSummary: () => Promise<void>;
@@ -55,7 +55,7 @@ export function handleTurnFailedEvent(data: Record<string, unknown>, deps: TurnL
     hasUnreadCompletion: failedThreadId ? shouldNotify : true,
   });
   if (shouldNotify) {
-    deps.playTurnNotification();
+    deps.playTurnNotification(failedThreadId, "failed");
   }
   const text = typeof data.text === "string" ? data.text : "Turn failed.";
   const threadId = deps.resolveThreadIdFromTurn(data.thread_id, turnId);
@@ -77,13 +77,13 @@ export function handleTurnCancelledEvent(data: Record<string, unknown>, deps: Tu
   if (turnId) {
     delete deps.turnThreadIdRef.current[turnId];
   }
-  const shouldNotify = cancelledThreadId && cancelledThreadId !== deps.activeThreadRef.current;
+  const isBackground = cancelledThreadId && cancelledThreadId !== deps.activeThreadRef.current;
   deps.updateThreadTabState(cancelledThreadId, {
     status: "cancelled",
-    hasUnreadCompletion: cancelledThreadId ? shouldNotify : true,
+    hasUnreadCompletion: cancelledThreadId ? isBackground : true,
   });
-  if (shouldNotify) {
-    deps.playTurnNotification();
+  if (cancelledThreadId) {
+    deps.playTurnNotification(cancelledThreadId, "cancelled");
   }
   deps.setStatusForThread(cancelledThreadId, "idle");
   deps.setActivityDetailForThread(cancelledThreadId, "");

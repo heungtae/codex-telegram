@@ -1,4 +1,5 @@
 import type { LabelHTMLAttributes, ReactNode } from "react";
+import { cn } from "./cn";
 
 type FormFieldProps = LabelHTMLAttributes<HTMLLabelElement> & {
   children?: ReactNode;
@@ -15,16 +16,11 @@ export default function FormField({
   label,
   ...props
 }: FormFieldProps) {
-  const classes = ["ui-form-field", className].filter(Boolean).join(" ");
-  const helpClasses = ["ui-form-field-help", helpClassName]
-    .filter(Boolean)
-    .join(" ");
-
   return (
-    <label className={classes} {...props}>
+    <label className={cn("ui-form-field", className)} {...props}>
       <span className="ui-form-field-label">{label}</span>
       {children}
-      {help ? <span className={helpClasses}>{help}</span> : null}
+      {help ? <span className={cn("ui-form-field-help", helpClassName)}>{help}</span> : null}
     </label>
   );
 }

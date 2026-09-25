@@ -1,4 +1,6 @@
 import React, { useEffect, useId, useRef, useState } from "react";
+import { useClickOutsideAndEscape } from "../../common/hooks/useClickOutsideAndEscape";
+import { CheckIcon, ChevronIcon } from "../../common/components/Icons";
 import {
   getGuardianSettingLabel,
   getNextDropdownIndex,
@@ -23,26 +25,13 @@ export default function GuardianSettingDropdown({
   const optionRefs = useRef([]);
   const listId = useId();
 
-  useEffect(() => {
-    if (!isOpen) return undefined;
-
-    const handlePointerDown = (event) => {
-      if (!rootRef.current?.contains(event.target)) setIsOpen(false);
-    };
-    const handleEscape = (event) => {
-      if (event.key === "Escape") {
-        setIsOpen(false);
-        triggerRef.current?.focus();
-      }
-    };
-
-    document.addEventListener("pointerdown", handlePointerDown);
-    document.addEventListener("keydown", handleEscape);
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-      document.removeEventListener("keydown", handleEscape);
-    };
-  }, [isOpen]);
+  useClickOutsideAndEscape(
+    rootRef,
+    () => setIsOpen(false),
+    isOpen,
+    undefined,
+    () => { setIsOpen(false); triggerRef.current?.focus(); },
+  );
 
   useEffect(() => {
     if (isOpen) optionRefs.current[activeIndex]?.focus();
@@ -99,7 +88,7 @@ export default function GuardianSettingDropdown({
         <span className="setting-dropdown-value">
           {getGuardianSettingLabel(fieldKey, value)}
         </span>
-        <span className="setting-dropdown-chevron" aria-hidden="true" />
+        <span className="setting-dropdown-chevron"><ChevronIcon expanded={isOpen} /></span>
       </button>
       {isOpen ? (
         <div id={listId} className="setting-dropdown-menu" role="listbox" aria-label={label}>
@@ -122,9 +111,7 @@ export default function GuardianSettingDropdown({
               >
                 <span>{getGuardianSettingLabel(fieldKey, option)}</span>
                 {isSelected ? (
-                  <span className="setting-dropdown-check" aria-hidden="true">
-                    ✓
-                  </span>
+                  <span className="setting-dropdown-check"><CheckIcon /></span>
                 ) : null}
               </button>
             );

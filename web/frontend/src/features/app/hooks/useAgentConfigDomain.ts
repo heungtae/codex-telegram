@@ -111,9 +111,7 @@ export default function useAgentConfigDomain({
       return;
     }
     setActiveAgentSettings(agentName);
-    if (agentName !== "guardian") {
-      setFloatingAgentSettings("");
-    }
+    setFloatingAgentSettings((current) => (current && current !== agentName ? "" : current));
     if (agentConfigs[agentName]) {
       if (agentName === "guardian" && !agentConfigRawEditors[agentName]) {
         setAgentConfigRawEditors((prev) => ({

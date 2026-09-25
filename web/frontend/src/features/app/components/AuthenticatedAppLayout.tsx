@@ -1,7 +1,5 @@
-import AuthenticatedAppPresenter from "./AuthenticatedAppPresenter";
-import AppMainFrame from "./AppMainFrame";
-import AppMainPresenter from "./AppMainPresenter";
-import AppSidebarPresenter from "./AppSidebarPresenter";
+import { MenuIcon, PanelRightIcon } from "../../common/components/Icons";
+import { IconButton } from "../../common/components/ui";
 
 export default function AuthenticatedAppLayout({
   isMobileLayout,
@@ -10,7 +8,6 @@ export default function AuthenticatedAppLayout({
   main,
   isSidebarOpen,
   onToggleSidebarOpen,
-  MenuIcon,
   rightPanel,
   isWorkspacePanelOpen,
   isCompactWorkspaceLayout,
@@ -28,20 +25,25 @@ export default function AuthenticatedAppLayout({
     .join(" ");
 
   return (
-    <AuthenticatedAppPresenter>
-      <div className={appClass}>
+    <div className={appClass}>
         {overlays}
-        <AppSidebarPresenter>{sidebar}</AppSidebarPresenter>
-        <AppMainPresenter>
-          <AppMainFrame
-            isMobileLayout={isMobileLayout}
-            isSidebarOpen={isSidebarOpen}
-            onToggleSidebarOpen={onToggleSidebarOpen}
-            MenuIcon={MenuIcon}
-          >
-            {main}
-          </AppMainFrame>
-        </AppMainPresenter>
+        {sidebar}
+        <main className="main">
+          {isMobileLayout ? (
+            <div className="mobile-main-actions">
+              <IconButton
+                className="menu-toggle icon-only"
+                onClick={() => onToggleSidebarOpen((current) => !current)}
+                aria-label="Toggle navigation menu"
+                aria-expanded={isSidebarOpen}
+                aria-controls="app-sidebar"
+              >
+                <MenuIcon />
+              </IconButton>
+            </div>
+          ) : null}
+          {main}
+        </main>
         {!isCompactWorkspaceLayout ? (
           <>
             {isWorkspacePanelOpen ? (
@@ -59,20 +61,21 @@ export default function AuthenticatedAppLayout({
               {isWorkspacePanelOpen ? (
                 rightPanel
               ) : (
-                <button
-                  className="workspace-panel-rail-toggle"
-                  type="button"
-                  onClick={onToggleWorkspacePanel}
-                  aria-label="Open workspace panel"
-                  title="Open workspace panel"
-                >
-                  &lsaquo;
-                </button>
+                <div className="workspace-panel-closed-header">
+                  <button
+                    className="sidebar-toggle-btn workspace-panel-open-btn"
+                    type="button"
+                    onClick={onToggleWorkspacePanel}
+                    aria-label="Open workspace panel"
+                    title="Open workspace panel"
+                  >
+                    <PanelRightIcon />
+                  </button>
+                </div>
               )}
             </div>
           </>
         ) : null}
-      </div>
-    </AuthenticatedAppPresenter>
+    </div>
   );
 }

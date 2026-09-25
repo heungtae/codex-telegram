@@ -1,5 +1,33 @@
 ﻿import { useEffect } from "react";
-import type { UseGlobalKeyboardShortcutsArgs } from "./useGlobalKeyboardShortcuts.types";
+type UseGlobalKeyboardShortcutsArgs = {
+  shortcutModalPage: string;
+  interactionBusy: boolean;
+  activeThread: string;
+  activeProjectTabId: string;
+  threadTabsByProjectTabId: Record<string, Array<Record<string, unknown>>>;
+  collaborationMode: string;
+  modeSwitchBusy: boolean;
+  isCompactWorkspaceLayout: boolean;
+  projectSearchQuery: string;
+  filteredProjects: Array<Record<string, unknown>>;
+  selectedProjectIndex: number;
+  activeProjectKey: string;
+  commandRefs: {
+    focusComposer: { current: ((cursor?: number | null) => void) | null };
+    startThread: { current: ((options?: Record<string, unknown>) => Promise<void>) | null };
+    closeThreadTab: { current: ((projectTabId: string, threadId: string) => void) | null };
+    viewThread: { current: ((threadId: string) => Promise<void>) | null };
+    sendMessage: { current: (() => Promise<void>) | null };
+    selectProject: { current: ((key: string) => Promise<void>) | null };
+  };
+  setShortcutModalPage: (page: string) => void;
+  setProjectSearchQuery: (query: string) => void;
+  setSelectedProjectIndex: (next: number | ((prev: number) => number)) => void;
+  setIsWorkspacePanelOpen: (next: boolean | ((prev: boolean) => boolean)) => void;
+  setCollaborationMode: (mode: string) => void;
+  api: (path: string, options?: Record<string, unknown>) => Promise<Record<string, unknown>>;
+  normalizeThreadId: (value: unknown) => string;
+};
 
 export default function useGlobalKeyboardShortcuts(args: UseGlobalKeyboardShortcutsArgs) {
   const {
@@ -58,7 +86,7 @@ export default function useGlobalKeyboardShortcuts(args: UseGlobalKeyboardShortc
           case "N":
             commandRefs.focusComposer.current?.();
             if (!interactionBusy) {
-              commandRefs.startThread.current?.({ replaceCurrentTab: true }).catch(() => {});
+              commandRefs.startThread.current?.().catch(() => {});
             }
             break;
           case "t":

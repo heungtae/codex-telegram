@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { api } from "../../common/api";
 import {
   formatPlanChecklistText,
@@ -5,13 +6,9 @@ import {
   summarizeReasoningStatus,
 } from "../../common/utils";
 import useAppUiEffects from "./useAppUiEffects";
-import useChatScrollEffects from "./useChatScrollEffects";
-import useComposerFocusEffects from "./useComposerFocusEffects";
 import useGlobalKeyboardShortcuts from "./useGlobalKeyboardShortcuts";
-import usePaletteEffects from "./usePaletteEffects";
 import useProjectPickerViewModel from "./useProjectPickerViewModel";
 import useResizeInteractions from "./useResizeInteractions";
-import useThreadBootstrapEffects from "./useThreadBootstrapEffects";
 import useTurnMessageMutations from "./useTurnMessageMutations";
 import useTurnSession from "./useTurnSession";
 import useViewportLayout from "./useViewportLayout";
@@ -21,10 +18,8 @@ import {
   WORKSPACE_PREVIEW_WIDTH_STORAGE_KEY,
   WORKSPACE_PREVIEW_MIN_HEIGHT,
   WORKSPACE_PREVIEW_MAX_HEIGHT,
-  WORKSPACE_PREVIEW_DEFAULT_HEIGHT,
   WORKSPACE_PREVIEW_MIN_WIDTH,
   WORKSPACE_PREVIEW_MAX_WIDTH,
-  WORKSPACE_PREVIEW_DEFAULT_WIDTH,
 } from "./workspacePreviewConstants";
 
 const SIDEBAR_MIN = 260;
@@ -51,18 +46,6 @@ function persistWorkspacePreviewWidth(width) {
   }
   try {
     window.localStorage.setItem(WORKSPACE_PREVIEW_WIDTH_STORAGE_KEY, String(width));
-  } catch {
-    // Ignore storage failures; preview sizing should not block runtime behavior.
-  }
-}
-
-function clearWorkspacePreviewSize() {
-  if (typeof window === "undefined") {
-    return;
-  }
-  try {
-    window.localStorage.removeItem(WORKSPACE_PREVIEW_HEIGHT_STORAGE_KEY);
-    window.localStorage.removeItem(WORKSPACE_PREVIEW_WIDTH_STORAGE_KEY);
   } catch {
     // Ignore storage failures; preview sizing should not block runtime behavior.
   }
@@ -120,54 +103,86 @@ export default function useAppRuntimeEffects({
     setMessages: threadState.setMessages,
     updateThreadTabState: projectThreadTabs.updateThreadTabState,
     playTurnNotification: domainRuntime.playTurnNotification,
+    interruptedThreadIdRef: refs.interruptedThreadIdRef,
     setApprovalBusyId: approvals.setApprovalBusyId,
     setApprovalItems: approvals.setApprovalItems,
     setCollaborationMode: session.setCollaborationMode,
     normalizeCollaborationMode,
     resolveThreadIdFromTurn: threadState.resolveThreadIdFromTurn,
   });
-  useChatScrollEffects({
-    normalizeThreadId,
-    activeThreadRef: threadState.activeThreadRef,
-    messages: threadState.messages,
-    renderItems: domainRuntime.renderItems,
-    debugLog: domainRuntime.debugLog,
-    chatRef: refs.chatRef,
-  });
-  useComposerFocusEffects({
-    status: threadState.status,
-    pendingComposerFocusRef: refs.pendingComposerFocusRef,
-    focusComposer: commandActions.focusComposer,
-    input: threadState.input,
-    autoResizeInput,
-    composerFocusWantedRef: refs.composerFocusWantedRef,
-    inputRef: refs.inputRef,
-    rememberComposerSelection: commandActions.rememberComposerSelection,
-    composerSelectionRef: refs.composerSelectionRef,
-    paletteOpen: palette.paletteOpen,
-    paletteSelectedIndex: ui.paletteSelectedIndex,
-  });
-  usePaletteEffects({
-    activeToken: palette.activeToken,
-    setPaletteSelectedIndex: ui.setPaletteSelectedIndex,
-    paletteItems: palette.paletteItems,
-    paletteSelectedIndex: ui.paletteSelectedIndex,
-    paletteOpen: palette.paletteOpen,
-    paletteRef: refs.paletteRef,
-    visiblePaletteItems: palette.visiblePaletteItems,
-  });
-  useThreadBootstrapEffects({
-    loadThreads: threadActions.loadThreads,
-    activeProjectKey: domainRuntime.activeProjectKey,
-    activeProjectTabId: threads.activeProjectTabId,
-    resolveCurrentThreadId: threadActions.resolveCurrentThreadId,
-    setActiveThreadForProjectTab:
-      projectThreadTabs.setActiveThreadForProjectTab,
-    restoreWorkspaceForThread: workspace.restoreWorkspaceForThread,
-    viewThread: threadActions.viewThread,
-    setMessages: threadState.setMessages,
-    loadSessionSummary: threadActions.loadSessionSummary,
-  });
+  useEffect(() => {
+    if (!refs.chatRef.current) return;
+    refs.chatRef.current.scrollTop = refs.chatRef.current.scrollHeight;
+  }, [threadState.messages]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!refs.chatRef.current) return;
+    const panels = refs.chatRef.current.querySelectorAll(".file-change-panel-scroll");
+    panels.forEach((panel) => {
+      panel.scrollTop = panel.scrollHeight;
+    });
+  }, [domainRuntime.renderItems]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Composer focus effects
+  useEffect(() => {
+    if (threadState.status === "running" || !refs.pendingComposerFocusRef.current) return;
+    refs.pendingComposerFocusRef.current = false;
+    commandActions.focusComposer(threadState.input.length);
+  }, [threadState.input.length, threadState.status]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    autoResizeInput();
+  }, [threadState.input]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!refs.composerFocusWantedRef.current || typeof window === "undefined") return undefined;
+    const el = refs.inputRef.current;
+    if (!el || el.disabled) return undefined;
+    if (document.activeElement === el) {
+      commandActions.rememberComposerSelection(el);
+      return undefined;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      if (!refs.composerFocusWantedRef.current) return;
+      const current = refs.inputRef.current;
+      if (!current || current.disabled || document.activeElement === current) return;
+      current.focus();
+      const { start, end } = refs.composerSelectionRef.current;
+      if (typeof start === "number" && typeof end === "number") {
+        current.selectionStart = start;
+        current.selectionEnd = end;
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [threadState.input, palette.paletteOpen, ui.paletteSelectedIndex]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!palette.paletteOpen || !refs.paletteRef.current) return;
+    const container = refs.paletteRef.current;
+    const active = container.querySelector(".slash-item.active");
+    if (!active) return;
+    active.scrollIntoView({ block: "nearest" });
+  }, [palette.paletteOpen, ui.paletteSelectedIndex, palette.visiblePaletteItems.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    threadActions.loadThreads({ projectKey: domainRuntime.activeProjectKey, projectTabId: threads.activeProjectTabId }).catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!threads.activeProjectTabId) return;
+    const selectedThreadId = threadActions.resolveCurrentThreadId(threads.activeProjectTabId);
+    projectThreadTabs.setActiveThreadForProjectTab(threads.activeProjectTabId, selectedThreadId);
+    workspace.restoreWorkspaceForThread(selectedThreadId);
+    if (selectedThreadId) {
+      threadActions.viewThread(selectedThreadId).catch(() => {});
+    } else {
+      threadState.setMessages([]);
+    }
+    threadActions.loadSessionSummary().catch(() => {});
+    threadActions.loadThreads({
+      projectKey: domainRuntime.activeProjectKey,
+      projectTabId: threads.activeProjectTabId,
+      ensureDefaultTab: false,
+    }).catch(() => {});
+  }, [threads.activeProjectTabId]); // eslint-disable-line react-hooks/exhaustive-deps
   useViewportLayout({
     mobileBreakpoint: MOBILE_BREAKPOINT,
     workspacePanelBreakpoint: WORKSPACE_PANEL_BREAKPOINT,
@@ -181,7 +196,7 @@ export default function useAppRuntimeEffects({
     setIsWorkspacePanelOpen: ui.setIsWorkspacePanelOpen,
     setIsResizingWorkspacePanel: workspace.setIsResizingWorkspacePanel,
   });
-  const { resetWorkspacePreviewSize } = useResizeInteractions({
+  useResizeInteractions({
     sidebarMin: SIDEBAR_MIN,
     sidebarMax: SIDEBAR_MAX,
     workspacePanelMin: WORKSPACE_PANEL_MIN,
@@ -190,8 +205,6 @@ export default function useAppRuntimeEffects({
     workspacePreviewMaxWidth: WORKSPACE_PREVIEW_MAX_WIDTH,
     workspacePreviewMinHeight: WORKSPACE_PREVIEW_MIN_HEIGHT,
     workspacePreviewMaxHeight: WORKSPACE_PREVIEW_MAX_HEIGHT,
-    workspacePreviewDefaultWidth: WORKSPACE_PREVIEW_DEFAULT_WIDTH,
-    workspacePreviewDefaultHeight: WORKSPACE_PREVIEW_DEFAULT_HEIGHT,
     isResizingSidebar: ui.isResizingSidebar,
     isResizingWorkspacePanel: workspace.isResizingWorkspacePanel,
     isResizingWorkspacePreview: workspace.isResizingWorkspacePreview,
@@ -212,16 +225,12 @@ export default function useAppRuntimeEffects({
     setWorkspacePreview: workspace.setWorkspacePreview,
     persistWorkspacePreviewWidth,
     persistWorkspacePreviewHeight,
-    clearWorkspacePreviewSize,
   });
   useAppUiEffects({
     activeToken: palette.activeToken,
     workspaceContextQuery: workspace.workspaceContextQuery,
     api,
     setProjectSuggestions: threads.setProjectSuggestions,
-    floatingAgentSettings: session.floatingAgentSettings,
-    activeAgentSettings: session.activeAgentSettings,
-    setFloatingAgentSettings: session.setFloatingAgentSettings,
     isProjectModeModalOpen: ui.isProjectModeModalOpen,
     setPendingProjectTarget: ui.setPendingProjectTarget,
     setIsProjectModeModalOpen: ui.setIsProjectModeModalOpen,
@@ -267,7 +276,6 @@ export default function useAppRuntimeEffects({
   });
 
   return {
-    resetWorkspacePreviewSize,
     projectPicker,
   };
 }

@@ -44,13 +44,9 @@ test("buildConversationViewModel returns grouped conversation props without chan
       approvalItems: [],
     },
     composer,
-    icons: {
-      StopIcon: "stop",
-    },
   });
 
   assert.equal(value.tabs.onSelectThread, onSelectThread);
   assert.equal(value.composer.input, "hello");
   assert.equal(value.workspace.workspacePanel, workspacePanel);
-  assert.equal(value.icons.StopIcon, "stop");
 });

@@ -1,5 +1,5 @@
-import { RefreshIcon, SaveIcon } from "../../common/components/Icons";
 import { FormField, Select } from "../../common/components/ui";
+import AgentSettingsActions from "./AgentSettingsActions";
 import GuardianRulesSummary from "./GuardianRulesSummary";
 
 export default function AgentSettingsCard({
@@ -18,6 +18,8 @@ export default function AgentSettingsCard({
   if (!activeAgentDef) {
     return null;
   }
+
+  const isGuardian = activeAgentSettings === "guardian";
 
   return (
     <div className="agent-settings-card">
@@ -52,7 +54,7 @@ export default function AgentSettingsCard({
               </Select>
             </FormField>
           ))}
-          {activeAgentSettings === "guardian" ? (
+          {isGuardian ? (
             <GuardianRulesSummary
               guardianRuleSummary={guardianRuleSummary}
               floatingAgentSettings={floatingAgentSettings}
@@ -60,38 +62,17 @@ export default function AgentSettingsCard({
               settingsBusy={settingsBusy}
             />
           ) : null}
-          <div className="agent-settings-actions">
-            <button
-              className="agent-settings-action"
-              type="button"
-              onClick={() =>
-                loadAgentConfig(activeAgentSettings, {
-                  syncRulesEditor: activeAgentSettings !== "guardian",
-                }).catch((err) => {
-                  setAgentConfigError(err.message || "Failed to refresh settings.");
-                })
-              }
-              disabled={settingsBusy}
-              aria-label="Refresh"
-              title="Refresh"
-            >
-              <RefreshIcon />
-            </button>
-            <button
-              className="agent-settings-action agent-settings-action-primary"
-              type="button"
-              onClick={() =>
-                saveAgentSettings(activeAgentSettings, {
-                  includeRules: false,
-                })
-              }
-              disabled={settingsBusy}
-              aria-label="Save"
-              title="Save"
-            >
-              <SaveIcon />
-            </button>
-          </div>
+          <AgentSettingsActions
+            settingsBusy={settingsBusy}
+            onRefresh={() =>
+              loadAgentConfig(activeAgentSettings, {
+                syncRulesEditor: !isGuardian,
+              }).catch((err) => {
+                setAgentConfigError(err.message || "Failed to refresh settings.");
+              })
+            }
+            onSave={() => saveAgentSettings(activeAgentSettings, { includeRules: false })}
+          />
         </div>
       ) : (
         <div className="agent-settings-empty">Loading settings.</div>

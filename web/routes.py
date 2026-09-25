@@ -28,6 +28,13 @@ from web.dependencies import (
     wait_for_codex,
 )
 from web.runtime import event_hub, session_manager
+from web.telegram_sync import (
+    TelegramBridgeConfigError,
+    bind_web_thread_to_telegram,
+    require_single_allowed_telegram_user_id,
+    single_allowed_telegram_user_id,
+)
+from web.telegram_thread_selection import notify_telegram_active_thread_changed
 from web.thread_history import (
     clip_thread_label,
     thread_profile_key,
@@ -363,13 +370,89 @@ def register_thread_routes(app: FastAPI) -> None:
     @app.post("/api/threads/start")
     async def start_thread(request: Request) -> dict[str, Any]:
         session = await session_from_request(request)
-        return await route_command("/start", [], session.user_id)
+        result = await route_command("/start", [], session.user_id)
+        meta = result.get("meta") if isinstance(result, dict) else None
+        thread_id = meta.get("thread_id") if isinstance(meta, dict) else None
+        if isinstance(thread_id, str) and thread_id:
+            await bind_web_thread_to_telegram(
+                session.user_id,
+                thread_id,
+                project_key=user_manager.get_thread_project(thread_id),
+            )
+        return result
 
     @app.post("/api/threads/resume")
     async def resume_thread(payload: dict[str, Any], request: Request) -> dict[str, Any]:
         session = await session_from_request(request)
         thread_id = _required_str(payload, "thread_id")
-        return await route_command("/resume", [thread_id], session.user_id)
+        result = await route_command("/resume", [thread_id], session.user_id)
+        await bind_web_thread_to_telegram(
+            session.user_id,
+            thread_id,
+            project_key=user_manager.get_thread_project(thread_id),
+        )
+        return result
+
+    @app.post("/api/telegram/open-thread")
+    async def open_thread_in_telegram(payload: dict[str, Any], request: Request) -> dict[str, Any]:
+        await session_from_request(request)
+        thread_id = _required_str(payload, "thread_id")
+        project_key = str(payload.get("project_key", "")).strip()
+        try:
+            telegram_user_id = require_single_allowed_telegram_user_id()
+        except TelegramBridgeConfigError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        resolved_project_key = project_key or user_manager.get_thread_project(thread_id)
+        previous_thread_id = user_manager.get(telegram_user_id).active_thread_id
+        logger.info(
+            "Telegram active thread change requested telegram_user_id=%s previous_thread_id=%s next_thread_id=%s project_key=%s",
+            telegram_user_id,
+            previous_thread_id,
+            thread_id,
+            resolved_project_key or "",
+        )
+        user_manager.set_active_thread(telegram_user_id, thread_id, project_key=resolved_project_key)
+        user_manager.keep_user_thread_subscription_only(telegram_user_id, thread_id)
+        if project_key:
+            user_manager.bind_thread_project(thread_id, project_key)
+        resume_status = "ok"
+        resume_error = ""
+        result: dict[str, Any] = {}
+        try:
+            result = await route_command("/resume", [thread_id], telegram_user_id)
+            if result.get("kind") == "error":
+                resume_status = "failed"
+                resume_error = str(result.get("text") or "Failed to open thread in Telegram.")
+        except Exception as exc:
+            logger.warning("Telegram active thread changed locally but app-server resume failed: %s", exc)
+            resume_status = "failed"
+            resume_error = str(exc)
+        notification = await notify_telegram_active_thread_changed(
+            state.telegram_app,
+            telegram_user_id,
+            thread_id,
+            project_key=resolved_project_key,
+            resume_status=resume_status,
+        )
+        logger.info(
+            "Telegram active thread change completed telegram_user_id=%s previous_thread_id=%s next_thread_id=%s resume_status=%s notify_status=%s",
+            telegram_user_id,
+            previous_thread_id,
+            thread_id,
+            resume_status,
+            notification.get("status"),
+        )
+        return {
+            **result,
+            "ok": True,
+            "thread_id": thread_id,
+            "telegram_user_id": telegram_user_id,
+            "project_key": resolved_project_key or "",
+            "resume_status": resume_status,
+            "resume_error": resume_error,
+            "notify_status": notification.get("status"),
+            "thread_preview": notification.get("preview"),
+        }
 
     @app.post("/api/threads/fork")
     async def fork_thread(payload: dict[str, Any], request: Request) -> dict[str, Any]:
@@ -466,6 +549,7 @@ def register_thread_routes(app: FastAPI) -> None:
         if payload_project_key:
             user_manager.bind_thread_project(thread_id, payload_project_key)
         user_manager.bind_thread_owner(session.user_id, thread_id)
+        bound_user_ids = await bind_web_thread_to_telegram(session.user_id, thread_id, project_key=payload_project_key or None)
 
         params = {
             "threadId": thread_id,
@@ -514,8 +598,23 @@ def register_thread_routes(app: FastAPI) -> None:
         turn = result.get("turn", {}) if isinstance(result, dict) else {}
         turn_id = turn.get("id") if isinstance(turn, dict) else None
         if isinstance(turn_id, str) and turn_id:
+            bound_user_ids = await bind_web_thread_to_telegram(
+                session.user_id,
+                thread_id,
+                project_key=payload_project_key or user_manager.get_thread_project(thread_id),
+            )
             state_user.set_turn(turn_id, thread_id)
             user_manager.bind_turn(session.user_id, turn_id, thread_id)
+            for bound_user_id in bound_user_ids:
+                if bound_user_id != session.user_id:
+                    user_manager.bind_turn_subscriber(bound_user_id, turn_id, thread_id)
+            logger.info(
+                "Web turn sync user_id=%s thread_id=%s turn_id=%s bound_users=%s",
+                session.user_id,
+                thread_id,
+                turn_id,
+                sorted(bound_user_ids),
+            )
 
         await event_hub.publish_event(
             session.user_id,
@@ -539,6 +638,11 @@ def register_thread_routes(app: FastAPI) -> None:
             raise HTTPException(status_code=400, detail="thread_id is required")
         user_manager.bind_thread_subscriber(session.user_id, normalized_thread_id)
         user_manager.set_active_thread(
+            session.user_id,
+            normalized_thread_id,
+            project_key=user_manager.get_thread_project(normalized_thread_id),
+        )
+        await bind_web_thread_to_telegram(
             session.user_id,
             normalized_thread_id,
             project_key=user_manager.get_thread_project(normalized_thread_id),
@@ -635,8 +739,8 @@ def register_project_routes(app: FastAPI) -> None:
         if not isinstance(thread_id, str) or not thread_id:
             raise HTTPException(status_code=502, detail="failed to open thread for project")
 
-        user_manager.bind_thread_owner(session.user_id, thread_id)
-        user_manager.bind_thread_project(thread_id, project["key"])
+        user_manager.set_active_thread(session.user_id, thread_id, project_key=project["key"])
+        await bind_web_thread_to_telegram(session.user_id, thread_id, project_key=project["key"])
         return {
             "thread_id": thread_id,
             "project_key": project["key"],
@@ -696,6 +800,12 @@ def register_system_routes(app: FastAPI) -> None:
         session = await session_from_request(request)
         await wait_for_codex()
         state_user = user_manager.get(session.user_id)
+        telegram_user_id = single_allowed_telegram_user_id()
+        telegram_active_thread_id = (
+            user_manager.get(telegram_user_id).active_thread_id
+            if telegram_user_id is not None
+            else None
+        )
         active_subagents = await event_hub.list_active_subagents(session.user_id)
         workspace = state_user.selected_project_path
         project_key = state_user.selected_project_key
@@ -721,6 +831,7 @@ def register_system_routes(app: FastAPI) -> None:
         ]
         return {
             "active_thread_id": state_user.active_thread_id,
+            "telegram_active_thread_id": telegram_active_thread_id,
             "active_turn_id": state_user.active_turn_id,
             "collaboration_mode": mode_label(state_user.collaboration_mode),
             "workspace": workspace,

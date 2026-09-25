@@ -1,15 +1,15 @@
-.composer {
+﻿.composer {
   position: relative;
-  border: 1px solid var(--border);
   background: rgba(10, 17, 28, 0.82);
   padding: 10px;
-  border-radius: 0;
   box-shadow: var(--shadow-sm);
 }
 
 .composer-inner {
-  max-width: 860px;
+  max-width: 820px;
   margin: 0 auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-modal);
   display: flex;
   gap: 8px;
   align-items: flex-start;
@@ -31,7 +31,7 @@
   display: flex;
   align-items: stretch;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-pill);
   background: #0e1724;
   transition: border-color 0.16s ease, box-shadow 0.16s ease;
 }
@@ -42,8 +42,11 @@
 }
 
 .composer-plan-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   padding: 4px 9px;
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   font-weight: 700;
   letter-spacing: 0.5px;
   border-radius: 6px;
@@ -51,14 +54,15 @@
   cursor: pointer;
   background: none;
   color: var(--muted);
-  transition: color 0.14s ease;
+  transition: color 0.14s ease, background 0.14s ease, border-radius 0.14s ease;
   white-space: nowrap;
   line-height: 1.4;
 }
 
 .composer-plan-chip:hover:not(:disabled) {
   border: none;
-  background: none;
+  background: var(--panel-soft);
+  border-radius: 999px;
   color: var(--text);
 }
 
@@ -104,7 +108,8 @@
 .composer-action svg {
   width: 16px;
   height: 16px;
-  fill: currentColor;
+  fill: none;
+  stroke: currentColor;
 }
 
 .composer-send {
@@ -179,58 +184,12 @@
   border-color: rgba(54, 199, 187, 0.28);
 }
 
-.primary {
-  border: none;
-  background: var(--brand);
-  color: #fff;
-  border-radius: 0;
-  padding: 12px 14px;
-  cursor: pointer;
-  box-shadow: 0 8px 18px rgba(11, 140, 130, 0.24);
-  transition: transform 0.12s ease, box-shadow 0.16s ease, background 0.16s ease;
-}
-
-.primary:hover {
-  background: var(--brand-strong);
-  transform: translateY(-1px);
-  box-shadow: 0 12px 22px rgba(6, 110, 103, 0.28);
-}
-
-.secondary {
-  border: 1px solid var(--border);
-  background: #172538;
-  color: var(--text);
-  border-radius: 0;
-  padding: 12px 14px;
-  cursor: pointer;
-  transition: all 0.16s ease;
-}
-
-.secondary:hover {
-  border-color: #496581;
-  background: #1c3048;
-}
-
-.danger {
-  border: 1px solid rgba(255, 139, 128, 0.35);
-  background: rgba(115, 37, 40, 0.22);
-  color: var(--danger);
-  border-radius: 0;
-  padding: 8px 10px;
-  cursor: pointer;
-}
-
-.danger:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 
 .activity-indicator {
-  max-width: 860px;
+  max-width: 820px;
   margin: 0 auto 12px;
   padding: 0 6px;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
@@ -256,15 +215,12 @@
 /* OpenCode composer treatment */
 .composer {
   background: var(--panel);
-  border-color: var(--border);
-  border-radius: 12px;
   padding: 0;
   box-shadow: none;
 }
 
 .composer-inner {
   background: transparent;
-  border-radius: 0;
   box-shadow: none;
   flex-direction: column;
   align-items: stretch;
@@ -338,9 +294,10 @@
 
 .composer-new-chat:hover:not(:disabled) {
   border: none;
-  background: var(--bg-soft);
+  background: var(--panel-soft);
   color: var(--text);
   transform: none;
+  border-radius: 50%;
 }
 
 .composer-action.composer-send {

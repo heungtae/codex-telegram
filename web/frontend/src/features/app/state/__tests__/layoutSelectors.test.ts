@@ -4,7 +4,6 @@ import assert from "node:assert/strict";
 import {
   getSidebarStyle,
   getWorkspacePanelStyle,
-  shouldShowWorkspacePanelDesktop,
 } from "../layoutSelectors.js";
 
 test("getWorkspacePanelStyle returns undefined in compact layout", () => {
@@ -13,6 +12,10 @@ test("getWorkspacePanelStyle returns undefined in compact layout", () => {
 
 test("getWorkspacePanelStyle returns width style in desktop layout", () => {
   assert.deepEqual(getWorkspacePanelStyle(false, 400), { width: 400 });
+});
+
+test("getWorkspacePanelStyle returns undefined when workspace is expanded", () => {
+  assert.equal(getWorkspacePanelStyle(false, 520, true), undefined);
 });
 
 test("getSidebarStyle handles mobile and collapsed modes", () => {
@@ -43,9 +46,4 @@ test("getSidebarStyle handles mobile and collapsed modes", () => {
     }),
     { width: 360 }
   );
-});
-
-test("shouldShowWorkspacePanelDesktop mirrors compact flag", () => {
-  assert.equal(shouldShowWorkspacePanelDesktop(true), false);
-  assert.equal(shouldShowWorkspacePanelDesktop(false), true);
 });

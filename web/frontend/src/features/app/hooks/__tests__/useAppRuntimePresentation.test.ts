@@ -6,6 +6,37 @@ import {
   buildConversationViewModel,
 } from "../useAppRuntimePresentation.js";
 
+test("open in Telegram action preserves rejected promises for the modal", async () => {
+  const presentationModule = await import("../useAppRuntimePresentation.js");
+  const createAction = presentationModule.createOpenInTelegramAction;
+
+  assert.equal(typeof createAction, "function");
+  if (typeof createAction !== "function") {
+    return;
+  }
+
+  const failure = new Error("open in Telegram failed");
+  const action = createAction(async () => {
+    throw failure;
+  });
+
+  await assert.rejects(action("thread-1"), failure);
+});
+
+test("telegram active thread id is read from the session summary", async () => {
+  const presentationModule = await import("../useAppRuntimePresentation.js");
+  const resolveThreadId = presentationModule.resolveTelegramActiveThreadId;
+
+  assert.equal(typeof resolveThreadId, "function");
+  if (typeof resolveThreadId !== "function") {
+    return;
+  }
+
+  assert.equal(resolveThreadId({ telegram_active_thread_id: " thread-1 " }), "thread-1");
+  assert.equal(resolveThreadId({ telegram_active_thread_id: null }), "");
+  assert.equal(resolveThreadId(null), "");
+});
+
 test("buildAppRuntimeContextValue preserves runtime context slices", () => {
   const domains = { ui: { isMobileLayout: false } };
   const runtime = { thread: { viewThread: () => {} } };
@@ -40,11 +71,9 @@ test("buildConversationViewModel returns grouped pane sections", () => {
     workspace: { workspacePanel: "workspace" },
     conversation: { renderItems: [] },
     composer: { input: "hello" },
-    icons: { StopIcon: "stop" },
   });
 
   assert.equal(value.tabs.onSelectThread, onSelectThread);
   assert.equal(value.workspace.workspacePanel, "workspace");
   assert.equal(value.composer.input, "hello");
-  assert.equal(value.icons.StopIcon, "stop");
 });

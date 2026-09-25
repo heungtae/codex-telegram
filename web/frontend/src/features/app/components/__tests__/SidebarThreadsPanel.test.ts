@@ -105,5 +105,5 @@ test("새 채팅 버튼 존재", () => {
     React.createElement(SidebarThreadsPanel, BASE_PROPS)
   );
 
-  assert.match(html, /Add thread tab/);
+  assert.match(html, /aria-label="Add thread"/);
 });

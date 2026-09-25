@@ -134,7 +134,7 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
              patch("main.get_guardian_settings", return_value=guardian_settings), \
              patch("main.match_approval_policy", return_value=policy_match):
             await app_main.post_init(None)
-            user_manager.bind_thread_owner(1, "thread-1")
+            user_manager.set_active_thread(1, "thread-1")
             await client._approval_handler(
                 {
                     "id": 7,
@@ -195,7 +195,7 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
              patch("main.get", side_effect=lambda key, default=None: default), \
              patch("main.get_guardian_settings", return_value=guardian_settings):
             await app_main.post_init(None)
-            user_manager.bind_thread_owner(1, "thread-1")
+            user_manager.set_active_thread(1, "thread-1")
             await event_hub.add_approval(
                 1,
                 6,
@@ -240,7 +240,7 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
              patch("main.get_guardian_settings", return_value=guardian_settings), \
              patch("main.asyncio.sleep", new=AsyncMock()) as sleep_mock:
             await app_main.post_init(telegram_app)
-            user_manager.bind_thread_owner(1, "thread-1")
+            user_manager.set_active_thread(1, "thread-1")
             queue = await event_hub.subscribe(1)
             try:
                 await client._any_handler(
@@ -294,7 +294,7 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
              patch("main.get", side_effect=lambda key, default=None: default), \
              patch("main.get_guardian_settings", return_value=guardian_settings):
             await app_main.post_init(telegram_app)
-            user_manager.bind_thread_owner(1, "thread-1")
+            user_manager.set_active_thread(1, "thread-1")
             queue = await event_hub.subscribe(1)
             try:
                 await client._any_handler(
@@ -365,7 +365,7 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
              patch("main.get", side_effect=self._config_getter()), \
              patch("main.get_guardian_settings", return_value=guardian_settings):
             await app_main.post_init(telegram_app)
-            user_manager.bind_thread_owner(1, "thread-1")
+            user_manager.set_active_thread(1, "thread-1")
             await client._any_handler(
                 "thread/tokenUsage/updated",
                 {
@@ -425,7 +425,7 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
              ), \
              patch("main.get_guardian_settings", return_value=guardian_settings):
             await app_main.post_init(telegram_app)
-            user_manager.bind_thread_owner(1, "thread-1")
+            user_manager.set_active_thread(1, "thread-1")
             queue = await event_hub.subscribe(1)
             try:
                 await client._any_handler(
@@ -466,7 +466,7 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
              patch("main.get", side_effect=self._config_getter()), \
              patch("main.get_guardian_settings", return_value=guardian_settings):
             await app_main.post_init(telegram_app)
-            user_manager.bind_thread_owner(1, "thread-1")
+            user_manager.set_active_thread(1, "thread-1")
             queue = await event_hub.subscribe(1)
             try:
                 await client._any_handler(
@@ -509,7 +509,9 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
              patch("main.get", side_effect=lambda key, default=None: default), \
              patch("main.get_guardian_settings", return_value=guardian_settings):
             await app_main.post_init(telegram_app)
-            user_manager.get(1).set_turn("turn-1")
+            user_manager.set_active_thread(1, "thread-1")
+            user_manager.get(1).set_turn("turn-1", "thread-1")
+            user_manager.bind_turn_thread("turn-1", "thread-1")
             queue = await event_hub.subscribe(1)
             try:
                 await client._any_handler(
@@ -554,7 +556,9 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
              patch("main.get", side_effect=lambda key, default=None: default), \
              patch("main.get_guardian_settings", return_value=guardian_settings):
             await app_main.post_init(telegram_app)
-            user_manager.get(1).set_turn("turn-1")
+            user_manager.set_active_thread(1, "thread-1")
+            user_manager.get(1).set_turn("turn-1", "thread-1")
+            user_manager.bind_turn_thread("turn-1", "thread-1")
             queue = await event_hub.subscribe(1)
             try:
                 await client._any_handler(
@@ -598,7 +602,7 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
              patch("main.get", side_effect=lambda key, default=None: default), \
              patch("main.get_guardian_settings", return_value=guardian_settings):
             await app_main.post_init(telegram_app)
-            user_manager.bind_thread_owner(1, "thread-1")
+            user_manager.set_active_thread(1, "thread-1")
             queue = await event_hub.subscribe(1)
             try:
                 await client._any_handler(
@@ -637,7 +641,7 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
              patch("main.get", side_effect=lambda key, default=None: default), \
              patch("main.get_guardian_settings", return_value=guardian_settings):
             await app_main.post_init(telegram_app)
-            user_manager.bind_thread_owner(1, "thread-1")
+            user_manager.set_active_thread(1, "thread-1")
             user_manager.bind_thread_subscriber(-100, "thread-1")
             web_queue = await event_hub.subscribe(-100)
             tg_queue = await event_hub.subscribe(1)
@@ -673,6 +677,186 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(-100, user_manager.find_user_ids_by_turn("turn-1"))
         self.assertIn(1, user_manager.find_user_ids_by_turn("turn-1"))
 
+    async def test_thread_level_event_without_turn_id_omits_unknown_turn_footer(self):
+        client = _DummyCodexClient(submit_result=True)
+        router = SimpleNamespace(projects=SimpleNamespace(resolve_effective_project=Mock(return_value=None)))
+        guardian = SimpleNamespace(stop=AsyncMock())
+        bot = SimpleNamespace(send_message=AsyncMock())
+        telegram_app = SimpleNamespace(bot=bot)
+        guardian_settings = {
+            "enabled": False,
+            "apply_to_methods": ["*"],
+            "failure_policy": "manual_fallback",
+            "explainability": "decision_only",
+            "timeout_seconds": 5,
+            "rules": [],
+        }
+
+        with patch("main.setup_codex", new=AsyncMock(return_value=client)), \
+             patch("main.CommandRouter", return_value=router), \
+             patch("main.ApprovalGuardianService", return_value=guardian), \
+             patch("main.get", side_effect=lambda key, default=None: default), \
+             patch("main.get_guardian_settings", return_value=guardian_settings):
+            await app_main.post_init(telegram_app)
+            user_manager.set_active_thread(1, "thread-1")
+
+            await client._any_handler(
+                "thread/status/changed",
+                {
+                    "threadId": "thread-1",
+                    "status": "active",
+                },
+            )
+
+        bot.send_message.assert_awaited_once()
+        sent_text = bot.send_message.await_args.kwargs["text"]
+        self.assertIn("[app-server] Thread status changed: active", sent_text)
+        self.assertNotIn("turnId: unknown", sent_text)
+
+    async def test_open_in_telegram_suppresses_output_from_previous_active_thread(self):
+        client = _DummyCodexClient(submit_result=True)
+        router = SimpleNamespace(projects=SimpleNamespace(resolve_effective_project=Mock(return_value=None)))
+        guardian = SimpleNamespace(stop=AsyncMock())
+        bot = SimpleNamespace(send_message=AsyncMock())
+        telegram_app = SimpleNamespace(bot=bot)
+        guardian_settings = {
+            "enabled": False,
+            "apply_to_methods": ["*"],
+            "failure_policy": "manual_fallback",
+            "explainability": "decision_only",
+            "timeout_seconds": 5,
+            "rules": [],
+        }
+
+        with patch("main.setup_codex", new=AsyncMock(return_value=client)), \
+             patch("main.CommandRouter", return_value=router), \
+             patch("main.ApprovalGuardianService", return_value=guardian), \
+             patch("main.get", side_effect=lambda key, default=None: default), \
+             patch("main.get_guardian_settings", return_value=guardian_settings):
+            await app_main.post_init(telegram_app)
+            user_manager.set_active_thread(1, "thread-new")
+            user_manager.bind_thread_subscriber(1, "thread-old")
+            user_manager.bind_turn(1, "turn-old", "thread-old")
+            user_manager.remove_user_turn_bindings_except_thread(1, "thread-new")
+
+            await client._any_handler(
+                "item/completed",
+                {
+                    "threadId": "thread-old",
+                    "turnId": "turn-old",
+                    "item": {"id": "item-1", "type": "assistantMessage", "text": "old response"},
+                },
+            )
+
+        bot.send_message.assert_not_awaited()
+
+    async def test_telegram_thread_subscriber_does_not_receive_non_active_thread_turn(self):
+        client = _DummyCodexClient(submit_result=True)
+        router = SimpleNamespace(projects=SimpleNamespace(resolve_effective_project=Mock(return_value=None)))
+        guardian = SimpleNamespace(stop=AsyncMock())
+        bot = SimpleNamespace(send_message=AsyncMock())
+        telegram_app = SimpleNamespace(bot=bot)
+        guardian_settings = {
+            "enabled": False,
+            "apply_to_methods": ["*"],
+            "failure_policy": "manual_fallback",
+            "explainability": "decision_only",
+            "timeout_seconds": 5,
+            "rules": [],
+        }
+
+        with patch("main.setup_codex", new=AsyncMock(return_value=client)), \
+             patch("main.CommandRouter", return_value=router), \
+             patch("main.ApprovalGuardianService", return_value=guardian), \
+             patch("main.get", side_effect=lambda key, default=None: default), \
+             patch("main.get_guardian_settings", return_value=guardian_settings):
+            await app_main.post_init(telegram_app)
+            user_manager.set_active_thread(1, "thread-active")
+            user_manager.bind_thread_subscriber(1, "thread-old")
+
+            await client._any_handler(
+                "item/completed",
+                {
+                    "threadId": "thread-old",
+                    "turnId": "turn-old",
+                    "item": {"id": "item-1", "type": "assistantMessage", "text": "old response"},
+                },
+            )
+
+        bot.send_message.assert_not_awaited()
+
+    async def test_turn_started_does_not_bind_telegram_when_active_thread_differs(self):
+        client = _DummyCodexClient(submit_result=True)
+        router = SimpleNamespace(projects=SimpleNamespace(resolve_effective_project=Mock(return_value=None)))
+        guardian = SimpleNamespace(stop=AsyncMock())
+        bot = SimpleNamespace(send_message=AsyncMock())
+        telegram_app = SimpleNamespace(bot=bot)
+        guardian_settings = {
+            "enabled": False,
+            "apply_to_methods": ["*"],
+            "failure_policy": "manual_fallback",
+            "explainability": "decision_only",
+            "timeout_seconds": 5,
+            "rules": [],
+        }
+
+        with patch("main.setup_codex", new=AsyncMock(return_value=client)), \
+             patch("main.CommandRouter", return_value=router), \
+             patch("main.ApprovalGuardianService", return_value=guardian), \
+             patch("main.get", side_effect=lambda key, default=None: default), \
+             patch("main.get_guardian_settings", return_value=guardian_settings):
+            await app_main.post_init(telegram_app)
+            user_manager.set_active_thread(1, "thread-active")
+            user_manager.bind_thread_subscriber(1, "thread-old")
+
+            await client._any_handler(
+                "turn/started",
+                {
+                    "threadId": "thread-old",
+                    "turnId": "turn-old",
+                },
+            )
+
+        self.assertNotIn(1, user_manager.find_user_ids_by_turn("turn-old"))
+        bot.send_message.assert_not_awaited()
+
+    async def test_turn_subscriber_telegram_receives_active_web_turn(self):
+        client = _DummyCodexClient(submit_result=True)
+        router = SimpleNamespace(projects=SimpleNamespace(resolve_effective_project=Mock(return_value=None)))
+        guardian = SimpleNamespace(stop=AsyncMock())
+        bot = SimpleNamespace(send_message=AsyncMock())
+        telegram_app = SimpleNamespace(bot=bot)
+        guardian_settings = {
+            "enabled": False,
+            "apply_to_methods": ["*"],
+            "failure_policy": "manual_fallback",
+            "explainability": "decision_only",
+            "timeout_seconds": 5,
+            "rules": [],
+        }
+
+        with patch("main.setup_codex", new=AsyncMock(return_value=client)), \
+             patch("main.CommandRouter", return_value=router), \
+             patch("main.ApprovalGuardianService", return_value=guardian), \
+             patch("main.get", side_effect=lambda key, default=None: default), \
+             patch("main.get_guardian_settings", return_value=guardian_settings):
+            await app_main.post_init(telegram_app)
+            user_manager.set_active_thread(1, "thread-web")
+            user_manager.bind_thread_subscriber(1, "thread-web")
+            user_manager.bind_turn_subscriber(1, "turn-web", "thread-web")
+
+            await client._any_handler(
+                "item/completed",
+                {
+                    "threadId": "thread-web",
+                    "turnId": "turn-web",
+                    "item": {"id": "item-1", "type": "assistantMessage", "text": "web response"},
+                },
+            )
+
+        bot.send_message.assert_awaited_once()
+        self.assertIn("web response", bot.send_message.await_args.kwargs["text"])
+
     async def test_thread_started_subagent_updates_registry_and_publishes_subagents_changed(self):
         client = _DummyCodexClient(submit_result=True)
         router = SimpleNamespace(projects=SimpleNamespace(resolve_effective_project=Mock(return_value=None)))
@@ -694,7 +878,7 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
              patch("main.get", side_effect=lambda key, default=None: default), \
              patch("main.get_guardian_settings", return_value=guardian_settings):
             await app_main.post_init(telegram_app)
-            user_manager.bind_thread_owner(1, "thread-parent")
+            user_manager.set_active_thread(1, "thread-parent")
             user_manager.bind_thread_subscriber(1, "thread-sub-1")
             queue = await event_hub.subscribe(1)
             try:
@@ -750,7 +934,7 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
              patch("main.get", side_effect=lambda key, default=None: default), \
              patch("main.get_guardian_settings", return_value=guardian_settings):
             await app_main.post_init(telegram_app)
-            user_manager.bind_thread_owner(1, "thread-parent")
+            user_manager.set_active_thread(1, "thread-parent")
             user_manager.bind_thread_subscriber(1, "thread-sub-1")
             queue = await event_hub.subscribe(1)
             try:
@@ -855,7 +1039,7 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
              patch("main.get", side_effect=lambda key, default=None: default), \
              patch("main.get_guardian_settings", return_value=guardian_settings):
             await app_main.post_init(telegram_app)
-            user_manager.bind_thread_owner(1, "thread-1")
+            user_manager.set_active_thread(1, "thread-1")
             queue = await event_hub.subscribe(1)
             try:
                 await client._any_handler(
@@ -897,7 +1081,7 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
              patch("main.get", side_effect=lambda key, default=None: default), \
              patch("main.get_guardian_settings", return_value=guardian_settings):
             await app_main.post_init(telegram_app)
-            user_manager.bind_thread_owner(1, "thread-1")
+            user_manager.set_active_thread(1, "thread-1")
             queue = await event_hub.subscribe(1)
             try:
                 await client._any_handler(
@@ -940,7 +1124,7 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
              patch("main.get", side_effect=lambda key, default=None: default), \
              patch("main.get_guardian_settings", return_value=guardian_settings):
             await app_main.post_init(telegram_app)
-            user_manager.bind_thread_owner(1, "thread-1")
+            user_manager.set_active_thread(1, "thread-1")
             queue = await event_hub.subscribe(1)
             try:
                 await client._any_handler(
@@ -989,7 +1173,7 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
              patch("main.get", side_effect=lambda key, default=None: default), \
              patch("main.get_guardian_settings", return_value=guardian_settings):
             await app_main.post_init(telegram_app)
-            user_manager.bind_thread_owner(1, "thread-1")
+            user_manager.set_active_thread(1, "thread-1")
             queue = await event_hub.subscribe(1)
             try:
                 await client._any_handler(
@@ -1040,7 +1224,7 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
              patch("main.get", side_effect=lambda key, default=None: default), \
              patch("main.get_guardian_settings", return_value=guardian_settings):
             await app_main.post_init(telegram_app)
-            user_manager.bind_thread_owner(1, "thread-1")
+            user_manager.set_active_thread(1, "thread-1")
             queue = await event_hub.subscribe(1)
             try:
                 await client._any_handler(
@@ -1100,7 +1284,7 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
              patch("main.get", side_effect=lambda key, default=None: default), \
              patch("main.get_guardian_settings", return_value=guardian_settings):
             await app_main.post_init(telegram_app)
-            user_manager.bind_thread_owner(1, "thread-1")
+            user_manager.set_active_thread(1, "thread-1")
             queue = await event_hub.subscribe(1)
             try:
                 await client._any_handler(
@@ -1147,7 +1331,7 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
              patch("main.get", side_effect=lambda key, default=None: default), \
              patch("main.get_guardian_settings", return_value=guardian_settings):
             await app_main.post_init(telegram_app)
-            user_manager.bind_thread_owner(1, "thread-1")
+            user_manager.set_active_thread(1, "thread-1")
             queue = await event_hub.subscribe(1)
             try:
                 await client._any_handler(
@@ -1197,7 +1381,7 @@ class MainApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
              patch("main.get", side_effect=lambda key, default=None: default), \
              patch("main.get_guardian_settings", return_value=guardian_settings):
             await app_main.post_init(telegram_app)
-            user_manager.bind_thread_owner(1, "thread-1")
+            user_manager.set_active_thread(1, "thread-1")
             queue = await event_hub.subscribe(1)
             try:
                 await client._any_handler(

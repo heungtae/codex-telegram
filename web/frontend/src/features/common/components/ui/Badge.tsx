@@ -1,4 +1,5 @@
 import type { HTMLAttributes, ReactNode } from "react";
+import { cn } from "./cn";
 
 type BadgeVariant = "neutral" | "accent";
 
@@ -8,9 +9,8 @@ type BadgeProps = HTMLAttributes<HTMLSpanElement> & {
 };
 
 export default function Badge({ children, className = "", variant = "neutral", ...props }: BadgeProps) {
-  const classes = ["ui-badge", `ui-badge-${variant}`, className].filter(Boolean).join(" ");
   return (
-    <span className={classes} {...props}>
+    <span className={cn("ui-badge", `ui-badge-${variant}`, className)} {...props}>
       {children}
     </span>
   );

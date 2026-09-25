@@ -2,8 +2,7 @@ import { Badge, Button, EmptyState, Input, Modal } from "../../common/components
 
 export function ProjectModeModal({ isOpen, onClose, onChooseProjectClickMode }) {
   return (
-    <Modal isOpen={isOpen} onClose={onClose} ariaLabel="Project open mode">
-      <div className="modal-title">Choose Project Tab Behavior</div>
+    <Modal isOpen={isOpen} onClose={onClose} ariaLabel="Project open mode" title="Choose Project Tab Behavior">
       <div className="modal-desc">
         Choose whether clicking a project opens it in a new tab or replaces the current tab.
       </div>
@@ -71,12 +70,13 @@ export function ProjectPickerModal({
               onMouseEnter={() => onSelectedProjectIndexChange(idx)}
             >
               <span className="project-picker-name">{item.name || item.key}</span>
-              <span className="project-picker-key">{item.key}</span>
               {item.default ? (
                 <Badge variant="accent" className="project-picker-badge">
                   default
                 </Badge>
-              ) : null}
+              ) : (
+                <span className="project-picker-key">{item.key}</span>
+              )}
             </button>
           ))
         )}
