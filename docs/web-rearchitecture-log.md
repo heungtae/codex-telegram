@@ -1864,3 +1864,17 @@ Rule:
   - `cd web/frontend && npm run build` 통과.
 - Next step:
   - 2단계에서 타입 정밀화(`any`/암시 타입 축소)와 Hook dependency 경고 해소를 점진 진행.
+## 2026-09-25  (local)
+- Objective:
+  - 0.5.0 릴리스 버전을 지정하고 배포 준비.
+- Files changed:
+  - codex_telegram/__init__.py
+  - docs/web-rearchitecture-log.md
+- Changes:
+  - 패키지의 canonical version을 0.5.0으로 갱신.
+- Validation:
+  - `git diff --check` 통과.
+  - `python3 -m build`로 0.5.0 wheel/sdist 생성 통과.
+  - PyPI 확인 결과 현재 최신은 0.4.16이며 0.5.0은 아직 없음.
+- Next step:
+  - 변경사항 커밋 후 PyPI 게시 및 GitHub v0.5.0 릴리스.
