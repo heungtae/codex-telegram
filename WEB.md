@@ -47,6 +47,7 @@ The Web UI receives live updates via SSE for:
 | `approval_required` | Guardian/approval needed |
 | `file_change` | File modifications with diffs |
 | `app_event` | Tool execution events |
+| `user_message` | User message sent |
 
 ### Authentication
 
@@ -96,28 +97,38 @@ Guardian provides automated safety checks before approval decisions:
 
 | Shortcut | Action |
 |----------|--------|
-| `Ctrl/Cmd + Enter` | Send message |
+| `Ctrl/Cmd + Enter` | Send message (or Shift+Enter for newline) |
 | `Tab` | Toggle Build/Plan mode |
+| `Escape` | Close modals / cancel project picker |
 
-#### Alt Key Shortcuts
+#### Alt Key Shortcuts (when not in input)
 
 | Shortcut | Action |
 |----------|--------|
-| `Alt + N` | New chat |
-| `Alt + T` | New thread tab |
-| `Alt + W` | Close current thread |
-| `Alt + P` | Open project picker |
-| `Alt + [` | Previous thread |
-| `Alt + ]` | Next thread |
-| `Alt + 1-9` | Switch to thread 1-9 |
-| `Alt + V` | Toggle workspace panel |
+| `Alt + N` | New chat (focus composer, start thread) |
+| `Alt + T` | New thread tab (start thread) |
+| `Alt + W` | Close current thread tab |
+| `Alt + P` | Open project picker modal |
+| `Alt + [` | Previous thread in project |
+| `Alt + ]` | Next thread in project |
+| `Alt + 1-9` | Switch to thread 1-9 in current project |
+| `Alt + V` | Toggle workspace panel (compact layout) |
 
-#### Mode
+#### Ctrl/Cmd Key Shortcuts (when not in input)
 
 | Shortcut | Action |
 |----------|--------|
 | `Ctrl/Cmd + B` | Switch to Build mode |
 | `Ctrl/Cmd + Shift + P` | Switch to Plan mode |
+
+#### Project Picker Modal
+
+| Shortcut | Action |
+|----------|--------|
+| `Up/Down` | Navigate projects |
+| `Enter` | Select project |
+| `Esc` / `Backspace` | Close modal |
+| `Type` | Filter projects by name/key |
 
 ## API Endpoints
 
@@ -154,6 +165,7 @@ Guardian provides automated safety checks before approval decisions:
 | POST | `/api/projects` | Add project |
 | POST | `/api/projects/select` | Switch project |
 | POST | `/api/projects/open-thread` | Open thread in project |
+| POST | `/api/projects/open-explorer` | Open project folder in OS file explorer |
 
 ### Workspace
 
@@ -172,7 +184,8 @@ Guardian provides automated safety checks before approval decisions:
 | GET | `/api/features` | List features |
 | POST | `/api/features/{key}` | Toggle feature |
 | GET | `/api/models` | List models |
-| GET | `/api/modes` | List modes |
+| GET | `/api/modes` | List collaboration modes |
+| GET | `/api/collab` | List collaboration modes (alias) |
 | GET | `/api/skills` | List skills |
 | GET | `/api/apps` | List apps |
 | GET | `/api/mcp` | List MCP servers |
@@ -180,6 +193,25 @@ Guardian provides automated safety checks before approval decisions:
 | POST | `/api/guardian` | Save guardian settings |
 | GET | `/api/config` | Get config |
 | POST | `/api/approvals/{id}` | Submit approval |
+
+### Approvals
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/approvals` | List pending approval requests |
+| POST | `/api/approvals/{request_id}` | Submit approval decision (approve|session|deny) |
+
+### Session
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/session/summary` | Get current session state (active thread, workspace, project, mode, agents) |
+
+### Commands
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/command` | Execute any slash command |
 
 ### Events
 
