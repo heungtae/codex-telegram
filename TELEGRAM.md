@@ -24,14 +24,17 @@ Execute Codex commands using slash commands in any chat with the bot:
 | `/compact <id>` | thread/compact/start | Compact conversation history |
 | `/rollback <n>` | thread/rollback | Roll back last N turns |
 | `/interrupt` | turn/interrupt | Interrupt running turn |
-| `/review` | review/start | Start code review |
+| `/review [uncommittedChanges\|baseBranch\|commit\|custom]` | review/start | Start code review |
 | `/exec <cmd>` | command/exec | Run command |
 | `/models` | model/list | List available models |
 | `/features` | experimentalFeature/list + command/exec | Show beta features |
 | `/guardian` | local config | Show guardian summary |
 | `/modes` | collaborationMode/list | List collaboration modes |
 | `/collab` | collaborationMode/list | List collaboration modes |
-| `/skills` | skills/list | List skills |
+| `/mode [toggle\|plan\|build]` | - | Show or set collaboration mode |
+| `/plan` | - | Switch collaboration mode to plan |
+| `/build` | - | Switch collaboration mode to build (default) |
+| `/skills [cwd]` | skills/list | List skills |
 | `/apps` | app/list | List apps |
 | `/mcp` | mcpServerStatus/list | List MCP servers |
 | `/config` | config/read | Read configuration |
@@ -58,6 +61,7 @@ Configure which events to receive via `telegram.forwarding.app_server_event_allo
 - Archive old threads to keep your list clean
 - Compact conversation history to save context
 - Rollback turns to undo mistakes
+- Start code reviews with `/review [uncommittedChanges|baseBranch|commit|custom]`
 
 ### Project Switching
 
@@ -67,6 +71,19 @@ Manage multiple projects:
 2. Use `/projects --list` to see all projects
 3. Use `/project <name>` to switch
 4. Each project maintains separate thread history
+
+### Collaboration Mode
+
+Control how Codex approaches tasks:
+
+| Command | Description |
+|---------|-------------|
+| `/mode` | Show current mode or set to `toggle`, `plan`, or `build` |
+| `/plan` | Switch to plan mode (analyze, don't execute) |
+| `/build` | Switch to build mode (execute changes, default) |
+| `/modes` / `/collab` | List available collaboration modes |
+
+Modes are session-local and persist per user. The current mode is shown in the welcome message and when switching projects.
 
 ## Configuration
 
