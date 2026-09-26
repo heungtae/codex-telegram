@@ -67,6 +67,34 @@ python -m venv .venv && source .venv/bin/activate
 pip install codex-telegram
 ```
 
+### Update
+
+The CLI checks for updates automatically on startup. When a newer version is available on PyPI, you'll see:
+
+```text
+✨ Update available! 0.5.1 -> 0.5.2
+
+  Release notes: https://github.com/heungtae/codex-telegram/releases/latest
+
+  1. Update now and exit (runs `pip install -U codex-telegram`)
+  2. Skip this run
+  3. Skip this version
+
+  Choose [1/2/3] (default: 2):
+```
+
+You can also update manually:
+
+```bash
+pip install -U codex-telegram
+```
+
+Or with system packages flag:
+
+```bash
+pip install -U codex-telegram --break-system-packages
+```
+
 ### 2. Configure
 
 Create `~/.config/codex-telegram/conf.toml`:
