@@ -1274,6 +1274,50 @@ path_glob_any = ["helm/**"]
             body["items"],
         )
 
+    def test_thread_summaries_paginates_before_project_limit_and_offset(self):
+        app = create_web_app()
+        endpoint = next(route.endpoint for route in app.routes
+                        if getattr(route, "path", None) == "/api/threads/summaries")
+        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+        user_manager.get(self.session.user_id).selected_project_key = "default"
+        for tid in ("t-1", "t-2", "t-3"):
+            user_manager.bind_thread_project(tid, "default")
+        user_manager.bind_thread_project("other", "other")
+        for offset, expected in ((0, ["t-1", "t-2"]), (1, ["t-2", "t-3"])):
+            with self.subTest(offset=offset):
+                state.codex_client.call = AsyncMock(side_effect=[
+                    {"data": [{"id": "other"}], "nextCursor": "page-2"},
+                    {"data": [{"id": "t-1"}], "nextCursor": "page-3"},
+                    {"data": [{"id": "t-1"}, {"id": "t-2"}, {"id": "t-3"}],
+                     "nextCursor": "unused"},
+                    {"thread": {}}, {"thread": {}},
+                ])
+                body = asyncio.run(endpoint(request, limit=2, offset=offset))
+                self.assertEqual(expected, [item["id"] for item in body["items"]])
+                list_calls = [c for c in state.codex_client.call.await_args_list
+                              if c.args[0] == "thread/list"]
+                self.assertEqual(3, len(list_calls))
+                self.assertNotIn("cursor", list_calls[0].args[1])
+                self.assertEqual("page-2", list_calls[1].args[1]["cursor"])
+                self.assertEqual("page-3", list_calls[2].args[1]["cursor"])
+
+    def test_thread_summaries_stops_on_exhaustion_or_repeated_cursor(self):
+        app = create_web_app()
+        endpoint = next(route.endpoint for route in app.routes
+                        if getattr(route, "path", None) == "/api/threads/summaries")
+        request = SimpleNamespace(cookies={COOKIE_NAME: self.session.token})
+        user_manager.get(self.session.user_id).selected_project_key = "default"
+        user_manager.bind_thread_project("other", "other")
+        for page in ({"data": [{"id": "other"}]},
+                     {"data": None, "nextCursor": "repeat"}):
+            with self.subTest(page=page):
+                state.codex_client.call = AsyncMock(return_value=page)
+                body = asyncio.run(endpoint(request, limit=2, archived=True))
+                self.assertEqual([], body["items"])
+                self.assertEqual(2 if page.get("nextCursor") else 1,
+                                 state.codex_client.call.await_count)
+                self.assertTrue(state.codex_client.call.await_args.args[1]["archived"])
+
     def test_thread_summaries_use_user_request_excerpt_as_title(self):
         app = create_web_app()
         endpoint = next(

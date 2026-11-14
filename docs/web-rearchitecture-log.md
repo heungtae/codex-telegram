@@ -2079,3 +2079,11 @@ Rule:
 - Changes: Reuse the Add Project form to edit name/path with a stable read-only key; add a default checkbox on add/modify; persist the default in the existing root `project` setting. Disable default-project Remove and retain server-side protection. Existing open chats remain open; refreshed project metadata applies to sidebar rows.
 - Validation: Config/API tests 9 passed; config/router regression group 35 passed; project modal/sidebar frontend tests passed; `npm run build` passed; `git diff --check` passed. Expanded Web/API tests: 57 passed, 1 Windows Explorer path expectation failed (unmodified behavior). Full frontend: 63 test files passed, 6 failed in unchanged overlay/sidebar/runtime areas, including missing component imports. Full Python run stopped after stalling in unrelated tests; system Python lacks runtime dependencies, so API checks used `.venv` with the system pytest package on `sys.path`. No browser visual verification performed.
 - Next step: Restart the server and verify Add/Modify Project and the disabled default Remove menu in the running UI; investigate unrelated suite failures separately.
+
+### 2026-11-14T18:06+09:00 — Project thread list pagination
+- Objective: Show project threads even when the global first page contains only other projects.
+- Files changed: `web/routes.py`, `tests/test_web_server_local_command.py`, this log.
+- Changes: Follow `thread/list` nextCursor until enough matching project threads are collected or pages are exhausted. Apply offset/limit after project matching, preserve upstream order and title behavior, deduplicate thread IDs, and stop repeated cursors. Existing unrelated worktree changes were preserved.
+- Validation: Targeted pytest thread group: 30 passed, 21 deselected, 6 subtests passed. Full local-command module: 50 passed, 1 pre-existing Windows Explorer path-separator expectation failed. Virtualenv lacks pytest; targeted pytest used the system pytest package on sys.path. No frontend source changes. Running server/UI verification remains pending.
+- Operational impact: Sparse project matches can require additional read-only App Server page requests. No config changes. Backend restart required to load the change.
+- Next step: Restart the backend when appropriate and refresh the ewap-browser Threads list.

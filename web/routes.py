@@ -329,10 +329,6 @@ def register_thread_routes(app: FastAPI) -> None:
         params: dict[str, Any] = {"limit": min(100, safe_limit + safe_offset)}
         if archived:
             params["archived"] = True
-        result = await state.codex_client.call("thread/list", params)
-        rows = result.get("data", [])
-        if not isinstance(rows, list):
-            rows = []
         state_user = user_manager.get(session.user_id)
         current_profile_key = project_key.strip()
         if not current_profile_key:
@@ -341,12 +337,30 @@ def register_thread_routes(app: FastAPI) -> None:
             default_key = get("project")
             if isinstance(default_key, str) and default_key.strip():
                 current_profile_key = default_key.strip()
-        if current_profile_key:
-            rows = [
-                thread
-                for thread in rows
-                if isinstance(thread, dict) and thread_profile_key(thread, current_profile_key) == current_profile_key
-            ]
+        # Apply the limit to matching threads, rather than the global first page.
+        rows: list[dict[str, Any]] = []
+        seen_ids: set[str] = set()
+        seen_cursors: set[str] = set()
+        while len(rows) < safe_offset + safe_limit:
+            result = await state.codex_client.call("thread/list", dict(params))
+            page = result.get("data", [])
+            if not isinstance(page, list):
+                page = []
+            for thread in page:
+                if not isinstance(thread, dict):
+                    continue
+                tid = thread.get("id")
+                if not isinstance(tid, str) or not tid or tid in seen_ids:
+                    continue
+                seen_ids.add(tid)
+                if current_profile_key and thread_profile_key(thread, current_profile_key) != current_profile_key:
+                    continue
+                rows.append(thread)
+            cursor = result.get("nextCursor")
+            if not isinstance(cursor, str) or not cursor or cursor in seen_cursors:
+                break
+            seen_cursors.add(cursor)
+            params["cursor"] = cursor
         if safe_offset:
             rows = rows[safe_offset:]
         rows = rows[:safe_limit]
