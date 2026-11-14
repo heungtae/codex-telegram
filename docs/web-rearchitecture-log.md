@@ -2276,3 +2276,10 @@ Rule:
 - Changes: Bump canonical version to 0.6.4. Release scope includes bounded Telegram startup retries; original Ctrl+C behavior is preserved.
 - Validation: Targeted pytest run passed (8 tests, 9 subtests); CLI reports 0.6.4; diff whitespace check passed. Broader run excluding `test_main_approval_flow.py`: 213 passed, 2 failed, 18 subtests passed. Both failures (stale PyPI version expectation and Windows Explorer path expectation on Linux) reproduced from HEAD in an isolated temporary checkout. Full suite stalled in `test_main_approval_flow.py`; no full-suite pass claimed. Live TLS/authenticated initialization passed in the preceding verification.
 - Operational impact / next step: Push the release commit and create v0.6.4; the existing published-release workflow builds distributions, publishes to PyPI and attaches assets. Track workflow completion separately.
+
+### 2026-11-14 — Verify 0.6.4 publication
+- Objective: Complete the requested release and verify automated publication.
+- Files changed: This log.
+- Changes: Pushed release commit `da4e0eb` and annotated tag `v0.6.4`; published https://github.com/heungtae/codex-telegram/releases/tag/v0.6.4.
+- Validation: GitHub Actions run https://github.com/heungtae/codex-telegram/actions/runs/43589510142 completed successfully, including Web UI build, distribution checks, PyPI publishing, and release asset uploads. Verified wheel, source distribution and SHA256SUMS are attached.
+- Next step: Users can upgrade to 0.6.4. Existing regression-suite limitations are documented above; no additional application changes were made during publication.
