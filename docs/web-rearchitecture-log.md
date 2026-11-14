@@ -2094,3 +2094,10 @@ Rule:
 - Validation: Targeted pytest thread group: 30 passed, 21 deselected, 6 subtests passed. Full local-command module: 50 passed, 1 pre-existing Windows Explorer path-separator expectation failed. Virtualenv lacks pytest; targeted pytest used the system pytest package on sys.path. No frontend source changes. Running server/UI verification remains pending.
 - Operational impact: Sparse project matches can require additional read-only App Server page requests. No config changes. Backend restart required to load the change.
 - Next step: Restart the backend when appropriate and refresh the ewap-browser Threads list.
+
+### 2026-11-14T18:10+09:00 — Version 0.6.0 and topic commits
+- Objective: Record the pending version update and commit all workspace changes by topic.
+- Files changed: `codex_telegram/__init__.py`, this log.
+- Changes: Set the canonical package version from 0.5.8 to 0.6.0; separate project management, thread pagination, access configuration documentation, and version commits.
+- Validation: Frontend build and both changed project UI test files passed. Backend project/thread selection: 42 passed, 1 existing Windows Explorer path-separator failure, 17 deselected, 6 subtests passed. Diff whitespace checks passed. No publishing or server restart performed.
+- Next step: Restart the backend to load the changes and verify project management and ewap-browser threads in the running UI.
