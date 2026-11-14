@@ -2080,6 +2080,13 @@ Rule:
 - Validation: Config/API tests 9 passed; config/router regression group 35 passed; project modal/sidebar frontend tests passed; `npm run build` passed; `git diff --check` passed. Expanded Web/API tests: 57 passed, 1 Windows Explorer path expectation failed (unmodified behavior). Full frontend: 63 test files passed, 6 failed in unchanged overlay/sidebar/runtime areas, including missing component imports. Full Python run stopped after stalling in unrelated tests; system Python lacks runtime dependencies, so API checks used `.venv` with the system pytest package on `sys.path`. No browser visual verification performed.
 - Next step: Restart the server and verify Add/Modify Project and the disabled default Remove menu in the running UI; investigate unrelated suite failures separately.
 
+### 2026-11-14T17:54+09:00 — Port forwarding access
+- Objective: Enable the requested port-forwarded Web UI access.
+- Files changed: Runtime `~/.config/codex-telegram/conf.toml` and this log.
+- Changes: Set `web.host` from `127.0.0.1` to `0.0.0.0`, preserve port 9090, and start the stopped server with the project virtual environment.
+- Validation: Listener confirmed at `0.0.0.0:9090`; local, LAN (`192.168.0.2`), and DDNS (`khugtae.iptime.org`) HTTP requests returned 200 from the server host.
+- Next step: Verify access from a separate external network; no application source change.
+
 ### 2026-11-14T18:06+09:00 — Project thread list pagination
 - Objective: Show project threads even when the global first page contains only other projects.
 - Files changed: `web/routes.py`, `tests/test_web_server_local_command.py`, this log.
