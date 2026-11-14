@@ -2084,7 +2084,7 @@ Rule:
 - Objective: Enable the requested port-forwarded Web UI access.
 - Files changed: Runtime `~/.config/codex-telegram/conf.toml` and this log.
 - Changes: Set `web.host` from `127.0.0.1` to `0.0.0.0`, preserve port 9090, and start the stopped server with the project virtual environment.
-- Validation: Listener confirmed at `0.0.0.0:9090`; local, LAN (`192.168.0.2`), and DDNS (`khugtae.iptime.org`) HTTP requests returned 200 from the server host.
+- Validation: Listener confirmed at `0.0.0.0:9090`; local, LAN (`192.168.0.2`), and DDNS (`codex.example.com`) HTTP requests returned 200 from the server host.
 - Next step: Verify access from a separate external network; no application source change.
 
 ### 2026-11-14T18:06+09:00 — Project thread list pagination
@@ -2126,3 +2126,76 @@ Rule:
 - Release: https://github.com/heungtae/codex-telegram/releases/tag/v0.6.1
 - Workflow: https://github.com/heungtae/codex-telegram/actions/runs/43580705715
 - Next step: Users can install codex-telegram==0.6.1; future deployments start by publishing a Release with a matching version tag. No running application restart performed.
+
+### 2026-11-14 — HTTPS startup validation and setup guide
+- Objective: Support reliable HTTPS using the existing certificate/key settings.
+- Files changed: `app_runtime/web_server.py`, `main.py`, `conf.toml.example`, `WEB.md`, `tests/test_web_server_tls.py`, this log.
+- Changes: Validate required TLS paths and load the certificate/key before starting the server thread; prevent silent HTTP fallback when HTTPS paths are missing. Correct endpoint return annotation and document direct HTTPS setup, secure cookies, port forwarding, and renewal restart requirements.
+- Validation: TLS/bootstrap tests: 10 passed. Broader server selection: 60 passed, 9 subtests passed, 1 unrelated Windows Explorer path-separator expectation failed (also recorded above before this change). Temporary real PEM certificate validation and hostname-verified TLS handshake passed using MemoryBIO; socket-based smoke was blocked by sandbox socket permissions. System Python lacks telegram; tests used project virtualenv with system pytest on sys.path. No frontend changes.
+- Operational impact: Invalid HTTPS settings now fail startup instead of silently serving HTTP. Default HTTP behavior is preserved. No active configuration, certificates, or running service changed.
+- Next step: Supply domain certificate/key paths in active configuration, enable ssl_enabled and cookie_secure, restart, and verify external HTTPS access. Certificate issuance and automatic renewal are outside this change.
+
+### 2026-11-14 — HTTPS provisioning CLI
+- Objective: Generate certificate/key files and update active TOML configuration with Certbot as the default method.
+- Files changed: `codex_telegram/cli.py`, new `codex_telegram/https_setup.py`, `requirements.txt`, `pyproject.toml`, new `tests/test_https_setup.py`, `WEB.md`, this log.
+- Changes: Add --setup-https/--domain/--method, bypass startup/update prompts for provisioning, invoke Certbot standalone by default, and support mkcert/OpenSSL alternatives. Validate hostname and certificate pair; preserve TOML comments with tomlkit, keep a private backup, atomically save only TLS fields, and detect config edits during issuance. Keep host/port/web.enabled unchanged. Store ACME state beside selected config and document port 80, permissions, trust, renewal, and restart requirements.
+- Validation: Initial targeted selection passed 20 tests including real OpenSSL self-signed issuance and PEM loading. Expanded validation follows. Dependencies installed only in project virtualenv; no public issuance or active config edits performed.
+- Next step: Finish CLI failure/boundary tests and config regression selection; use the documented command to provision the actual domain when port 80 prerequisites are ready.
+- Final validation: 45 targeted CLI/config/bootstrap/TLS tests passed, including all 19 new provisioning cases. CLI --help verified and git diff --check passed. Full suite was attempted but stalled after 110 completed tests and was interrupted; full-suite success is not claimed. Earlier broader server run also exposed the already documented Windows Explorer path-separator failure. No frontend files changed, so frontend build was not required.
+- Handoff: Implementation and documentation complete. Actual Certbot issuance, external HTTPS access, OS renewal scheduling, and service restart remain deployment steps; no production config or service was changed. Earlier HTTPS startup changes in the worktree were preserved.
+
+### 2026-11-14 — Build/run script HTTPS options
+- Objective: Allow HTTPS provisioning through run_build_and_main.sh.
+- Files changed: `run_build_and_main.sh`, new `codex_telegram/__main__.py`, new `tests/test_run_build_and_main.py`, `WEB.md`, this log.
+- Changes: Route supplied arguments to the package CLI; skip frontend builds for HTTPS setup, validation, help, and version. Preserve no-argument build/main execution. Support PYTHON_BIN to select the dependency-equipped interpreter and retain quoted argument boundaries, including config paths containing spaces.
+- Validation: bash -n passed; actual script --help displayed new HTTPS options without building or starting the server; 33 script/HTTPS/CLI/TLS tests passed. Six script scenarios used fake npm/Python executables to verify command order, cwd, argument preservation, and interpreter selection. git diff --check passed. No frontend source changed.
+- Risks / next step: Actual domain issuance still requires installed Certbot and port 80 prerequisites; execute the documented setup command, then restart with the no-argument script. No public issuance, active config edit, or running-service change performed.
+
+### 2026-11-14 — Unprivileged Certbot challenge port
+- Objective: Simplify HTTPS setup by avoiding privileged local port 80.
+- Files changed: `codex_telegram/https_setup.py`, `tests/test_https_setup.py`, `WEB.md`, this log.
+- Changes: Pass configured web.port (default 8080) to Certbot --http-01-port; require integer port 1024–65535. Print external TCP 80 forwarding and app-stop guidance before issuance. Preserve service port and setup-only behavior. Document 80→9090 example, one-time ownership repair after prior sudo runs, and renewal port/downtime requirements.
+- Validation: 38 HTTPS/script/TLS/CLI tests passed, including port propagation, default port, invalid-port rejection, and real self-signed generation. git diff --check passed. No frontend source changes.
+- Risks / next step: Stop the existing app, forward external TCP 80 to PC TCP 9090, repair prior root-owned ACME files if needed, rerun setup as the normal user, then start the app. No real issuance, router changes, or service termination performed.
+
+### 2026-11-14 — Default HTTPS method changed to self-signed
+- Objective: Make self-signed the default HTTPS setup method as requested.
+- Files changed: `codex_telegram/cli.py`, `codex_telegram/https_setup.py`, `tests/test_https_setup.py`, `WEB.md`, `conf.toml.example`, this log.
+- Changes: CLI and provisioning function default to self-signed; help/config examples describe OpenSSL and browser trust requirements. Certbot regression tests explicitly select certbot; the real OpenSSL test now covers the function default.
+- Validation: 38 HTTPS/script/CLI/TLS tests passed; script --help reports self-signed default; git diff --check passed.
+- Risks / next step: Browser trust remains required for self-signed certificates. No active config or certificates changed. Omit --method for self-signed; use --method certbot for public issuance on an eligible domain.
+
+### 2026-11-14 — Self-signed HTTPS usage and browser trust documentation
+- Objective: Explain the default self-signed setup and browser privacy warning in WEB.md.
+- Files changed: `WEB.md`, this log.
+- Changes: Add copyable setup/start commands, hostname formatting, HTTPS URL, preserved config and forwarding requirements, expected browser warning, per-client trust/fingerprint guidance, mkcert alternative, certificate replacement/expiry behavior, and CAA failure troubleshooting.
+- Validation: Checked commands and described defaults against current provisioning/build script behavior; git diff --check passed. Documentation only; no runtime changes or test rerun required.
+- Risks / next step: Client trust support varies by OS/browser; follow the client certificate settings using the generated public certificate. No production settings or certificates changed.
+
+### 2026-11-14 — Generic HTTPS example hostname
+- Objective: Replace the personal hostname in repository examples with a generic domain.
+- Files changed: `WEB.md`, `codex_telegram/cli.py`, this log.
+- Changes: Use `codex.example.com` in HTTPS commands, access URLs, CLI help, and the prior log reference. The hostname in the historical entry is anonymized; example.com is not a live verification target.
+- Validation: Repository-wide literal search found no remaining personal hostname matches; git diff --check passed. Help/example text only; runtime behavior unchanged.
+- Next step: Substitute an actual hostname when following the examples. No active configuration changed.
+
+### 2026-11-14T19:26:40+09:00 — Consistent HTTPS example domain
+- Objective: Use the same your-domain.com placeholder across HTTPS usage examples.
+- Files changed: `WEB.md`, `codex_telegram/cli.py`, this log.
+- Changes: Align CLI and build/run setup command examples and the corresponding access URL with your-domain.com.
+- Validation: Literal search confirmed consistent placeholders in WEB.md and CLI help; git diff --check passed. Example text only.
+- Next step: Replace your-domain.com with the actual hostname during setup.
+
+### 2026-11-14T19:29:03+09:00 — Unify all domain command examples
+- Objective: Use your-domain.com in every documented --domain example.
+- Files changed: `WEB.md`, this log.
+- Changes: Update the remaining mkcert and explicit self-signed command examples.
+- Validation: Repository-wide --domain search confirmed documentation, config example, and CLI help use your-domain.com; git diff --check passed. Test fixture hostnames remain test data.
+- Next step: Substitute the actual hostname when running setup. No runtime changes.
+
+### 2026-11-14T19:35:39+09:00 — Version 0.6.2 preparation
+- Objective: Bump the package version and commit the pending HTTPS setup work and consistent domain examples.
+- Files changed: `codex_telegram/__init__.py`; HTTPS runtime, CLI, build script, dependency manifests, documentation, and regression tests listed in the preceding entries.
+- Changes: Advance the canonical package version from 0.6.1 to 0.6.2. Include setup-only provisioning, self-signed default, explicit Certbot/mkcert support, startup TLS validation, and your-domain.com usage examples.
+- Validation: HTTPS/script/TLS tests: 37 passed. Full suite: 237 passed, 2 failed, 12 subtests passed. Both failures reproduced on an isolated HEAD archive: stale 0.5.0 latest-version fixture and Windows explorer path separators on Linux. Tests used .venv Python with system pytest appended to sys.path; full suite required execution outside the sandbox after an async test stalled inside it. CLI --version reports 0.6.2; bash -n run_build_and_main.sh and git diff --check passed.
+- Risks / next step: Existing two test failures remain. No live CA issuance or application restart performed. Commit locally; push/publication remains separate.

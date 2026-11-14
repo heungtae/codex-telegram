@@ -1,4 +1,5 @@
 import logging
+import ssl
 import threading
 
 logger = logging.getLogger("codex-telegram")
@@ -13,6 +14,15 @@ class WebServerThread:
         self.ssl_certfile = ssl_certfile
         self.ssl_keyfile = ssl_keyfile
         self.server = None
+        if self.ssl_enabled:
+            if not self.ssl_certfile or not self.ssl_keyfile:
+                raise ValueError(
+                    "HTTPS requires both web.ssl_certfile and web.ssl_keyfile"
+                )
+            # Validate before the background thread starts so TLS errors cannot
+            # leave the application reporting a working HTTPS endpoint.
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            context.load_cert_chain(self.ssl_certfile, self.ssl_keyfile)
 
     def run(self):
         try:
@@ -20,7 +30,7 @@ class WebServerThread:
 
             app = self.app_factory()
             ssl_args = {}
-            if self.ssl_enabled and self.ssl_certfile and self.ssl_keyfile:
+            if self.ssl_enabled:
                 ssl_args["ssl_certfile"] = self.ssl_certfile
                 ssl_args["ssl_keyfile"] = self.ssl_keyfile
                 logger.info("Web UI HTTPS enabled with cert=%s key=%s", self.ssl_certfile, self.ssl_keyfile)

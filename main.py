@@ -91,7 +91,7 @@ async def _run_without_telegram_channel() -> None:
     )
 
 
-def _parse_web_endpoint() -> tuple[bool, str, int, str]:
+def _parse_web_endpoint() -> tuple[bool, str, int, str, bool, str, str]:
     web_enabled = parse_bool(get("web.enabled", False), default=False)
     web_host = str(get("web.host", "127.0.0.1")).strip() or "127.0.0.1"
     web_port_raw = get("web.port", 8080)

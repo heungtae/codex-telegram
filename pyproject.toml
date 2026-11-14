@@ -15,7 +15,8 @@ authors = [
 dependencies = [
   "python-telegram-bot>=20.0",
   "fastapi>=0.111.0",
-  "uvicorn>=0.30.0"
+  "uvicorn>=0.30.0",
+  "tomlkit>=0.13,<1"
 ]
 classifiers = [
   "Development Status :: 3 - Alpha",

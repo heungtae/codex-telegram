@@ -69,9 +69,12 @@ conflict_action = "prompt" # prompt | kill | exit
 # Access it at http://<host>:<port> when enabled.
 #
 # HTTPS Setup:
+#   Automatic: codex-telegram --setup-https --domain your-domain.com
+#   (default: self-signed; requires OpenSSL and browser trust setup; see WEB.md)
 #   1. Set ssl_enabled = true
 #   2. Provide paths to your SSL certificate and private key files
 #   3. Supported formats: PEM (single file with chain or separate files)
+#   Missing, unreadable, or invalid certificates/keys prevent startup.
 #
 # Security Recommendations:
 #   - Use HTTPS in production (ssl_enabled = true)

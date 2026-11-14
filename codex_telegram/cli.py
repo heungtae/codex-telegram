@@ -75,7 +75,7 @@ def _load_root_main_module() -> ModuleType:
 
 
 def main() -> int:
-    if "--version" not in sys.argv and "--validate-config" not in sys.argv and "--debug" not in sys.argv:
+    if not any(flag in sys.argv for flag in ("--version", "--validate-config", "--debug", "--setup-https", "--help", "-h")):
         current = _get_version()
         latest = _check_for_update(current)
         if latest and _prompt_update(latest):
@@ -97,6 +97,7 @@ Examples:
   codex-telegram --config /path/to/conf.toml
   codex-telegram --web-only        Run web UI only (no Telegram polling)
   codex-telegram --validate-config Validate configuration and exit
+  codex-telegram --setup-https --domain your-domain.com
   codex-telegram --debug           Enable debug logging
         """,
     )
@@ -127,14 +128,37 @@ Examples:
         action="version",
         version=f"%(prog)s {_get_version()}",
     )
+    parser.add_argument('--setup-https', action='store_true', help='Provision HTTPS and update config, then exit')
+    parser.add_argument('--domain', help='Certificate hostname, without scheme or port')
+    parser.add_argument('--method', choices=('certbot', 'mkcert', 'self-signed'), default='self-signed',
+                        help='HTTPS certificate method (default: self-signed)')
 
     args = parser.parse_args()
+    if args.setup_https and not args.domain:
+        parser.error('--setup-https requires --domain')
+    if args.domain and not args.setup_https:
+        parser.error('--domain requires --setup-https')
+    if args.setup_https and (args.validate_config or args.web_only):
+        parser.error('--setup-https cannot be combined with --validate-config or --web-only')
 
     if args.config:
         os.environ["CODEX_CONFIG_PATH"] = args.config
 
     if args.debug:
         logging.getLogger().setLevel(logging.DEBUG)
+
+    if args.setup_https:
+        try:
+            from codex_telegram.https_setup import setup_https
+            from utils.config import get_config_path
+
+            cert, key = setup_https(get_config_path(), args.domain, args.method)
+            print(f'HTTPS configured. Certificate: {cert}; key: {key}')
+            print('Restart the application to apply HTTPS. Host, port, and web.enabled were preserved.')
+            return 0
+        except Exception as error:
+            print(f'HTTPS setup failed: {error}', file=sys.stderr)
+            return 1
 
     if args.validate_config:
         return _validate_config()
