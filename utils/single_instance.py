@@ -5,7 +5,10 @@ import signal
 import time
 from pathlib import Path
 
-import fcntl
+try:
+    import fcntl
+except ImportError:  # Windows: no fcntl, lock becomes best-effort
+    fcntl = None
 
 
 def token_lock_key(token: str) -> str:
@@ -21,6 +24,13 @@ class SingleInstanceLock:
     def acquire(self) -> bool:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._file = self.path.open("a+", encoding="utf-8")
+        if fcntl is None:
+            # Windows: no flock support; record pid only (best-effort lock)
+            self._file.seek(0)
+            self._file.truncate(0)
+            self._file.write(str(os.getpid()))
+            self._file.flush()
+            return True
         try:
             fcntl.flock(self._file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError as exc:
@@ -38,7 +48,8 @@ class SingleInstanceLock:
     def release(self):
         if self._file is None:
             return
-        fcntl.flock(self._file.fileno(), fcntl.LOCK_UN)
+        if fcntl is not None:
+            fcntl.flock(self._file.fileno(), fcntl.LOCK_UN)
         self._file.close()
         self._file = None
 
@@ -114,7 +125,7 @@ def _is_same_user_process(pid: int) -> bool:
 
 def find_local_conflict_candidates(token: str, exclude_pid: int | None = None) -> list[tuple[int, str]]:
     token = (token or "").strip()
-    if not token:
+    if not token or fcntl is None:  # /proc scan below requires fcntl (Unix-only)
         return []
 
     candidates: list[tuple[int, str]] = []
