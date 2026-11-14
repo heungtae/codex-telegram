@@ -2117,3 +2117,12 @@ Rule:
 - Validation: Live PyPI metadata confirms latest 0.6.0 and no 0.6.1 files; remote main matches the local base and no v0.6.1 tag exists. GitHub CLI authentication verified. Package validation and remote publishing results follow below.
 - Next step: Build/check 0.6.1, commit/push, publish v0.6.1, and inspect all release jobs.
 - Preparation result: 0.6.1 wheel/sdist built and twine check passed. Repository secret list is empty and pypi environment is absent. Local upload credentials exist, but automatic approval review rejected exporting the token into a GitHub secret and creating the environment without explicit authorization; awaiting that authorization before credential changes/publication.
+
+### 2026-11-14 — Release 0.6.1 published
+- Objective: Complete authorized Release-driven PyPI deployment.
+- Files changed: This log; GitHub repository secret/environment and Release metadata updated remotely with explicit user authorization.
+- Changes: Registered the existing upload credential as PYPI_API_TOKEN without printing its value; created the pypi environment without required reviewers. Published v0.6.1 at f75244da1da81dd250ea6d42a39de239181198ec.
+- Validation: Actions run 43580705715 completed successfully: build, publish, and attachment jobs all passed. Live PyPI 0.6.1 JSON lists wheel and sdist; their SHA-256 hashes exactly match Release SHA256SUMS. Release includes both distributions and SHA256SUMS.
+- Release: https://github.com/heungtae/codex-telegram/releases/tag/v0.6.1
+- Workflow: https://github.com/heungtae/codex-telegram/actions/runs/43580705715
+- Next step: Users can install codex-telegram==0.6.1; future deployments start by publishing a Release with a matching version tag. No running application restart performed.
