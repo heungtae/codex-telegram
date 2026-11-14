@@ -1,5 +1,5 @@
 import { IconButton } from "../../common/components/ui";
-import { CloseIcon, ComposeIcon } from "../../common/components/Icons";
+import { CloseIcon, ComposeIcon, ThreadIcon } from "../../common/components/Icons";
 import CollapsibleSection from "../../common/components/CollapsibleSection";
 import { normalizeThreadId } from "../../common/utils";
 
@@ -59,6 +59,7 @@ export default function SidebarThreadsPanel({
               className="session-tab-main"
               onClick={() => handleSelectThread(tab.id)}
             >
+              <span className="session-tab-icon"><ThreadIcon /></span>
               <span className="session-tab-title">{tab.title || tab.id}</span>
               {tab.hasUnreadCompletion ? <span className="session-tab-dot" /> : null}
             </button>

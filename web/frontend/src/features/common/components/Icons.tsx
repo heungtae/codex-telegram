@@ -7,9 +7,11 @@ import {
   Ellipsis,
   FileCode,
   Folder,
+  FolderClosed,
   FolderOpen,
   Maximize,
   Menu,
+  MessageSquare,
   Minimize,
   Moon,
   PanelLeft,
@@ -119,4 +121,12 @@ export function PlusIcon() {
 
 export function TrashIcon() {
   return <Trash2 {...iconProps} />;
+}
+
+export function ThreadIcon() {
+  return <MessageSquare {...iconProps} />;
+}
+
+export function ProjectIcon() {
+  return <FolderClosed {...iconProps} />;
 }

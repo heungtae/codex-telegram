@@ -110,6 +110,17 @@
   cursor: pointer;
 }
 
+.session-tab-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+
+.session-tab-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
 .session-tab-title {
   min-width: 0;
   overflow: hidden;

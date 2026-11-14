@@ -2199,3 +2199,52 @@ Rule:
 - Changes: Advance the canonical package version from 0.6.1 to 0.6.2. Include setup-only provisioning, self-signed default, explicit Certbot/mkcert support, startup TLS validation, and your-domain.com usage examples.
 - Validation: HTTPS/script/TLS tests: 37 passed. Full suite: 237 passed, 2 failed, 12 subtests passed. Both failures reproduced on an isolated HEAD archive: stale 0.5.0 latest-version fixture and Windows explorer path separators on Linux. Tests used .venv Python with system pytest appended to sys.path; full suite required execution outside the sandbox after an async test stalled inside it. CLI --version reports 0.6.2; bash -n run_build_and_main.sh and git diff --check passed.
 - Risks / next step: Existing two test failures remain. No live CA issuance or application restart performed. Commit locally; push/publication remains separate.
+
+### 2026-11-14T19:39:11+09:00 — Thread list icons
+- Objective: Add an icon before each thread in the Web sidebar.
+- Files changed: `web/frontend/src/features/app/components/SidebarThreadsPanel.tsx`, `web/frontend/src/features/common/components/Icons.tsx`, `web/frontend/src/styles/_threads.scss`, this log.
+- Changes: Reuse the Lucide icon system for a decorative message bubble before each title; use a fixed 16px icon and preserve title truncation and thread controls.
+- Validation: SidebarThreadsPanel component tests passed; npm run build passed.
+- Risks / next step: No configuration impact. Browser visual verification remains; refresh Web UI to view the icons.
+
+### 2026-11-14T19:41:25+09:00 — Match thread and project icon sizes
+- Objective: Align thread icons with project folder icons.
+- Files changed: `web/frontend/src/styles/_threads.scss`, this log.
+- Changes: Reduce thread icon width and height from 16px to the project icon size of 14px.
+- Validation: Confirmed both project folder selectors use 14px; npm run build passed; git diff --check passed.
+- Next step: Refresh the Web UI to view the matching icon sizes.
+
+### 2026-11-14T19:42:45+09:00 — Project panel icons
+- Objective: Replace the project folder icon with a different project symbol.
+- Files changed: `web/frontend/src/features/common/components/Icons.tsx`, `web/frontend/src/features/app/components/SidebarProjectsPanel.tsx`, this log.
+- Changes: Use the Lucide PanelsTopLeft icon for both project row variants, preserving the 14px size.
+- Validation: SidebarProjectsPanel component tests and npm run build passed; git diff --check passed.
+- Next step: Refresh Web UI for visual review. No configuration impact.
+
+### 2026-11-14T19:46:31+09:00 — Reference folder icon for projects
+- Objective: Match the outlined folder icon in the supplied screenshot.
+- Files changed: `web/frontend/src/features/app/components/SidebarProjectsPanel.tsx`, `web/frontend/src/features/common/components/Icons.tsx`, this log.
+- Changes: Use the existing Lucide Folder icon for both project row variants at 14px; remove the unused panel icon wrapper.
+- Validation: npm run build and git diff --check passed.
+- Next step: Refresh Web UI for visual review; no configuration impact.
+
+### 2026-11-14T19:47:46+09:00 — Folder icon reference detail
+- Objective: Match the inner horizontal line in the reference folder icon.
+- Files changed: `web/frontend/src/features/common/components/Icons.tsx`, this log.
+- Changes: Use Lucide FolderClosed for closed folders, preserving the existing open-folder variant and sizing. This also aligns other closed-folder usages with the shared icon.
+- Validation: npm run build and git diff --check passed.
+- Next step: Refresh Web UI for visual review.
+
+### 2026-11-14T19:49:34+09:00 — Limit reference folder icon to projects
+- Objective: Preserve the original Files viewer folder icons.
+- Files changed: `web/frontend/src/features/common/components/Icons.tsx`, `web/frontend/src/features/app/components/SidebarProjectsPanel.tsx`, this log.
+- Changes: Restore shared FolderIcon to its original Folder/FolderOpen variants; add a dedicated FolderClosed ProjectIcon and use it only for the two project row variants.
+- Validation: SidebarProjectsPanel tests, npm run build, and git diff --check passed.
+- Next step: Refresh Web UI to review project and Files viewer icons.
+
+### 2026-11-14T19:52:56+09:00 — Version 0.6.3 preparation
+- Objective: Bump the patch version and commit the requested sidebar icon updates.
+- Files changed: `codex_telegram/__init__.py`, the sidebar components, shared icons, thread styles, and this log.
+- Changes: Set canonical package version to 0.6.3; include 14px thread icons and a project-specific folder icon while preserving Files viewer icons.
+- Validation: Project and thread sidebar component tests passed; frontend production build passed in the preceding validation; package version import confirmed 0.6.3; git diff --check passed.
+- Next step: Commit locally. Browser visual review remains; no push or publication requested.

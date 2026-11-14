@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useClickOutsideAndEscape } from "../../common/hooks/useClickOutsideAndEscape";
 
 import CollapsibleSection from "../../common/components/CollapsibleSection";
-import { ChevronIcon, CloseIcon, ComposeIcon, FolderIcon, MoreIcon, TrashIcon, PlusIcon } from "../../common/components/Icons";
+import { ChevronIcon, CloseIcon, ComposeIcon, FolderIcon, ProjectIcon, MoreIcon, TrashIcon, PlusIcon } from "../../common/components/Icons";
 import { IconButton } from "../../common/components/ui";
 import { normalizeThreadId } from "../../common/utils";
 import { cn } from "../../common/components/ui/cn";
@@ -20,7 +20,7 @@ function ProjectBaseRowItem({ row, interactionBusy, onSelectProject, onMoreClick
           disabled={interactionBusy}
           aria-label={`Open project ${row.name}`}
         >
-          <FolderIcon open={false} />
+          <ProjectIcon />
           <span className="project-name-text">{row.name}</span>
           {row.isDefault ? <span className="project-badge-d">D</span> : null}
         </button>
@@ -282,7 +282,7 @@ export default function SidebarProjectsPanel({
                       disabled={interactionBusy}
                       aria-label={`Select project ${row.name}`}
                     >
-                      <FolderIcon open={false} />
+                      <ProjectIcon />
                       <span className="project-session-title">{row.name}</span>
                       {row.isDefault ? <span className="project-badge-d">D</span> : null}
                     </button>
