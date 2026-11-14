@@ -2101,3 +2101,19 @@ Rule:
 - Changes: Set the canonical package version from 0.5.8 to 0.6.0; separate project management, thread pagination, access configuration documentation, and version commits.
 - Validation: Frontend build and both changed project UI test files passed. Backend project/thread selection: 42 passed, 1 existing Windows Explorer path-separator failure, 17 deselected, 6 subtests passed. Diff whitespace checks passed. No publishing or server restart performed.
 - Next step: Restart the backend to load the changes and verify project management and ewap-browser threads in the running UI.
+
+### 2026-11-14T18:20+09:00 — Release-driven PyPI deployment
+- Objective: Complete package publishing and distribution attachment automatically when a GitHub Release is published.
+- Files changed: `.github/workflows/pypi-publish.yml`, `README.md`, this log.
+- Changes: Replace tag-push trigger with release.published. Build the release tag, reject version/tag mismatches, build frontend with npm ci, build/check wheel and sdist and assert bundled UI assets, retain distributions/checksums, publish via the existing PYPI_API_TOKEN/pypi environment, then attach the identical artifacts to the Release. Separate publishing and attachment jobs support retrying failed attachment without republishing. Document prerequisites, prereleases, and recovery.
+- Validation: Frontend build passed; real wheel and sdist built with no-isolation in an isolated temporary tooling environment; twine check passed for both; workflow embedded version script passed matching/mismatching tags; embedded archive checks confirmed HTML/JS/CSS in both packages; YAML structure, job dependencies, embedded Python syntax, and git diff --check passed. No remote workflow execution or PyPI upload performed.
+- Operational impact: Tag pushes and draft Releases no longer publish. The release tag must contain the updated workflow. PYPI_API_TOKEN and any pypi environment protections remain required; environment reviewers can delay automatic deployment. Attachment requires contents:write only in the final job.
+- Next step: Commit/push this workflow before publishing a matching version Release; verify all three Actions jobs complete. Actual remote secret/environment settings were not inspected.
+
+### 2026-11-14 — Release 0.6.1 preparation
+- Objective: Publish the requested release after confirming 0.6.0 already exists on PyPI.
+- Files changed: `codex_telegram/__init__.py`, this log, pending release workflow and README changes.
+- Changes: Advance package version to 0.6.1; retain release.published automation for UI/package builds, PyPI upload, and Release attachments.
+- Validation: Live PyPI metadata confirms latest 0.6.0 and no 0.6.1 files; remote main matches the local base and no v0.6.1 tag exists. GitHub CLI authentication verified. Package validation and remote publishing results follow below.
+- Next step: Build/check 0.6.1, commit/push, publish v0.6.1, and inspect all release jobs.
+- Preparation result: 0.6.1 wheel/sdist built and twine check passed. Repository secret list is empty and pypi environment is absent. Local upload credentials exist, but automatic approval review rejected exporting the token into a GitHub secret and creating the environment without explicit authorization; awaiting that authorization before credential changes/publication.

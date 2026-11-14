@@ -157,6 +157,17 @@ cp conf.toml.example ~/.config/codex-telegram/conf.toml
 ./run_build_and_main.sh
 ```
 
+## Publishing a Release
+
+1. Update `codex_telegram/__init__.py` (`__version__`), validate the changes, and push the commits.
+2. In GitHub Releases, create a draft with a matching tag (for example, `v0.6.0` for version `0.6.0`) targeting the intended commit. The commit must contain `.github/workflows/pypi-publish.yml` with the release trigger.
+3. Write the release notes and publish the Release. Drafts and tag pushes alone do not deploy.
+4. Wait for **Publish release to PyPI** to succeed: it builds the Web UI, builds/checks the wheel and sdist (including UI assets), publishes to PyPI, then attaches the same distributions and `SHA256SUMS` to the Release.
+
+Configure `PYPI_API_TOKEN` as a repository secret or a secret on the `pypi` environment before publishing. Existing environment protection rules still apply; remove required reviewers from that environment if fully automatic publishing is desired. Published prereleases also trigger this workflow, so use a matching Python prerelease version such as `0.6.1rc1` / `v0.6.1rc1`.
+
+A published GitHub Release alone does not mean PyPI deployment succeeded; check the workflow result. If attachment fails after PyPI publishing succeeds, rerun only failed jobs to attach the retained files without republishing. For code changes after a successful PyPI upload, use a new version and Release.
+
 ## Documentation
 
 | File | Description |

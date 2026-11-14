@@ -1,41 +1,125 @@
-name: Publish to PyPI
+name: Publish release to PyPI
 
 on:
-  push:
-    tags:
-      - 'v*.*.*'
+  release:
+    types: [published]
+
+concurrency:
+  group: pypi-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
-  build-and-publish:
-    name: Build and Publish to PyPI
+  build:
+    name: Build release distributions
     runs-on: ubuntu-latest
-    environment: pypi
     steps:
-      - name: Checkout repository
+      - name: Checkout release tag
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
+      - name: Verify release version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          python - <<'PY'
+          import os
+          from codex_telegram import __version__
+          expected = f"v{__version__}"
+          if os.environ["RELEASE_TAG"] != expected:
+              raise SystemExit(f"Release tag must match package version: {expected}")
+          PY
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/frontend/package-lock.json
+
+      - name: Build Web UI
+        working-directory: web/frontend
+        run: |
+          npm ci
+          npm run build
+
       - name: Install build dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install build twine
+        run: python -m pip install build twine
 
-      - name: Build package
-        run: python -m build
-
-      - name: Verify package
+      - name: Build and verify packages
         run: |
+          rm -rf dist build *.egg-info
+          python -m build
           python -m twine check dist/*
+          python - <<'PY'
+          from pathlib import Path
+          import tarfile
+          import zipfile
+          for package in Path("dist").iterdir():
+              if package.suffix == ".whl":
+                  with zipfile.ZipFile(package) as archive:
+                      names = archive.namelist()
+              else:
+                  with tarfile.open(package) as archive:
+                      names = archive.getnames()
+              for suffix in ("web/static/dist/index.html", ".js", ".css"):
+                  if not any("web/static/dist/" in name and name.endswith(suffix) for name in names):
+                      raise SystemExit(f"Missing built Web UI ({suffix}) in {package}")
+          PY
+          sha256sum dist/* > SHA256SUMS
+
+      - name: Retain release distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-distributions
+          path: |
+            dist/*
+            SHA256SUMS
+          if-no-files-found: error
+
+  publish:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    steps:
+      - name: Download verified distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: release-distributions
+
+      - name: Verify distribution checksums
+        run: sha256sum --check SHA256SUMS
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}
+
+  release-assets:
+    name: Attach published distributions to Release
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download published distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: release-distributions
+
+      - name: Attach distributions and checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$RELEASE_TAG" dist/* SHA256SUMS --clobber
