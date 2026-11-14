@@ -682,7 +682,9 @@ def save_guardian_settings(
     return get_guardian_settings()
 
 
-def save_project_profile(key: str, name: str, path: str) -> None:
+def save_project_profile(
+    key: str, name: str, path: str, *, make_default: bool = False
+) -> None:
     if not re.fullmatch(r"[A-Za-z0-9_-]+", key):
         raise ValueError("Invalid project key. Use letters, numbers, '_' or '-'.")
     if not name.strip():
@@ -711,6 +713,64 @@ def save_project_profile(key: str, name: str, path: str) -> None:
         f'path = "{_escape_toml_string(path)}"\n'
     )
 
+    if make_default:
+        updated = _with_default_project(updated, key)
+    tomllib.loads(updated)
+    config_path.write_text(updated, encoding="utf-8")
+
+
+def _with_default_project(raw: str, key: str) -> str:
+    lines = raw.splitlines(keepends=True)
+    for index, line in enumerate(lines):
+        if line.lstrip().startswith("["):
+            break
+        if re.match(r"^\s*project\s*=", line):
+            lines[index] = f'project = "{_escape_toml_string(key)}"\n'
+            return "".join(lines)
+    return f'project = "{_escape_toml_string(key)}"\n' + raw
+
+
+def update_project_profile(
+    key: str, name: str, path: str, *, make_default: bool = False
+) -> None:
+    if not name.strip() or not path.strip():
+        raise ValueError("Project name and path must not be empty.")
+    _ensure_config_exists()
+    config_path = _get_config_path()
+    raw = config_path.read_text(encoding="utf-8")
+    parsed = tomllib.loads(raw)
+    if key not in parsed.get("projects", {}):
+        raise ValueError(f"Project key '{key}' not found.")
+    lines = raw.splitlines(keepends=True)
+    start = None
+    end = len(lines)
+    for index, line in enumerate(lines):
+        if not line.lstrip().startswith("["):
+            continue
+        if start is not None:
+            end = index
+            break
+        try:
+            header = tomllib.loads(line.strip())
+        except tomllib.TOMLDecodeError:
+            continue
+        if header.get("projects", {}).get(key) == {}:
+            start = index
+    if start is None:
+        raise ValueError("Project table could not be updated.")
+    body = "".join(lines[start + 1:end])
+    for field, value in (("name", name), ("path", path)):
+        pattern = rf"(?m)^\s*{field}\s*=.*$"
+        replacement = f'{field} = "{_escape_toml_string(value)}"'
+        if re.search(pattern, body):
+            body = re.sub(pattern, lambda match: replacement, body)
+        else:
+            body = body.rstrip() + "\n" + replacement + "\n"
+    updated = "".join(lines[:start + 1]) + body + "".join(lines[end:])
+    tomllib.loads(updated)
+    if make_default:
+        updated = _with_default_project(updated, key)
+    tomllib.loads(updated)
     config_path.write_text(updated, encoding="utf-8")
 
 
@@ -725,7 +785,10 @@ def remove_project_profile(key: str) -> None:
         raise ValueError(f"Project key '{key}' not found.")
 
     if parsed.get("project") == key:
-        raise ValueError(f"Cannot remove the active project '{key}'. Switch to another project first.")
+        raise ValueError(
+            f"Cannot remove the default project '{key}'. "
+            "Set another default project first."
+        )
 
     lines = raw.splitlines(keepends=True)
     result: list[str] = []

@@ -2072,3 +2072,10 @@ Rule:
   - `gh` 인증에 유효한 계정이 없어 GitHub Release 항목은 생성하지 못함.
 - Next step:
   - 설치된 0.5.1에서 UI를 확인하고, GitHub Release 항목이 필요하면 `gh` 인증 복구 후 생성.
+
+### 2026-11-14 — Project modification and default selection
+- Objective: Add a Modify Project form and configurable default project; disable removal of the default project.
+- Files: `utils/config.py`, `web/routes.py`, project modal/sidebar/container, project styles, project UI tests, `tests/test_project_config.py`, `tests/test_project_routes.py`, `WEB.md`.
+- Changes: Reuse the Add Project form to edit name/path with a stable read-only key; add a default checkbox on add/modify; persist the default in the existing root `project` setting. Disable default-project Remove and retain server-side protection. Existing open chats remain open; refreshed project metadata applies to sidebar rows.
+- Validation: Config/API tests 9 passed; config/router regression group 35 passed; project modal/sidebar frontend tests passed; `npm run build` passed; `git diff --check` passed. Expanded Web/API tests: 57 passed, 1 Windows Explorer path expectation failed (unmodified behavior). Full frontend: 63 test files passed, 6 failed in unchanged overlay/sidebar/runtime areas, including missing component imports. Full Python run stopped after stalling in unrelated tests; system Python lacks runtime dependencies, so API checks used `.venv` with the system pytest package on `sys.path`. No browser visual verification performed.
+- Next step: Restart the server and verify Add/Modify Project and the disabled default Remove menu in the running UI; investigate unrelated suite failures separately.

@@ -499,3 +499,9 @@
   font-size: var(--font-size-sm);
   word-break: break-all;
 }
+
+.ui-icon-button.project-context-menu-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}

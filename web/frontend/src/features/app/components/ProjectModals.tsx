@@ -98,10 +98,11 @@ export function ProjectPickerModal({
   );
 }
 
-export function AddProjectModal({ isOpen, onClose, onAddProject }) {
-  const [key, setKey] = React.useState("");
-  const [name, setName] = React.useState("");
-  const [path, setPath] = React.useState("");
+export function AddProjectModal({ isOpen, onClose, onAddProject, project = null }) {
+  const [key, setKey] = React.useState(project?.key || "");
+  const [name, setName] = React.useState(project?.name || "");
+  const [path, setPath] = React.useState(project?.path || "");
+  const [makeDefault, setMakeDefault] = React.useState(!!project?.default);
   const [error, setError] = React.useState("");
   const [loading, setLoading] = React.useState(false);
 
@@ -110,21 +111,21 @@ export function AddProjectModal({ isOpen, onClose, onAddProject }) {
     setError("");
     setLoading(true);
     try {
-      await api("/api/projects", {
-        method: "POST",
-        body: JSON.stringify({ key, name, path }),
+      await api(project ? `/api/projects/${encodeURIComponent(project.key)}` : "/api/projects", {
+        method: project ? "PUT" : "POST",
+        body: JSON.stringify({ key, name, path, default: makeDefault }),
       });
-      onAddProject();
+      await onAddProject();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to add project");
+      setError(err instanceof Error ? err.message : "Failed to save project");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} ariaLabel="Add project" title="Add Project">
+    <Modal isOpen={isOpen} onClose={onClose} ariaLabel={project ? "Modify project" : "Add project"} title={project ? "Modify Project" : "Add Project"}>
       <form onSubmit={handleSubmit}>
         <div className="modal-field">
           <label htmlFor="project-key">Key</label>
@@ -135,6 +136,7 @@ export function AddProjectModal({ isOpen, onClose, onAddProject }) {
             value={key}
             onChange={(e) => setKey(e.target.value)}
             disabled={loading}
+            readOnly={!!project}
             autoFocus
             required
           />
@@ -164,10 +166,18 @@ export function AddProjectModal({ isOpen, onClose, onAddProject }) {
             required
           />
         </div>
+        <div className="modal-field">
+          <label>
+            <input type="checkbox" checked={makeDefault} disabled={loading || !!project?.default}
+              onChange={(event) => setMakeDefault(event.target.checked)} />
+            {" "}Default project
+          </label>
+          {project?.default && <span className="modal-hint">Set another project as default to change this.</span>}
+        </div>
         {error && <div className="modal-error">{error}</div>}
         <div className="modal-actions">
           <Button type="submit" variant="primary" disabled={loading}>
-            {loading ? "Adding..." : "Add Project"}
+            {loading ? "Saving..." : project ? "Save Changes" : "Add Project"}
           </Button>
           <Button type="button" variant="ghost" onClick={onClose} disabled={loading}>
             Cancel

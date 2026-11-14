@@ -59,6 +59,7 @@ export default function SidebarProjectsPanel({
   onCloseThread,
   onAddThread,
   onOpenInExplorer,
+  onModifyProject,
   onRemoveProject,
   onOpenAddProjectModal,
 }: {
@@ -74,6 +75,7 @@ export default function SidebarProjectsPanel({
   onCloseThread: (projectTabId: string, threadId: string) => void;
   onAddThread: (projectTabId: string) => void;
   onOpenInExplorer: (projectKey: string) => void;
+  onModifyProject?: (projectKey: string) => void;
   onRemoveProject: (projectKey: string) => void;
   onOpenAddProjectModal: () => void;
 }) {
@@ -197,8 +199,10 @@ export default function SidebarProjectsPanel({
     onOpenInExplorer(menuProjectKey);
   };
 
+  const menuProject = projectRows.find((row) => row.key === menuProjectKey);
+
   const handleRemoveProject = () => {
-    if (!menuProjectKey) return;
+    if (!menuProject || menuProject.isDefault) return;
     setOpenMenuKey(null);
     onRemoveProject(menuProjectKey);
   };
@@ -421,18 +425,37 @@ export default function SidebarProjectsPanel({
                 <FolderIcon open={true} />
                 <span>Open in Explorer</span>
               </button>
-              <button
-                type="button"
-                className={cn("ui-icon-button", "project-context-menu-item")}
-                onClick={handleRemoveProject}
-              >
-                <TrashIcon />
-                <span>Remove</span>
-              </button>
+              <ProjectManagementActions
+                isDefault={!!menuProject?.isDefault}
+                unavailable={!menuProject}
+                onModify={() => {
+                  setOpenMenuKey(null);
+                  onModifyProject?.(menuProjectKey);
+                }}
+                onRemove={handleRemoveProject}
+              />
             </div>,
             document.body,
           )
         : null}
+    </>
+  );
+}
+
+export function ProjectManagementActions({ isDefault, unavailable = false, onModify, onRemove }) {
+  return (
+    <>
+      <button type="button" className="ui-icon-button project-context-menu-item"
+        disabled={unavailable} onClick={onModify}>
+        <span>Modify Project</span>
+      </button>
+      <button type="button" className="ui-icon-button project-context-menu-item"
+        disabled={unavailable || isDefault}
+        title={isDefault ? "Default project cannot be removed" : undefined}
+        onClick={onRemove}>
+        <TrashIcon />
+        <span>Remove</span>
+      </button>
     </>
   );
 }

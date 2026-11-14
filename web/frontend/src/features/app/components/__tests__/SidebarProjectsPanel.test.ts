@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import SidebarProjectsPanel from "../SidebarProjectsPanel";
+import SidebarProjectsPanel, { ProjectManagementActions } from "../SidebarProjectsPanel";
 import type { ProjectRow } from "../../state/projectRows.js";
 
 const NOOP = () => {};
@@ -373,4 +373,20 @@ test("활성 및 unread 프로젝트 세션 상태 클래스를 렌더한다", (
   );
 
   assert.match(html, /project-session-row state-unread active/);
+});
+
+
+test("default project Remove is disabled while Modify remains available", () => {
+  const html = renderToStaticMarkup(React.createElement(ProjectManagementActions, {
+    isDefault: true, onModify: NOOP, onRemove: NOOP,
+  }));
+  assert.match(html, /<button[^>]*disabled=""[^>]*>[\s\S]*?<span>Remove<\/span>/);
+  assert.match(html, /<button(?![^>]*disabled)[^>]*><span>Modify Project<\/span>/);
+});
+
+test("non-default project Remove is enabled", () => {
+  const html = renderToStaticMarkup(React.createElement(ProjectManagementActions, {
+    isDefault: false, onModify: NOOP, onRemove: NOOP,
+  }));
+  assert.doesNotMatch(html, /disabled/);
 });

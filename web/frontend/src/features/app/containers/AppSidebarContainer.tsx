@@ -110,6 +110,7 @@ export default function AppSidebarContainer() {
   const { agent, thread } = useAppRuntimeContext<SidebarRuntime>();
   const { shell, sidebar } = useAppPresentationContext<SidebarPresentation>();
 
+  const [editingProject, setEditingProject] = useState<ProjectItem | null>(null);
   const [addProjectModalOpen, setAddProjectModalOpen] = useState(false);
 
   useEffect(() => {
@@ -120,16 +121,13 @@ export default function AppSidebarContainer() {
   }, [session.sessionSummary, session.activeAgentSettings, agent.openAgentSettings]);
 
   const handleOpenAddProjectModal = () => {
+    setEditingProject(null);
     setAddProjectModalOpen(true);
   };
 
   const handleAddProject = async () => {
-    try {
-      await thread.loadProjects();
-      setAddProjectModalOpen(false);
-    } catch {
-      // Error handling is done in the modal
-    }
+    await thread.loadProjects();
+    setAddProjectModalOpen(false);
   };
 
   const handleRemoveProject = async (projectKey: string) => {
@@ -208,6 +206,13 @@ export default function AppSidebarContainer() {
             body: JSON.stringify(createOpenExplorerPayload(projectKey)),
           }).catch(() => {})
         }
+        onModifyProject={(key) => {
+          const project = threads.projectItems.find((item) => item.key === key);
+          if (project) {
+            setEditingProject(project);
+            setAddProjectModalOpen(true);
+          }
+        }}
         onRemoveProject={handleRemoveProject}
         onOpenAddProjectModal={handleOpenAddProjectModal}
       />
@@ -222,6 +227,8 @@ export default function AppSidebarContainer() {
         disableAddThread={!threads.activeProjectKey || sidebar.interactionBusy}
       />
       <AddProjectModal
+        key={`${editingProject?.key || "add"}:${addProjectModalOpen}`}
+        project={editingProject}
         isOpen={addProjectModalOpen}
         onClose={() => setAddProjectModalOpen(false)}
         onAddProject={handleAddProject}

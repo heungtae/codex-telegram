@@ -20,6 +20,7 @@ A ChatGPT-style web interface for interacting with Codex App Server. Provides re
 - **Thread tabs**: Multiple conversations per project, each with independent chat state
 - **Thread states**: Visual indicators for idle, running, completed, failed, or cancelled
 - **Unread notifications**: Badge indicators for new completions
+- **Project management**: Use the project menu → Modify Project to edit its name/path. The key remains fixed to preserve chat associations. Add/Modify Project includes a Default project checkbox. The default project is marked D and its Remove menu is disabled; choose another default before removing it. Changing the default updates the shared configuration without switching existing open chats.
 - **Persistent state**: Thread and project tabs preserved across sessions
 
 ### Workspace Browser
@@ -162,7 +163,9 @@ Guardian provides automated safety checks before approval decisions:
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/projects` | List projects |
-| POST | `/api/projects` | Add project |
+| POST | `/api/projects` | Add project (`default: true` optionally sets the default) |
+| PUT | `/api/projects/{key}` | Modify name/path and optionally set default |
+| DELETE | `/api/projects/{key}` | Remove a non-default project |
 | POST | `/api/projects/select` | Switch project |
 | POST | `/api/projects/open-thread` | Open thread in project |
 | POST | `/api/projects/open-explorer` | Open project folder in OS file explorer |
