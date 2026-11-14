@@ -2248,3 +2248,31 @@ Rule:
 - Changes: Set canonical package version to 0.6.3; include 14px thread icons and a project-specific folder icon while preserving Files viewer icons.
 - Validation: Project and thread sidebar component tests passed; frontend production build passed in the preceding validation; package version import confirmed 0.6.3; git diff --check passed.
 - Next step: Commit locally. Browser visual review remains; no push or publication requested.
+
+### 2026-11-14 — Repair local CLI installation
+- Objective: Resolve `codex-telegram` failing to import `codex_telegram`.
+- Files changed: This log; local ignored `.venv` installation metadata and console entrypoint.
+- Changes: Confirmed the active virtual environment uses Python 3.14 while the old package remained under Python 3.12 site-packages. Reinstalled this checkout with `.venv/bin/python -m pip install -e .`, installing version 0.6.3 for the active interpreter. No application code or configuration changed.
+- Validation: CLI `--version` returned 0.6.3; `--help` passed; `pip check` reported no broken requirements; runtime main module imported and exposed a callable entrypoint.
+- Next step: Run `codex-telegram` normally. Full service startup and external connectivity were not exercised.
+
+### 2026-11-14 — Revert Ctrl+C handling change
+- Objective: Restore the original shutdown behavior at user request.
+- Files changed: Restored `main.py`; removed `tests/test_main_shutdown.py`; updated this log.
+- Changes: Removed the custom SIGINT handler and exit-code wrapper. Local CLI installation repair remains in place.
+- Validation: Confirmed `main.py` matches HEAD; `git diff --check` passed.
+- Next step: Investigate the Telegram bootstrap TLS connection failure separately.
+
+### 2026-11-14T20:11:00+09:00 — Retry transient Telegram bootstrap failures
+- Objective: Prevent a single transient TLS/network connection failure during Telegram initialization from immediately terminating startup.
+- Files changed: `main.py`, `conf.toml.example`, `tests/test_telegram_bootstrap.py`, this log.
+- Changes: Explicitly pass a default budget of 5 bootstrap retries to `run_polling`, covering initialization and polling bootstrap with the library's backoff. Document `telegram.bot.bootstrap_retries` (non-negative integer, 0 disables retries); invalid values fall back to 5. Retain original Ctrl+C behavior and certificate verification. Exhausted retries still propagate failure and release web/instance resources.
+- Validation: 8 tests passed via `.venv/bin/python -m unittest tests.test_telegram_bootstrap tests.test_telegram_bot_config tests.test_cli_entrypoint -q`, covering transient recovery, exhaustion, invalid token, configuration boundaries, polling wiring and cleanup. Live TLS handshake to `api.telegram.org` succeeded; authenticated application initialization with the existing token succeeded without polling, sending messages, or exposing credentials. `git diff --check` passed.
+- Operational impact / next step: Existing configurations automatically gain bounded startup retries. Restart to apply; persistent network/TLS failures can still exhaust the budget. The historical connection failure's underlying network cause remains unconfirmed; full live polling was not exercised.
+
+### 2026-11-14 — Prepare 0.6.4 release
+- Objective: Version, commit and release the Telegram bootstrap retry fix.
+- Files changed: `codex_telegram/__init__.py`, bootstrap fix/config/tests, this log.
+- Changes: Bump canonical version to 0.6.4. Release scope includes bounded Telegram startup retries; original Ctrl+C behavior is preserved.
+- Validation: Targeted pytest run passed (8 tests, 9 subtests); CLI reports 0.6.4; diff whitespace check passed. Broader run excluding `test_main_approval_flow.py`: 213 passed, 2 failed, 18 subtests passed. Both failures (stale PyPI version expectation and Windows Explorer path expectation on Linux) reproduced from HEAD in an isolated temporary checkout. Full suite stalled in `test_main_approval_flow.py`; no full-suite pass claimed. Live TLS/authenticated initialization passed in the preceding verification.
+- Operational impact / next step: Push the release commit and create v0.6.4; the existing published-release workflow builds distributions, publishes to PyPI and attaches assets. Track workflow completion separately.

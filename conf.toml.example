@@ -55,6 +55,10 @@ token = "TELEGRAM_BOT_TOKEN"
 # while the bot was offline.
 drop_pending_updates = true
 
+# Retry Telegram initialization/polling bootstrap after transient network failures.
+# Non-negative integer; 0 disables retries. Uses library retry backoff.
+bootstrap_retries = 5
+
 # Action to take when another instance is detected with the same bot token.
 # Options:
 #   prompt  - Ask interactively (requires TTY). Falls back to "exit" if no TTY.

@@ -134,6 +134,14 @@ def _resolve_drop_pending_updates() -> bool:
     return parse_bool(drop_pending_raw, default=True)
 
 
+def _resolve_bootstrap_retries() -> int:
+    value = get_telegram_bot("bootstrap_retries", 5)
+    if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+        return value
+    logger.warning("Invalid telegram.bot.bootstrap_retries; using 5 retries")
+    return 5
+
+
 def _resolve_conflict_action() -> str:
     action = str(get_telegram_bot("conflict_action", "prompt")).strip().lower()
     if action != "prompt":
@@ -227,6 +235,7 @@ def main():
     try:
         app.run_polling(
             stop_signals=None,
+            bootstrap_retries=_resolve_bootstrap_retries(),
             allowed_updates=Update.ALL_TYPES,
             drop_pending_updates=drop_pending_updates,
         )
